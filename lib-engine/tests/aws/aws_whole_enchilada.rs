@@ -361,6 +361,8 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                             consolidate_after_in_seconds: None,
                         }),
                         cronjob_override: None,
+                        default_public_override: None,
+                        default_private_override: None,
                     },
                 }),
             },

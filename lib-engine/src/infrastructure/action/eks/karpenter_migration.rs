@@ -206,6 +206,7 @@ fn install_karpenter_charts(
         kubernetes.version().clone(),
         kubernetes.region.to_cloud_provider_format(),
         karpenter_parameters,
+        kubernetes.options.vpc_qovery_network_mode.clone(),
         kubernetes.options.user_provided_network.as_ref(),
         kubernetes.advanced_settings.aws_eks_ec2_ami.to_model(),
         aws_storage_type,

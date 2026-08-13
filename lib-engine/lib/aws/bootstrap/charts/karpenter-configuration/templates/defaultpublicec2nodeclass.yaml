@@ -1,0 +1,78 @@
+{{- if .Values.defaultPublicNodePool.enable }}
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: qovery-default-public
+spec:
+  metadataOptions:
+    # https://github.com/kubernetes/autoscaler/issues/3592
+    # hop limit should be set to 2 for https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/deploy/installation/#using-the-amazon-ec2-instance-metadata-server-version-2-imdsv2
+    httpPutResponseHopLimit: 2
+  {{- if .Values.isCustomAmi }}
+  amiFamily: {{ .Values.amiFamily }}
+  amiSelectorTerms:
+    {{- if .Values.customAmiId }}
+    - id: {{ .Values.customAmiId }}
+    {{- else }}
+    - name: {{ .Values.customAmiName | quote }}
+    {{- end }}
+  {{- else }}
+  amiSelectorTerms:
+    - alias: {{ .Values.amiSelectorTermsAlias }}
+  {{- end }}
+  role: "KarpenterNodeRole-{{ .Values.clusterName }}"
+  # Nodes land on public subnets and egress through the IGW (no NAT processing).
+  # Selector tags are ANDed within a single term; each tag must be cluster-unique
+  # because Karpenter tag discovery is account+region-wide.
+  subnetSelectorTerms:
+    - tags:
+        ClusterId: "{{ .Values.tags.ClusterId }}"
+        SubnetType: "workload"
+        Public: "true"
+  associatePublicIPAddress: true
+  securityGroupSelectorTerms:
+    # Always select the security group by ID, never by tag
+    - id: {{ .Values.securityGroupId }}
+
+  # configures storage devices for the instance
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        # Bottlerocket uses xvda for OS only: keep it small and fixed
+        # User data goes to xvdb (see below)
+        {{- if .Values.isBottlerocket }}
+        volumeSize: 4Gi
+        {{- else }}
+        volumeSize: {{ .Values.diskSize }}
+        {{- end }}
+        volumeType: {{ .Values.storageClass }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskIops }}
+        iops: {{ .Values.diskIops }}
+        {{- end }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskThroughput }}
+        throughput: {{ .Values.diskThroughput }}
+        {{- end }}
+        encrypted: true
+        deleteOnTermination: true
+    {{- if .Values.isBottlerocket }}
+    # Bottlerocket uses a second volume for container data (images, logs)
+    - deviceName: /dev/xvdb
+      ebs:
+        volumeSize: {{ .Values.diskSize }}
+        volumeType: {{ .Values.storageClass }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskIops }}
+        iops: {{ .Values.diskIops }}
+        {{- end }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskThroughput }}
+        throughput: {{ .Values.diskThroughput }}
+        {{- end }}
+        encrypted: true
+        deleteOnTermination: true
+    {{- end }}
+
+  # Optional, propagates tags to underlying EC2 resources
+  tags:
+    {{- range $key, $value := .Values.tags }}
+       {{ $key }}: {{ $value }}
+    {{- end }}
+{{- end }}

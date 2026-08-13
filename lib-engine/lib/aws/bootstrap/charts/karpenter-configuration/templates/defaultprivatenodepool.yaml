@@ -1,0 +1,41 @@
+{{- if .Values.defaultPrivateNodePool.enable }}
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: qovery-default-private
+spec:
+  template:
+    spec:
+      requirements:
+        {{- range .Values.defaultPrivateNodePool.requirements }}
+        - key: "{{ .key }}"
+          operator: "{{ .operator }}"
+          values:
+            {{- range .values }}
+            - "{{ . }}"
+            {{- end }}
+          {{- if .minValues }}
+          minValues: {{ .minValues }}
+          {{- end }}
+        {{- end }}
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: qovery-default-private
+      taints:
+        - key: nodepool/qovery-default-private
+          effect: NoSchedule
+      expireAfter: 720h # 30 * 24h = 720h
+      terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: {{ .Values.defaultPrivateNodePool.consolidateAfter }}
+    budgets:
+    - nodes: 10%
+  {{- if not (and (empty .Values.defaultPrivateNodePool.limits.maxCpu) (empty .Values.defaultPrivateNodePool.limits.maxMemory)) }}
+  limits:
+    cpu: {{ .Values.defaultPrivateNodePool.limits.maxCpu }}
+    memory: {{ .Values.defaultPrivateNodePool.limits.maxMemory }}
+  {{- end }}
+  weight: 10
+{{- end }}

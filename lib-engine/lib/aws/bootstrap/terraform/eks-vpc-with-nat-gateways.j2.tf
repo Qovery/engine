@@ -114,6 +114,8 @@ resource "aws_subnet" "eks_zone_a_public" {
     local.tags_eks_vpc_public,
     {
       Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[0]}"
+      SubnetType = "workload"
+      Public = "true"
     }
   )
 }
@@ -130,6 +132,8 @@ resource "aws_subnet" "eks_zone_b_public" {
     local.tags_eks_vpc_public,
     {
       Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[1]}"
+      SubnetType = "workload"
+      Public = "true"
     }
   )
 }
@@ -146,6 +150,8 @@ resource "aws_subnet" "eks_zone_c_public" {
     local.tags_eks_vpc_public,
     {
       Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[2]}"
+      SubnetType = "workload"
+      Public = "true"
     }
   )
 }
@@ -272,6 +278,8 @@ resource "aws_subnet" "eks_zone_a" {
     {
       Name = "qovery-${var.kubernetes_cluster_id}-private-${var.aws_availability_zones[0]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
+      SubnetType = "workload"
+      Public = "false"
     }
   )
 }
@@ -289,6 +297,8 @@ resource "aws_subnet" "eks_zone_b" {
     {
       Name = "qovery-${var.kubernetes_cluster_id}-private-${var.aws_availability_zones[1]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
+      SubnetType = "workload"
+      Public = "false"
     }
   )
 }
@@ -306,6 +316,8 @@ resource "aws_subnet" "eks_zone_c" {
     {
       Name = "qovery-${var.kubernetes_cluster_id}-private-${var.aws_availability_zones[2]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
+      SubnetType = "workload"
+      Public = "false"
     }
   )
 }

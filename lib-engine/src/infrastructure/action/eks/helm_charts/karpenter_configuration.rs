@@ -15,9 +15,11 @@ use crate::infrastructure::models::kubernetes::karpenter::{
     KarpenterNodePoolDisruptionBudget, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
     KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
 };
+use crate::io_models::models::VpcQoveryNetworkMode;
 use itertools::Itertools;
 use kube::Client;
 use std::collections::HashMap;
+use tracing::warn;
 
 pub struct KarpenterConfigurationChart {
     chart_path: HelmChartPath,
@@ -32,6 +34,8 @@ pub struct KarpenterConfigurationChart {
     region: String,
     karpenter_parameters: KarpenterParameters,
     kubernetes_version: KubernetesVersion,
+    vpc_qovery_network_mode: VpcQoveryNetworkMode,
+    is_user_provided_network: bool,
     explicit_subnet_ids: Vec<String>,
     eks_ec2_ami: Ec2Ami,
     aws_storage_type: AwsStorageType,
@@ -52,6 +56,7 @@ impl KarpenterConfigurationChart {
         kubernetes_version: KubernetesVersion,
         region: &str,
         karpenter_parameters: KarpenterParameters,
+        vpc_qovery_network_mode: VpcQoveryNetworkMode,
         user_network_config: Option<&UserNetworkConfig>,
         eks_ec2_ami: Ec2Ami,
         aws_storage_type: AwsStorageType,
@@ -79,6 +84,8 @@ impl KarpenterConfigurationChart {
             region: region.to_string(),
             kubernetes_version: kubernetes_version.clone(),
             karpenter_parameters,
+            vpc_qovery_network_mode,
+            is_user_provided_network: user_network_config.is_some(),
             explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
                 match user_network_config.eks_create_nodes_in_private_subnet {
                     true => [
@@ -519,6 +526,119 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             }
         }
 
+        // Egress-class node pools (QOV-2107): enabled only when core sends the per-cluster
+        // override AND the network mode provides the matching subnets. BYO-VPC clusters get
+        // neither (subnet tags are not under Qovery control there).
+        let (public_pool_allowed, private_pool_allowed) = if self.is_user_provided_network {
+            (false, false)
+        } else {
+            match self.vpc_qovery_network_mode {
+                VpcQoveryNetworkMode::WithNatGateways => (true, true),
+                VpcQoveryNetworkMode::WithoutNatGateways => (true, false),
+            }
+        };
+
+        match (
+            &self.karpenter_parameters.qovery_node_pools.default_public_override,
+            public_pool_allowed,
+        ) {
+            (Some(public_pool_override), true) => {
+                values.push(ChartSetValue {
+                    key: "defaultPublicNodePool.enable".to_string(),
+                    value: true.to_string(),
+                });
+
+                // Requirements (reuse the global requirements with spot settings)
+                let public_spot = public_pool_override
+                    .spot_enabled
+                    .unwrap_or(self.karpenter_parameters.spot_enabled);
+                let public_requirements = Self::enrich_karpenter_requirements(
+                    public_spot,
+                    &self.karpenter_parameters.qovery_node_pools.requirements,
+                );
+                Self::push_requirements_values(&mut values, "defaultPublicNodePool", &public_requirements);
+
+                // Node pool limits
+                if let Some(limits) = &public_pool_override.limits {
+                    Self::push_limits_values(&mut values, "defaultPublicNodePool", limits);
+                }
+
+                if let Some(consolidate_after_in_seconds) = public_pool_override.consolidate_after_in_seconds {
+                    values.push(ChartSetValue {
+                        key: "defaultPublicNodePool.consolidateAfter".to_string(),
+                        value: format!("{}s", consolidate_after_in_seconds),
+                    });
+                }
+            }
+            (Some(_), false) => {
+                warn!(
+                    cluster_id = %self.cluster_id,
+                    "default_public_override is set but the public node pool is not allowed on this cluster (user-provided network) — override ignored"
+                );
+                values.push(ChartSetValue {
+                    key: "defaultPublicNodePool.enable".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+            (None, _) => {
+                values.push(ChartSetValue {
+                    key: "defaultPublicNodePool.enable".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+        }
+
+        match (
+            &self.karpenter_parameters.qovery_node_pools.default_private_override,
+            private_pool_allowed,
+        ) {
+            (Some(private_pool_override), true) => {
+                values.push(ChartSetValue {
+                    key: "defaultPrivateNodePool.enable".to_string(),
+                    value: true.to_string(),
+                });
+
+                // Requirements (reuse the global requirements with spot settings)
+                let private_spot = private_pool_override
+                    .spot_enabled
+                    .unwrap_or(self.karpenter_parameters.spot_enabled);
+                let private_requirements = Self::enrich_karpenter_requirements(
+                    private_spot,
+                    &self.karpenter_parameters.qovery_node_pools.requirements,
+                );
+                Self::push_requirements_values(&mut values, "defaultPrivateNodePool", &private_requirements);
+
+                // Node pool limits
+                if let Some(limits) = &private_pool_override.limits {
+                    Self::push_limits_values(&mut values, "defaultPrivateNodePool", limits);
+                }
+
+                if let Some(consolidate_after_in_seconds) = private_pool_override.consolidate_after_in_seconds {
+                    values.push(ChartSetValue {
+                        key: "defaultPrivateNodePool.consolidateAfter".to_string(),
+                        value: format!("{}s", consolidate_after_in_seconds),
+                    });
+                }
+            }
+            (Some(_), false) => {
+                warn!(
+                    cluster_id = %self.cluster_id,
+                    network_mode = %self.vpc_qovery_network_mode,
+                    "default_private_override is set but the private node pool is not allowed on this cluster (no Qovery-managed private subnets) — override ignored"
+                );
+                values.push(ChartSetValue {
+                    key: "defaultPrivateNodePool.enable".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+            (None, _) => {
+                values.push(ChartSetValue {
+                    key: "defaultPrivateNodePool.enable".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+        }
+
         // Default node pool limits
         if let Some(limits) = self
             .karpenter_parameters
@@ -618,14 +738,15 @@ mod tests {
     use crate::infrastructure::models::disk_size::DiskSize;
     use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
     use crate::infrastructure::models::kubernetes::karpenter::{
-        KarpenterCronjobNodePoolOverride, KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride,
-        KarpenterNodePool, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
-        KarpenterNodePoolLimits, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
+        KarpenterCronjobNodePoolOverride, KarpenterDefaultNodePoolOverride, KarpenterDefaultPrivateNodePoolOverride,
+        KarpenterDefaultPublicNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
+        KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
+        KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
         KarpenterRequirementOperator, KarpenterStableNodePoolOverride,
     };
     use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
     use crate::io_models::models::CpuArchitecture::ARM64;
-    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode};
 
     const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
         prefix: None,
@@ -651,6 +772,8 @@ mod tests {
                 default_override: None,
                 gpu_override: None,
                 cronjob_override: None,
+                default_public_override: None,
+                default_private_override: None,
             },
         );
 
@@ -692,6 +815,8 @@ mod tests {
                 default_override: None,
                 gpu_override: None,
                 cronjob_override: None,
+                default_public_override: None,
+                default_private_override: None,
             },
         );
 
@@ -734,6 +859,8 @@ mod tests {
                 default_override: None,
                 gpu_override: None,
                 cronjob_override: None,
+                default_public_override: None,
+                default_private_override: None,
             },
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -792,6 +919,8 @@ mod tests {
                     default_override: None,
                     gpu_override: None,
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -824,6 +953,8 @@ mod tests {
                     default_override: None,
                     gpu_override: None,
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -864,6 +995,8 @@ mod tests {
                     default_override: None,
                     gpu_override: None,
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -938,6 +1071,8 @@ mod tests {
                         consolidate_after_in_seconds: None,
                     }),
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -1002,6 +1137,8 @@ mod tests {
                     }),
                     consolidate_after_in_seconds: Some(60),
                 }),
+                default_public_override: None,
+                default_private_override: None,
             },
         );
 
@@ -1135,6 +1272,7 @@ mod tests {
                 default_service_architecture: ARM64,
                 qovery_node_pools,
             },
+            VpcQoveryNetworkMode::WithNatGateways,
             None,
             Ec2Ami::AmazonLinux2023,
             AwsStorageType::GP3,
@@ -1349,8 +1487,11 @@ mod tests {
                     default_override: None,
                     gpu_override: None,
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
             },
+            VpcQoveryNetworkMode::WithNatGateways,
             Some(&user_network_config),
             Ec2Ami::AmazonLinux2023,
             AwsStorageType::GP3,
@@ -1441,8 +1582,11 @@ mod tests {
                     default_override: None,
                     gpu_override: None,
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
             },
+            VpcQoveryNetworkMode::WithNatGateways,
             Some(&user_network_config),
             Ec2Ami::AmazonLinux2023,
             AwsStorageType::GP3,
@@ -1534,8 +1678,11 @@ mod tests {
                     default_override: None,
                     gpu_override: None,
                     cronjob_override: None,
+                    default_public_override: None,
+                    default_private_override: None,
                 },
             },
+            VpcQoveryNetworkMode::WithNatGateways,
             None,
             ec2_ami,
             AwsStorageType::GP3,
@@ -1673,5 +1820,283 @@ mod tests {
             node_classes.iter().all(|nc| nc.metadata.name != "gpu"),
             "GPU nodeclass should not be rendered when gpu_override is None"
         );
+    }
+
+    // --- Egress-class node pools (qovery-default-public / qovery-default-private) ---
+
+    fn egress_node_pools(with_default_public_override: bool, with_default_private_override: bool) -> KarpenterNodePool {
+        KarpenterNodePool {
+            requirements: vec![
+                KarpenterNodePoolRequirement {
+                    key: KarpenterNodePoolRequirementKey::InstanceCategory,
+                    operator: Some(KarpenterRequirementOperator::In),
+                    values: vec!["c".to_string()],
+                },
+                KarpenterNodePoolRequirement {
+                    key: KarpenterNodePoolRequirementKey::Arch,
+                    operator: Some(KarpenterRequirementOperator::In),
+                    values: vec!["AMD64".to_string()],
+                },
+            ],
+            stable_override: KarpenterStableNodePoolOverride {
+                spot_enabled: None,
+                budgets: vec![],
+                limits: None,
+                consolidate_after_in_seconds: None,
+            },
+            default_override: None,
+            gpu_override: None,
+            cronjob_override: None,
+            default_public_override: if with_default_public_override {
+                Some(KarpenterDefaultPublicNodePoolOverride {
+                    spot_enabled: None,
+                    limits: Some(KarpenterNodePoolLimits {
+                        max_cpu: KubernetesCpuResourceUnit::MilliCpu(8_000),
+                        max_memory: KubernetesMemoryResourceUnit::GibiByte(32),
+                    }),
+                    consolidate_after_in_seconds: Some(120),
+                })
+            } else {
+                None
+            },
+            default_private_override: if with_default_private_override {
+                Some(KarpenterDefaultPrivateNodePoolOverride {
+                    spot_enabled: None,
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                })
+            } else {
+                None
+            },
+        }
+    }
+
+    fn generate_chart_yaml_with_network(
+        vpc_qovery_network_mode: VpcQoveryNetworkMode,
+        user_network_config: Option<&UserNetworkConfig>,
+        qovery_node_pools: KarpenterNodePool,
+    ) -> String {
+        let chart = KarpenterConfigurationChart::new(
+            None,
+            "test-cluster".to_string(),
+            true,
+            "sg-12345".to_string(),
+            "z12345678",
+            Uuid::new_v4(),
+            "org-id",
+            Uuid::new_v4(),
+            KUBERNETES_VERSION,
+            "us-east-1",
+            KarpenterParameters {
+                spot_enabled: false,
+                max_node_drain_time_in_secs: None,
+                disk_size: DiskSize::Gib(50),
+                disk_iops: None,
+                disk_throughput: None,
+                default_service_architecture: ARM64,
+                qovery_node_pools,
+            },
+            vpc_qovery_network_mode,
+            user_network_config,
+            Ec2Ami::AmazonLinux2023,
+            AwsStorageType::GP3,
+            0,
+            std::collections::HashMap::new(),
+        );
+
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/{}/bootstrap/charts/{}",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
+            KarpenterConfigurationChart::chart_name(),
+        );
+
+        let helm = Helm::new::<String>(None, &[]).expect("Failed to initialize Helm");
+        let common_chart = chart.to_common_helm_chart().expect("Failed to convert to common chart");
+
+        helm.get_template(&chart_path, &common_chart.chart_info)
+            .expect("Failed to get Helm template")
+    }
+
+    fn parse_documents(yaml: &str) -> Vec<Value> {
+        serde_yaml::Deserializer::from_str(yaml)
+            .filter_map(|doc| Value::deserialize(doc).ok())
+            .collect()
+    }
+
+    fn find_resource<'a>(documents: &'a [Value], kind: &str, name: &str) -> Option<&'a Value> {
+        documents.iter().find(|document| {
+            document.get("kind").and_then(Value::as_str) == Some(kind)
+                && document
+                    .get("metadata")
+                    .and_then(|metadata| metadata.get("name"))
+                    .and_then(Value::as_str)
+                    == Some(name)
+        })
+    }
+
+    #[test]
+    fn test_egress_node_pools_are_not_rendered_without_overrides() {
+        let yaml = generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            egress_node_pools(false, false),
+        );
+        let documents = parse_documents(&yaml);
+
+        for name in ["qovery-default-public", "qovery-default-private"] {
+            assert!(
+                find_resource(&documents, "NodePool", name).is_none(),
+                "{name} NodePool should not be rendered without override"
+            );
+            assert!(
+                find_resource(&documents, "EC2NodeClass", name).is_none(),
+                "{name} EC2NodeClass should not be rendered without override"
+            );
+        }
+    }
+
+    #[test]
+    fn test_egress_node_pools_rendered_with_nat_gateways() {
+        let yaml = generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            egress_node_pools(true, true),
+        );
+        let documents = parse_documents(&yaml);
+
+        for (name, public_flag) in [("qovery-default-public", "true"), ("qovery-default-private", "false")] {
+            let node_pool =
+                find_resource(&documents, "NodePool", name).unwrap_or_else(|| panic!("{name} NodePool expected"));
+
+            // Opt-in only: pool must be tainted
+            let taints = node_pool["spec"]["template"]["spec"]["taints"]
+                .as_sequence()
+                .unwrap_or_else(|| panic!("{name} taints expected"));
+            assert_eq!(taints.len(), 1);
+            assert_eq!(taints[0]["key"].as_str(), Some(format!("nodepool/{name}").as_str()));
+            assert_eq!(taints[0]["effect"].as_str(), Some("NoSchedule"));
+
+            // Dedicated node class
+            assert_eq!(
+                node_pool["spec"]["template"]["spec"]["nodeClassRef"]["name"].as_str(),
+                Some(name)
+            );
+
+            // Global requirements + spot resolution (spot disabled -> on-demand only)
+            let requirements = node_pool["spec"]["template"]["spec"]["requirements"]
+                .as_sequence()
+                .unwrap_or_else(|| panic!("{name} requirements expected"));
+            assert!(
+                requirements.iter().any(|requirement| {
+                    requirement["key"].as_str() == Some("karpenter.sh/capacity-type")
+                        && requirement["values"]
+                            .as_sequence()
+                            .map(|values| values.iter().filter_map(Value::as_str).collect_vec() == vec!["on-demand"])
+                            == Some(true)
+                }),
+                "{name} should inherit the cluster capacity-type resolution"
+            );
+
+            // Subnet selection: cluster-unique ANDed tags
+            let node_class = find_resource(&documents, "EC2NodeClass", name)
+                .unwrap_or_else(|| panic!("{name} EC2NodeClass expected"));
+            let subnet_selector_terms = node_class["spec"]["subnetSelectorTerms"]
+                .as_sequence()
+                .unwrap_or_else(|| panic!("{name} subnetSelectorTerms expected"));
+            assert_eq!(subnet_selector_terms.len(), 1);
+            let subnet_tags = &subnet_selector_terms[0]["tags"];
+            assert_eq!(subnet_tags["ClusterId"].as_str(), Some("z12345678"));
+            assert_eq!(subnet_tags["SubnetType"].as_str(), Some("workload"));
+            assert_eq!(subnet_tags["Public"].as_str(), Some(public_flag));
+
+            // Security group selected by ID
+            assert_eq!(
+                node_class["spec"]["securityGroupSelectorTerms"][0]["id"].as_str(),
+                Some("sg-12345")
+            );
+        }
+
+        // Public IP only on the public node class
+        let public_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-public").unwrap();
+        assert_eq!(public_node_class["spec"]["associatePublicIPAddress"].as_bool(), Some(true));
+        let private_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-private").unwrap();
+        assert!(private_node_class["spec"].get("associatePublicIPAddress").is_none());
+
+        // Public pool override knobs
+        let public_node_pool = find_resource(&documents, "NodePool", "qovery-default-public").unwrap();
+        assert_eq!(public_node_pool["spec"]["limits"]["cpu"].as_str(), Some("8000m"));
+        assert_eq!(public_node_pool["spec"]["limits"]["memory"].as_str(), Some("32Gi"));
+        assert_eq!(
+            public_node_pool["spec"]["disruption"]["consolidateAfter"].as_str(),
+            Some("120s")
+        );
+    }
+
+    #[test]
+    fn test_egress_node_pools_without_nat_gateways_renders_public_only() {
+        let yaml = generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithoutNatGateways,
+            None,
+            egress_node_pools(true, true),
+        );
+        let documents = parse_documents(&yaml);
+
+        assert!(
+            find_resource(&documents, "NodePool", "qovery-default-public").is_some(),
+            "public pool should be rendered on WithoutNatGateways clusters"
+        );
+        assert!(
+            find_resource(&documents, "NodePool", "qovery-default-private").is_none(),
+            "private pool should not be rendered on WithoutNatGateways clusters (no private subnets)"
+        );
+        assert!(find_resource(&documents, "EC2NodeClass", "qovery-default-private").is_none());
+    }
+
+    #[test]
+    fn test_egress_node_pools_disabled_on_user_provided_network() {
+        let user_network_config = UserNetworkConfig {
+            documentdb_subnets_zone_a_ids: vec![],
+            documentdb_subnets_zone_b_ids: vec![],
+            documentdb_subnets_zone_c_ids: vec![],
+            elasticache_subnets_zone_a_ids: vec![],
+            elasticache_subnets_zone_b_ids: vec![],
+            elasticache_subnets_zone_c_ids: vec![],
+            rds_subnets_zone_a_ids: vec![],
+            rds_subnets_zone_b_ids: vec![],
+            rds_subnets_zone_c_ids: vec![],
+            aws_vpc_eks_id: "vpc-custom-12345".to_string(),
+            eks_subnets_zone_a_ids: vec!["subnet-public-a".to_string()],
+            eks_subnets_zone_b_ids: vec!["subnet-public-b".to_string()],
+            eks_subnets_zone_c_ids: vec!["subnet-public-c".to_string()],
+            eks_private_subnets_zone_a_ids: vec![],
+            eks_private_subnets_zone_b_ids: vec![],
+            eks_private_subnets_zone_c_ids: vec![],
+            eks_create_nodes_in_private_subnet: false,
+        };
+
+        let yaml = generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            Some(&user_network_config),
+            egress_node_pools(true, true),
+        );
+        let documents = parse_documents(&yaml);
+
+        for name in ["qovery-default-public", "qovery-default-private"] {
+            assert!(
+                find_resource(&documents, "NodePool", name).is_none(),
+                "{name} NodePool should not be rendered on BYO-VPC clusters"
+            );
+            assert!(
+                find_resource(&documents, "EC2NodeClass", name).is_none(),
+                "{name} EC2NodeClass should not be rendered on BYO-VPC clusters"
+            );
+        }
     }
 }
