@@ -53,3 +53,17 @@ cronjobNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
+
+defaultPublicNodePool:
+  enable: set-by-engine-code
+  requirements: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+
+defaultPrivateNodePool:
+  enable: set-by-engine-code
+  requirements: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""

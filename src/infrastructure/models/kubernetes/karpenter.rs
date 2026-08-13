@@ -15,6 +15,8 @@ pub enum KarpenterNodePoolType {
     Default,
     Gpu,
     Cronjob,
+    DefaultPublic,
+    DefaultPrivate,
 }
 
 impl Display for KarpenterNodePoolType {
@@ -24,6 +26,8 @@ impl Display for KarpenterNodePoolType {
             KarpenterNodePoolType::Default => "default",
             KarpenterNodePoolType::Gpu => "gpu",
             KarpenterNodePoolType::Cronjob => "cronjob",
+            KarpenterNodePoolType::DefaultPublic => "qovery-default-public",
+            KarpenterNodePoolType::DefaultPrivate => "qovery-default-private",
         };
         write!(f, "{output}")
     }
@@ -49,6 +53,8 @@ pub struct KarpenterNodePool {
     pub default_override: Option<KarpenterDefaultNodePoolOverride>,
     pub gpu_override: Option<KarpenterGpuNodePoolOverride>,
     pub cronjob_override: Option<KarpenterCronjobNodePoolOverride>,
+    pub default_public_override: Option<KarpenterDefaultPublicNodePoolOverride>,
+    pub default_private_override: Option<KarpenterDefaultPrivateNodePoolOverride>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -209,6 +215,32 @@ pub struct KarpenterDefaultNodePoolOverride {
     pub consolidate_after_in_seconds: Option<u64>,
 }
 
+/// Overrides for the opt-in `qovery-default-public` node pool (nodes on public
+/// subnets, IGW egress). Received from core as `qovery_node_pools.default_public_override`;
+/// the field's presence is what enables the pool, provided the cluster network
+/// mode allows it (WithNatGateways or WithoutNatGateways, never BYO-VPC).
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterDefaultPublicNodePoolOverride {
+    #[serde(default)]
+    pub spot_enabled: Option<bool>,
+    pub limits: Option<KarpenterNodePoolLimits>,
+    #[serde(default)]
+    pub consolidate_after_in_seconds: Option<u64>,
+}
+
+/// Overrides for the opt-in `qovery-default-private` node pool (nodes on private
+/// subnets, NAT egress). Received from core as `qovery_node_pools.default_private_override`;
+/// the field's presence is what enables the pool, provided the cluster network
+/// mode allows it (WithNatGateways only — other modes have no private subnets).
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterDefaultPrivateNodePoolOverride {
+    #[serde(default)]
+    pub spot_enabled: Option<bool>,
+    pub limits: Option<KarpenterNodePoolLimits>,
+    #[serde(default)]
+    pub consolidate_after_in_seconds: Option<u64>,
+}
+
 #[serde_with::serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterNodePoolLimits {
@@ -237,6 +269,8 @@ mod tests {
         assert_eq!(KarpenterNodePoolType::Stable.to_string(), "stable");
         assert_eq!(KarpenterNodePoolType::Gpu.to_string(), "gpu");
         assert_eq!(KarpenterNodePoolType::Cronjob.to_string(), "cronjob");
+        assert_eq!(KarpenterNodePoolType::DefaultPublic.to_string(), "qovery-default-public");
+        assert_eq!(KarpenterNodePoolType::DefaultPrivate.to_string(), "qovery-default-private");
     }
 
     #[test]

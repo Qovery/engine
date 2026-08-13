@@ -757,6 +757,7 @@ impl Karpenter {
             kubernetes.version.clone(),
             region.to_cloud_provider_format(),
             karpenter_parameters,
+            options.vpc_qovery_network_mode.clone(),
             options.user_provided_network.as_ref(),
             kubernetes.advanced_settings().aws_eks_ec2_ami.to_model(),
             AwsStorageType::try_from(kubernetes.advanced_settings.k8s_storage_class_fast_ssd.to_model()).map_err(

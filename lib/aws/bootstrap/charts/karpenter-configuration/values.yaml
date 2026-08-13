@@ -72,3 +72,19 @@ cronjobNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
+# Egress-class pools (QOV-2107): opt-in (tainted), disabled unless the cluster
+# receives an explicit override from core AND its network mode allows the pool.
+defaultPublicNodePool:
+  enable: false
+  consolidateAfter: 1m
+  requirements: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+defaultPrivateNodePool:
+  enable: false
+  consolidateAfter: 1m
+  requirements: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
