@@ -3,7 +3,8 @@ use crate::environment::models;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
 use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{
-    Build, DockerfileFragment as BuildDockerfileFragment, GitRepository, GitRepositoryExtraFile, Image, SshKey,
+    Build, BuildSource, DockerfileFragment as BuildDockerfileFragment, GitRepository, GitRepositoryExtraFile, Image,
+    SshKey,
 };
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
@@ -581,7 +582,7 @@ impl TerraformService {
         let extra_files_to_inject = self.build_extra_files(root_module_path)?;
 
         let mut build = Build {
-            git_repository: GitRepository {
+            source: BuildSource::Git(Box::new(GitRepository {
                 url: git_url.clone(),
                 get_credentials: if git_credentials.is_none() {
                     None
@@ -597,7 +598,7 @@ impl TerraformService {
                 extra_files_to_inject,
                 docker_target_build_stage: None,
                 skip_submodules: self.advanced_settings.build_skip_git_submodules,
-            },
+            })),
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: build_env_vars,
             disable_buildkit_cache: disable_build_cache,

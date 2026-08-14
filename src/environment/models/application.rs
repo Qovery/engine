@@ -406,7 +406,7 @@ impl<T: CloudProvider> Application<T> {
     }
 
     fn service_version(&self) -> String {
-        self.build.git_repository.commit_id.clone()
+        self.build.commit_id().to_string()
     }
 }
 

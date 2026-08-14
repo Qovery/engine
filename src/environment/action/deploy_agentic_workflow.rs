@@ -107,7 +107,7 @@ impl DeploymentAction for AgenticWorkflow {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
 
-        let task = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+        let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             let chart = build_agentic_workflow_chart_info(self, target);
             let helm = HelmDeployment::new(
                 event_details.clone(),
@@ -117,7 +117,22 @@ impl DeploymentAction for AgenticWorkflow {
                 chart,
             );
 
-            helm.on_delete(target)
+            helm.on_delete(target)?;
+
+            // A workflow with a docker fragment owns a repository in the cluster registry holding
+            // its built images. Nothing else will reclaim it, so drop it here. Failing to do so
+            // leaves an orphaned repository behind but does not make the delete itself fail.
+            if let Some(build) = self.build() {
+                logger.info("🪓 Terminating container registry of the agentic workflow".to_string());
+                if let Err(err) = target
+                    .container_registry
+                    .delete_repository(build.image.legacy_repository_name())
+                {
+                    logger.warning(format!("❌ Failed to delete container registry of the agentic workflow: {err}"));
+                }
+            }
+
+            Ok(())
         };
 
         execute_long_deployment(AgenticWorkflowDeploymentReporter::new(self, target, Action::Delete), task)

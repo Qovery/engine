@@ -1,10 +1,12 @@
 use crate::environment::action::DeploymentAction;
+use crate::environment::models::container::RegistryTeraContext;
 use crate::environment::models::types::ToTeraContext;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
+use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::io_models::agentic_workflow::AgenticWorkflowModelType;
 use crate::io_models::context::Context;
 use crate::io_models::models::{EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -95,8 +97,8 @@ fn run_inputs_json(payload: &Option<AgenticWorkflowRunPayload>) -> String {
 pub struct AgenticWorkflowConfig {
     pub image_repository: String,
     pub image_tag: String,
-    /// Extra Dockerfile fragment (§8.3). Not consumed yet - see the comment on
-    /// `io_models::agentic_workflow::AgenticWorkflow::docker_fragment`.
+    /// Extra Dockerfile instructions layered onto the base image. Turned into the workflow's
+    /// [`Build`] at conversion time; kept here as the record of what was asked for.
     pub docker_fragment: String,
     pub prompt: String,
     pub model_type: AgenticWorkflowModelType,
@@ -122,6 +124,23 @@ impl AgenticWorkflowConfig {
     }
 }
 
+/// Kubernetes pull secret rendered by the chart when the Job runs an image built by the engine, and
+/// therefore living in the cluster's private registry.
+fn registry_tera_context(build: &Build, target: &DeploymentTarget, kube_name: &str) -> Option<RegistryTeraContext> {
+    let registry_info = target.container_registry.registry_info();
+
+    registry_info
+        .get_registry_docker_json_config(DockerRegistryInfo {
+            registry_name: Some(target.kubernetes.cluster_name()),
+            repository_name: Some(build.image.repository_name().to_string()),
+            image_name: Some(build.image.name()),
+        })
+        .map(|docker_json| RegistryTeraContext {
+            secret_name: format!("{kube_name}-registry"),
+            docker_json_config: Some(docker_json),
+        })
+}
+
 /// Deployment of an AgenticWorkflow: renders and installs a single Kubernetes `Job` running the
 /// agent (`qovery-ai-runner`) image, with a `qovery-job-output-waiter` sidecar for output
 /// capture. It is intentionally a single concrete struct (not generic over `CloudProvider`)
@@ -137,6 +156,9 @@ pub struct AgenticWorkflow {
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
     pub(crate) config: AgenticWorkflowConfig,
+    /// Present only when `config.docker_fragment` asks for extra layers on the base image. `None`
+    /// means the Job runs the base image straight from its public registry.
+    pub(crate) build: Option<Build>,
 }
 
 impl AgenticWorkflow {
@@ -147,6 +169,7 @@ impl AgenticWorkflow {
         name: String,
         kube_name: String,
         config: AgenticWorkflowConfig,
+        build: Option<Build>,
         action: Action,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, AgenticWorkflowError> {
@@ -178,6 +201,7 @@ impl AgenticWorkflow {
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
             config,
+            build,
         })
     }
 
@@ -228,7 +252,11 @@ impl AgenticWorkflow {
                 long_id: self.long_id,
                 name: self.name.clone(),
                 kube_name: self.kube_name.clone(),
-                image_full: self.config.image_full(),
+                image_full: self
+                    .build
+                    .as_ref()
+                    .map(|build| build.image.full_image_name_with_tag())
+                    .unwrap_or_else(|| self.config.image_full()),
                 prompt_b64: general_purpose::STANDARD.encode(self.config.prompt.as_bytes()),
                 inputs_json_b64: general_purpose::STANDARD.encode(run_inputs_json(&self.config.run_payload).as_bytes()),
                 cpu_request_in_milli: self.config.cpu_request_in_milli.to_string(),
@@ -238,6 +266,10 @@ impl AgenticWorkflow {
                 max_duration_in_sec: self.config.max_duration_in_sec,
             },
             environment_variables: self.get_environment_variables(),
+            registry: self
+                .build
+                .as_ref()
+                .and_then(|build| registry_tera_context(build, target, self.kube_name.as_str())),
         }
     }
 }
@@ -288,34 +320,13 @@ impl Service for AgenticWorkflow {
     }
 
     fn build(&self) -> Option<&Build> {
-        // First cut runs the manually-pushed base image (`public.ecr.aws/r3m4q3r9/qovery-ai-runner`);
-        // `config.docker_fragment` is threaded through end-to-end but not consumed yet.
-        //
-        // TODO(QOV-2086, §8.3): build a per-workflow image so `docker_fragment` takes effect.
-        // High-level spec:
-        //   1. Hold an `Option<Build>` on the domain struct, computed at `new()`, so this can
-        //      return a reference (mirror how `io_models/job.rs` constructs a `Build` for
-        //      container-source services).
-        //   2. Construct that `Build` from the `qovery-ai-runner` source repo:
-        //        - `git_repository`: qovery-ai-runner at a pinned ref + its Dockerfile path.
-        //        - `image`: target tag in a Qovery registry (call `compute_image_tag()` — it
-        //          already factors `dockerfile_fragment` into the tag, so per-fragment cache
-        //          keys work for free).
-        //        - `dockerfile_fragment: Some(DockerfileFragment::Inline { content:
-        //          self.config.docker_fragment.clone() })` — the build platform splices this
-        //          into the Dockerfile at build time. NB: this makes the ai-runner repo's own
-        //          `render-fragment.sh`/marker mechanism redundant for the engine path (it
-        //          stays useful only for manual/local builds).
-        //        - resources/registries/architectures as the other services set them.
-        //   3. Returning `Some(build)` makes the deploy pipeline build+push before deploy;
-        //      point the chart's Job image at the built tag instead of the fixed base image.
-        //   4. `build_mut()` must return the same `Build` (the pipeline mutates the tag).
-        // Leave `docker_fragment` empty → keep running the fixed base image (skip the build).
-        None
+        self.build.as_ref()
     }
 
     fn build_mut(&mut self) -> Option<&mut Build> {
-        None
+        // The build pipeline rewrites the image tag once it knows which Dockerfile args are used,
+        // so it must get the very same `Build` the tera context later reads.
+        self.build.as_mut()
     }
 
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
@@ -468,11 +479,14 @@ pub(crate) struct AgenticWorkflowTeraContext {
     pub(crate) deployment_id: String,
     pub(crate) service: ServiceTeraContext,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    /// `None` when the Job runs the public base image and needs no pull secret.
+    pub(crate) registry: Option<RegistryTeraContext>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::{AgenticWorkflowRunPayload, AgenticWorkflowTeraContext, ServiceTeraContext, run_inputs_json};
+    use crate::environment::models::container::RegistryTeraContext;
     use crate::io_models::models::EnvironmentVariable;
     use base64::Engine;
     use base64::engine::general_purpose;
@@ -516,7 +530,20 @@ mod tests {
                     is_secret: false,
                 },
             ],
+            registry: None,
         }
+    }
+
+    /// Same context, but for a workflow whose image the engine built from a docker fragment: it now
+    /// lives in the cluster's private registry and needs a pull secret.
+    fn build_agentic_workflow_tera_context_with_built_image() -> AgenticWorkflowTeraContext {
+        let mut context = build_agentic_workflow_tera_context();
+        context.service.image_full = "registry.qovery.com/z1234567:mytag".to_string();
+        context.registry = Some(RegistryTeraContext {
+            secret_name: "test-agentic-workflow-registry".to_string(),
+            docker_json_config: Some("eyJhdXRocyI6e319".to_string()),
+        });
+        context
     }
 
     fn job_template() -> &'static str {
@@ -644,6 +671,52 @@ mod tests {
         )
         .expect("decoded value must be valid UTF-8");
         assert_eq!(decoded_once, "CLAUDE");
+    }
+
+    /// Without a build the Job runs the public base image, so rendering a pull secret would be a
+    /// dangling reference to a Secret the chart never creates.
+    #[test]
+    fn renders_no_pull_secret_when_the_workflow_has_no_built_image() {
+        let job = render_template(job_template(), build_agentic_workflow_tera_context());
+        let secret = render_template(secret_template(), build_agentic_workflow_tera_context());
+
+        assert!(!job.contains("imagePullSecrets"), "got:\n{job}");
+        assert!(!secret.contains("dockerconfigjson"), "got:\n{secret}");
+    }
+
+    /// The image built from a docker fragment lands in the cluster's private registry, so the Job
+    /// needs the pull secret and the chart has to create it, or the pod is stuck in ImagePullBackOff.
+    #[test]
+    fn renders_pull_secret_when_the_workflow_image_was_built() {
+        let job = render_template(job_template(), build_agentic_workflow_tera_context_with_built_image());
+        let secret = render_template(secret_template(), build_agentic_workflow_tera_context_with_built_image());
+
+        assert!(job.contains("imagePullSecrets"), "got:\n{job}");
+        assert!(job.contains("- name: test-agentic-workflow-registry"), "got:\n{job}");
+        assert!(job.contains("image: \"registry.qovery.com/z1234567:mytag\""), "got:\n{job}");
+
+        assert!(secret.contains("type: kubernetes.io/dockerconfigjson"), "got:\n{secret}");
+        assert!(secret.contains("name: test-agentic-workflow-registry"), "got:\n{secret}");
+        assert!(secret.contains(".dockerconfigjson: eyJhdXRocyI6e319"), "got:\n{secret}");
+    }
+
+    /// Both templates gate on `docker_json_config`, so a registry carrying no credentials renders
+    /// neither. Gating the Job on `registry` alone would make it reference a Secret that was never
+    /// created; gating the Secret on `registry` alone would create one with an empty
+    /// `.dockerconfigjson`, which kubelet rejects. Either way the pod never starts.
+    #[test]
+    fn renders_no_pull_secret_when_the_registry_carries_no_credentials() {
+        let mut context = build_agentic_workflow_tera_context_with_built_image();
+        context.registry = Some(RegistryTeraContext {
+            secret_name: "test-agentic-workflow-registry".to_string(),
+            docker_json_config: None,
+        });
+
+        let job = render_template(job_template(), context.clone());
+        let secret = render_template(secret_template(), context);
+
+        assert!(!job.contains("imagePullSecrets"), "got:\n{job}");
+        assert!(!secret.contains("dockerconfigjson"), "got:\n{secret}");
     }
 
     fn prompt_config_map_template() -> &'static str {

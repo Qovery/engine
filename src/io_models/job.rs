@@ -8,7 +8,7 @@ use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
 use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
-use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use crate::infrastructure::models::build_platform::{Build, BuildSource, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind};
 use crate::infrastructure::models::container_registry::{
@@ -299,7 +299,7 @@ impl Job {
         });
 
         let mut build = Build {
-            git_repository: GitRepository {
+            source: BuildSource::Git(Box::new(GitRepository {
                 url,
                 get_credentials: if git_credentials.is_none() {
                     None
@@ -315,7 +315,7 @@ impl Job {
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: docker_target_build_stage.clone(),
                 skip_submodules: self.advanced_settings.build_skip_git_submodules,
-            },
+            })),
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
             environment_variables: self
                 .environment_vars_with_infos

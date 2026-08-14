@@ -32,6 +32,14 @@ spec:
         app.kubernetes.io/managed-by: "qovery"
     spec:
       restartPolicy: Never
+      {%- if registry.docker_json_config %}
+      # Only set when the agent image was built by the engine from a docker fragment, and therefore
+      # lives in the cluster's private registry. The output-waiter sidecar is public and unaffected.
+      # Guarded on `docker_json_config`, the same condition secret.j2.yaml creates the Secret under,
+      # so this can never reference a Secret that was not rendered.
+      imagePullSecrets:
+        - name: {{ registry.secret_name }}
+      {%- endif %}
       volumes:
         - name: output
           emptyDir: {}
