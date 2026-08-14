@@ -1,3 +1,5 @@
+use json_patch::{AddOperation, PatchOperation, RemoveOperation, ReplaceOperation, TestOperation};
+use jsonptr::PointerBuf;
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::Secret;
 use k8s_openapi::api::networking::v1::Ingress;
@@ -11,6 +13,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use serde_yaml::Deserializer;
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::{File, read_dir, read_to_string};
 use std::io::{BufRead, BufReader, Read};
@@ -1193,15 +1196,77 @@ pub fn kubectl_get_listenerset_served_version(kube_client: &Client) -> Option<St
     served_versions.into_iter().next()
 }
 
-/// Reconciles Gateway TLS certificateRefs to include all router TLS Secrets (router-tls-*)
-/// found across namespaces. Returns true if the Gateway was patched.
+/// Reconciles Gateway TLS certificateRefs to exactly match live router TLS Secrets (`router-tls-*`).
+///
+/// Non-router certificate references are preserved. Router references are derived from live
+/// Ingresses, ListenerSets, and GKE fallback ReferenceGrants, so a cluster update removes stale
+/// fallback references left by interrupted environment deletions. Returns true if the Gateway was
+/// patched.
 pub fn kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
     kube_client: &Client,
     gateway_namespace: &str,
     gateway_name: &str,
     listener_name: &str,
 ) -> Result<bool, CommandError> {
-    let mut desired_refs: Vec<(String, String)> = Vec::new();
+    let api_version = kubectl_get_gateway_api_served_version(kube_client).unwrap_or_else(|| "v1".to_string());
+    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &api_version, "Gateway");
+    let api: Api<kube::core::DynamicObject> =
+        Api::namespaced_with(kube_client.clone(), gateway_namespace, &ApiResource::from_gvk(&gvk));
+
+    for _ in 0..MAX_GATEWAY_CERTIFICATE_REF_RECONCILIATION_ATTEMPTS {
+        // Fetch the Gateway before its sources of truth. If router cleanup changes the Gateway
+        // after this read, the resourceVersion test below rejects this attempt and the next one
+        // recomputes desired references after the cleanup has completed.
+        let gateway = block_on(api.get(gateway_name)).map_err(|error| {
+            CommandError::new_from_safe_message(format!(
+                "Failed to fetch Gateway {gateway_namespace}/{gateway_name}: {error}"
+            ))
+        })?;
+        let mut desired_refs = gateway_router_tls_certificate_refs(kube_client)?;
+        let fallback_ownership = gateway_fallback_certificate_ref_ownership(&gateway);
+        let live_fallback_ownership =
+            live_gateway_fallback_certificate_ref_ownership(kube_client, &fallback_ownership)?;
+        let stale_fallback_ownership = fallback_ownership
+            .difference(&live_fallback_ownership)
+            .cloned()
+            .collect();
+        desired_refs.extend(live_fallback_ownership);
+        let legacy_fallback_refs =
+            gateway_legacy_reference_grant_certificate_refs(kube_client, gateway_namespace, &fallback_ownership)?;
+        desired_refs.extend(legacy_fallback_refs.iter().cloned());
+        let Some(patch) = gateway_certificate_refs_reconciliation_patch(
+            &gateway,
+            listener_name,
+            &desired_refs,
+            &legacy_fallback_refs,
+            &stale_fallback_ownership,
+            gateway_namespace,
+        )?
+        else {
+            return Ok(false);
+        };
+
+        let patch: Patch<kube::core::DynamicObject> = Patch::Json(patch);
+        match block_on(api.patch(gateway_name, &PatchParams::default(), &patch)) {
+            Ok(_) => return Ok(true),
+            Err(error) if is_kubernetes_optimistic_concurrency_conflict(&error) => continue,
+            Err(error) => {
+                return Err(CommandError::new_from_safe_message(format!(
+                    "Failed to patch Gateway {gateway_namespace}/{gateway_name} certificateRefs: {error}"
+                )));
+            }
+        }
+    }
+
+    Err(CommandError::new_from_safe_message(format!(
+        "Failed to reconcile Gateway {gateway_namespace}/{gateway_name} certificateRefs: the Gateway changed concurrently"
+    )))
+}
+
+const MAX_GATEWAY_CERTIFICATE_REF_RECONCILIATION_ATTEMPTS: usize = 3;
+
+fn gateway_router_tls_certificate_refs(kube_client: &Client) -> Result<BTreeSet<(String, String)>, CommandError> {
+    let mut desired_refs = BTreeSet::new();
 
     // Collect secrets referenced by Qovery-managed Ingress resources.
     let ingress_api: Api<Ingress> = Api::all(kube_client.clone());
@@ -1223,7 +1288,7 @@ pub fn kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
             if !secret_name.starts_with("router-tls-") {
                 continue;
             }
-            desired_refs.push((namespace.clone(), secret_name));
+            desired_refs.insert((namespace.clone(), secret_name));
         }
     }
 
@@ -1269,99 +1334,401 @@ pub fn kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
                             .and_then(Value::as_str)
                             .map(|s| s.to_string())
                             .unwrap_or_else(|| ls_namespace.clone());
-                        desired_refs.push((namespace, name.to_string()));
+                        desired_refs.insert((namespace, name.to_string()));
                     }
                 }
             }
         }
     }
 
-    // Deduplicate desired refs.
-    desired_refs.sort();
-    desired_refs.dedup();
+    live_router_tls_certificate_refs(kube_client, &desired_refs)
+}
 
-    if desired_refs.is_empty() {
-        return Ok(false);
-    }
+pub(crate) const GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL: &str = "qovery.com/gateway-fallback-router-tls";
+pub(crate) const GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE: &str = "true";
+const QOVERY_ENGINE_FIELD_MANAGER: &str = "qovery-engine";
 
-    let api_version = kubectl_get_gateway_api_served_version(kube_client).unwrap_or_else(|| "v1".to_string());
-    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &api_version, "Gateway");
-    let api: Api<kube::core::DynamicObject> =
-        Api::namespaced_with(kube_client.clone(), gateway_namespace, &ApiResource::from_gvk(&gvk));
-
-    let mut gateway = block_on(api.get(gateway_name)).map_err(|e| {
-        CommandError::new_from_safe_message(format!("Failed to fetch Gateway {gateway_namespace}/{gateway_name}: {e}"))
-    })?;
-
-    let listeners = gateway
-        .data
-        .get_mut("spec")
-        .and_then(|spec| spec.get_mut("listeners"))
-        .and_then(|listeners| listeners.as_array_mut())
-        .ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Gateway {gateway_namespace}/{gateway_name} has no spec.listeners"
-            ))
-        })?;
-
-    let listener = listeners
-        .iter_mut()
-        .find(|l| l.get("name").and_then(|v| v.as_str()) == Some(listener_name))
-        .ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Gateway {gateway_namespace}/{gateway_name} has no '{listener_name}' listener"
-            ))
-        })?;
-
-    let mut mutated = false;
-
-    let tls = listener
-        .as_object_mut()
-        .ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Gateway {gateway_namespace}/{gateway_name} listener '{listener_name}' is not an object"
-            ))
-        })?
-        .entry("tls")
-        .or_insert_with(|| {
-            mutated = true;
-            json!({ "mode": "Terminate", "certificateRefs": [] })
-        });
-
-    let cert_refs = tls
-        .as_object_mut()
-        .ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Gateway {gateway_namespace}/{gateway_name} listener '{listener_name}' tls is not an object"
-            ))
-        })?
-        .entry("certificateRefs")
-        .or_insert_with(|| {
-            mutated = true;
-            json!([])
-        });
-
-    let cert_refs_array = cert_refs.as_array_mut().ok_or_else(|| {
+fn gateway_legacy_reference_grant_certificate_refs(
+    kube_client: &Client,
+    gateway_namespace: &str,
+    fallback_ownership: &BTreeSet<(String, String)>,
+) -> Result<BTreeSet<(String, String)>, CommandError> {
+    // This is a bounded migration source for fallback references created before the Gateway
+    // ownership annotation existed. A live router TLS Secret and its matching ReferenceGrant
+    // prove that the fallback is still required even if a cluster-chart upgrade has already
+    // reset the dynamically managed Gateway certificateRefs.
+    let Some(reference_grant_version) = kubectl_get_reference_grant_served_version(kube_client) else {
+        return Ok(BTreeSet::new());
+    };
+    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &reference_grant_version, "ReferenceGrant");
+    let api: Api<kube::core::DynamicObject> = Api::all_with(kube_client.clone(), &ApiResource::from_gvk(&gvk));
+    let reference_grants = block_on(api.list(&ListParams::default())).map_err(|error| {
         CommandError::new_from_safe_message(format!(
-            "Gateway {gateway_namespace}/{gateway_name} listener '{listener_name}' tls.certificateRefs is not an array"
+            "Failed to list ReferenceGrant resources for Gateway reconciliation: {error}"
         ))
     })?;
 
-    let mut existing = std::collections::HashSet::new();
-    for r in cert_refs_array.iter() {
-        let name = r.get("name").and_then(|v| v.as_str());
-        if let Some(n) = name {
-            let ns = r.get("namespace").and_then(|v| v.as_str()).unwrap_or(gateway_namespace);
-            existing.insert(format!("{ns}/{n}"));
+    let mut legacy_refs = BTreeSet::new();
+    for reference_grant in &reference_grants.items {
+        let Some(namespace) = reference_grant.metadata.namespace.clone() else {
+            continue;
+        };
+        let Some(secret_name) = reference_grant_router_tls_secret_name(reference_grant, gateway_namespace) else {
+            continue;
+        };
+        if fallback_ownership.contains(&(namespace.clone(), secret_name.clone()))
+            || !is_engine_gateway_fallback_reference_grant(reference_grant, &secret_name)
+        {
+            continue;
+        }
+        let secret_api: Api<Secret> = Api::namespaced(kube_client.clone(), &namespace);
+        let secret = block_on(secret_api.get_opt(&secret_name)).map_err(|error| {
+            CommandError::new_from_safe_message(format!(
+                "Failed to fetch legacy fallback router TLS Secret {namespace}/{secret_name}: {error}"
+            ))
+        })?;
+        if secret.is_some() {
+            legacy_refs.insert((namespace, secret_name));
+        }
+    }
+
+    Ok(legacy_refs)
+}
+
+/// Returns whether a fallback ReferenceGrant is managed by the engine.
+pub(crate) fn is_engine_gateway_fallback_reference_grant(
+    reference_grant: &kube::core::DynamicObject,
+    secret_name: &str,
+) -> bool {
+    if reference_grant
+        .metadata
+        .labels
+        .as_ref()
+        .and_then(|labels| labels.get(GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL))
+        .is_some_and(|value| value == GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE)
+    {
+        return true;
+    }
+
+    // Grants created before the label existed can be migrated once. Require both the canonical
+    // resource name and the server-side-apply manager used by the engine so unrelated grants
+    // cannot be adopted into the shared Gateway.
+    reference_grant.metadata.name.as_deref() == Some(&format!("allow-gateway-to-{secret_name}"))
+        && reference_grant
+            .metadata
+            .managed_fields
+            .as_ref()
+            .is_some_and(|managed_fields| {
+                managed_fields.iter().any(|entry| {
+                    entry.manager.as_deref() == Some(QOVERY_ENGINE_FIELD_MANAGER)
+                        && entry.operation.as_deref() == Some("Apply")
+                })
+            })
+}
+
+fn reference_grant_router_tls_secret_name(
+    reference_grant: &kube::core::DynamicObject,
+    gateway_namespace: &str,
+) -> Option<String> {
+    let spec = reference_grant.data.get("spec")?;
+    let allows_gateway = spec.get("from").and_then(Value::as_array).is_some_and(|sources| {
+        sources.iter().any(|source| {
+            source.get("group").and_then(Value::as_str) == Some("gateway.networking.k8s.io")
+                && source.get("kind").and_then(Value::as_str) == Some("Gateway")
+                && source.get("namespace").and_then(Value::as_str) == Some(gateway_namespace)
+        })
+    });
+    if !allows_gateway {
+        return None;
+    }
+
+    spec.get("to").and_then(Value::as_array).and_then(|targets| {
+        targets.iter().find_map(|target| {
+            let name = target.get("name").and_then(Value::as_str)?;
+            (target.get("group").and_then(Value::as_str) == Some("")
+                && target.get("kind").and_then(Value::as_str) == Some("Secret")
+                && name.starts_with("router-tls-"))
+            .then(|| name.to_string())
+        })
+    })
+}
+
+const GATEWAY_FALLBACK_CERTIFICATE_REF_ANNOTATION_PREFIX: &str = "qovery.com/gateway-fallback-router-tls-";
+
+pub(crate) fn gateway_fallback_certificate_ref_annotation_key(secret_name: &str) -> String {
+    format!(
+        "{GATEWAY_FALLBACK_CERTIFICATE_REF_ANNOTATION_PREFIX}{}",
+        secret_name.strip_prefix("router-tls-").unwrap_or(secret_name)
+    )
+}
+
+fn gateway_fallback_certificate_ref_ownership(gateway: &kube::core::DynamicObject) -> BTreeSet<(String, String)> {
+    gateway
+        .metadata
+        .annotations
+        .iter()
+        .flat_map(|annotations| annotations.iter())
+        .filter_map(|(key, namespace)| {
+            let router_id = key.strip_prefix(GATEWAY_FALLBACK_CERTIFICATE_REF_ANNOTATION_PREFIX)?;
+            (!namespace.is_empty() && !router_id.is_empty())
+                .then(|| (namespace.clone(), format!("router-tls-{router_id}")))
+        })
+        .collect()
+}
+
+fn live_gateway_fallback_certificate_ref_ownership(
+    kube_client: &Client,
+    fallback_ownership: &BTreeSet<(String, String)>,
+) -> Result<BTreeSet<(String, String)>, CommandError> {
+    live_router_tls_certificate_refs(kube_client, fallback_ownership)
+}
+
+/// Filters router TLS references to Secrets that still exist.
+///
+/// Ingresses and ListenerSets can outlive their Secrets after a partial router deletion. Keeping
+/// their references would make reconciliation re-add dead certificateRefs to the shared Gateway.
+fn live_router_tls_certificate_refs(
+    kube_client: &Client,
+    router_tls_certificate_refs: &BTreeSet<(String, String)>,
+) -> Result<BTreeSet<(String, String)>, CommandError> {
+    let mut live_refs = BTreeSet::new();
+
+    for (namespace, secret_name) in router_tls_certificate_refs {
+        let api: Api<Secret> = Api::namespaced(kube_client.clone(), namespace);
+        let secret = block_on(api.get_opt(secret_name)).map_err(|error| {
+            CommandError::new_from_safe_message(format!(
+                "Failed to fetch router TLS Secret {namespace}/{secret_name} during Gateway reconciliation: {error}"
+            ))
+        })?;
+        if secret.is_some() {
+            live_refs.insert((namespace.clone(), secret_name.clone()));
+        }
+    }
+
+    Ok(live_refs)
+}
+
+fn gateway_certificate_refs_reconciliation_patch(
+    gateway: &kube::core::DynamicObject,
+    listener_name: &str,
+    desired_refs: &BTreeSet<(String, String)>,
+    legacy_fallback_refs: &BTreeSet<(String, String)>,
+    stale_fallback_ownership: &BTreeSet<(String, String)>,
+    gateway_namespace: &str,
+) -> Result<Option<json_patch::Patch>, CommandError> {
+    let resource_version = gateway.metadata.resource_version.as_ref().ok_or_else(|| {
+        CommandError::new_from_safe_message(format!(
+            "Gateway {} has no resourceVersion",
+            gateway.metadata.name.as_deref().unwrap_or("unknown")
+        ))
+    })?;
+    let listeners = gateway
+        .data
+        .get("spec")
+        .and_then(|spec| spec.get("listeners"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| CommandError::new_from_safe_message("Gateway has no spec.listeners".to_string()))?;
+
+    let listener_index = listeners
+        .iter()
+        .position(|listener| listener.get("name").and_then(Value::as_str) == Some(listener_name))
+        .ok_or_else(|| CommandError::new_from_safe_message(format!("Gateway has no '{listener_name}' listener")))?;
+    let listener = listeners
+        .get(listener_index)
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            CommandError::new_from_safe_message(format!("Gateway listener '{listener_name}' is not an object"))
+        })?;
+    let listener_path = format!("/spec/listeners/{listener_index}");
+
+    let mut patch_operations = vec![PatchOperation::Test(TestOperation {
+        path: json_pointer("/metadata/resourceVersion")?,
+        value: Value::String(resource_version.clone()),
+    })];
+    let ownership_patch_operations =
+        gateway_fallback_ownership_patch_operations(gateway, legacy_fallback_refs, stale_fallback_ownership)?;
+    let mut certificate_refs = match listener.get("tls") {
+        None => {
+            if desired_refs.is_empty() {
+                if ownership_patch_operations.is_empty() {
+                    return Ok(None);
+                }
+                patch_operations.extend(ownership_patch_operations);
+                return Ok(Some(json_patch::Patch(patch_operations)));
+            }
+            let mut certificate_refs = Vec::new();
+            reconcile_router_tls_certificate_refs(&mut certificate_refs, desired_refs, gateway_namespace);
+            patch_operations.push(PatchOperation::Add(AddOperation {
+                path: json_pointer(format!("{listener_path}/tls"))?,
+                value: json!({ "mode": "Terminate", "certificateRefs": certificate_refs }),
+            }));
+            patch_operations.extend(ownership_patch_operations);
+            return Ok(Some(json_patch::Patch(patch_operations)));
+        }
+        Some(tls) => {
+            let tls = tls.as_object().ok_or_else(|| {
+                CommandError::new_from_safe_message(format!("Gateway listener '{listener_name}' tls is not an object"))
+            })?;
+            match tls.get("certificateRefs") {
+                None => {
+                    if desired_refs.is_empty() {
+                        if ownership_patch_operations.is_empty() {
+                            return Ok(None);
+                        }
+                        patch_operations.extend(ownership_patch_operations);
+                        return Ok(Some(json_patch::Patch(patch_operations)));
+                    }
+                    let mut certificate_refs = Vec::new();
+                    reconcile_router_tls_certificate_refs(&mut certificate_refs, desired_refs, gateway_namespace);
+                    patch_operations.push(PatchOperation::Add(AddOperation {
+                        path: json_pointer(format!("{listener_path}/tls/certificateRefs"))?,
+                        value: Value::Array(certificate_refs),
+                    }));
+                    patch_operations.extend(ownership_patch_operations);
+                    return Ok(Some(json_patch::Patch(patch_operations)));
+                }
+                Some(certificate_refs) => certificate_refs
+                    .as_array()
+                    .ok_or_else(|| {
+                        CommandError::new_from_safe_message(format!(
+                            "Gateway listener '{listener_name}' tls.certificateRefs is not an array"
+                        ))
+                    })?
+                    .clone(),
+            }
+        }
+    };
+
+    let certificate_refs_changed =
+        reconcile_router_tls_certificate_refs(&mut certificate_refs, desired_refs, gateway_namespace);
+    if !certificate_refs_changed && ownership_patch_operations.is_empty() {
+        return Ok(None);
+    }
+    if certificate_refs_changed {
+        patch_operations.push(PatchOperation::Replace(ReplaceOperation {
+            path: json_pointer(format!("{listener_path}/tls/certificateRefs"))?,
+            value: Value::Array(certificate_refs),
+        }));
+    }
+    patch_operations.extend(ownership_patch_operations);
+
+    Ok(Some(json_patch::Patch(patch_operations)))
+}
+
+fn gateway_fallback_ownership_patch_operations(
+    gateway: &kube::core::DynamicObject,
+    legacy_fallback_refs: &BTreeSet<(String, String)>,
+    stale_fallback_ownership: &BTreeSet<(String, String)>,
+) -> Result<Vec<PatchOperation>, CommandError> {
+    let missing_ownership: Vec<_> = legacy_fallback_refs
+        .iter()
+        .filter(|(namespace, secret_name)| {
+            let key = gateway_fallback_certificate_ref_annotation_key(secret_name);
+            gateway
+                .metadata
+                .annotations
+                .as_ref()
+                .and_then(|annotations| annotations.get(&key))
+                != Some(namespace)
+        })
+        .collect();
+    if missing_ownership.is_empty() && stale_fallback_ownership.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    match gateway.metadata.annotations.as_ref() {
+        Some(_) => {
+            let mut patch_operations: Vec<_> = missing_ownership
+                .into_iter()
+                .map(|(namespace, secret_name)| {
+                    let key = gateway_fallback_certificate_ref_annotation_key(secret_name);
+                    Ok(PatchOperation::Add(AddOperation {
+                        path: json_pointer(format!("/metadata/annotations/{}", json_pointer_segment(&key)))?,
+                        value: Value::String(namespace.clone()),
+                    }))
+                })
+                .collect::<Result<_, CommandError>>()?;
+            patch_operations.extend(
+                stale_fallback_ownership
+                    .iter()
+                    .map(|(_, secret_name)| {
+                        let key = gateway_fallback_certificate_ref_annotation_key(secret_name);
+                        Ok(PatchOperation::Remove(RemoveOperation {
+                            path: json_pointer(format!("/metadata/annotations/{}", json_pointer_segment(&key)))?,
+                        }))
+                    })
+                    .collect::<Result<Vec<_>, CommandError>>()?,
+            );
+            Ok(patch_operations)
+        }
+        None => Ok(vec![PatchOperation::Add(AddOperation {
+            path: json_pointer("/metadata/annotations")?,
+            value: Value::Object(
+                missing_ownership
+                    .into_iter()
+                    .map(|(namespace, secret_name)| {
+                        (
+                            gateway_fallback_certificate_ref_annotation_key(secret_name),
+                            Value::String(namespace.clone()),
+                        )
+                    })
+                    .collect(),
+            ),
+        })]),
+    }
+}
+
+fn json_pointer(path: impl AsRef<str>) -> Result<PointerBuf, CommandError> {
+    PointerBuf::parse(path.as_ref())
+        .map_err(|error| CommandError::new_from_safe_message(format!("Invalid Gateway patch path: {error}")))
+}
+
+fn json_pointer_segment(segment: &str) -> String {
+    segment.replace('~', "~0").replace('/', "~1")
+}
+
+fn is_kubernetes_optimistic_concurrency_conflict(error: &kube::Error) -> bool {
+    matches!(error, kube::Error::Api(status) if status.is_conflict())
+}
+
+fn reconcile_router_tls_certificate_refs(
+    certificate_refs: &mut Vec<Value>,
+    desired_refs: &BTreeSet<(String, String)>,
+    gateway_namespace: &str,
+) -> bool {
+    let existing_refs = std::mem::take(certificate_refs);
+    let mut retained_refs = Vec::with_capacity(existing_refs.len() + desired_refs.len());
+    let mut retained_router_refs = BTreeSet::new();
+    let mut mutated = false;
+
+    for reference in existing_refs {
+        let Some(name) = reference.get("name").and_then(Value::as_str) else {
+            retained_refs.push(reference);
+            continue;
+        };
+        if !name.starts_with("router-tls-") {
+            retained_refs.push(reference);
+            continue;
+        }
+
+        let namespace = reference
+            .get("namespace")
+            .and_then(Value::as_str)
+            .unwrap_or(gateway_namespace)
+            .to_string();
+        let identity = (namespace, name.to_string());
+        if desired_refs.contains(&identity) && retained_router_refs.insert(identity) {
+            retained_refs.push(reference);
+        } else {
+            mutated = true;
         }
     }
 
     for (namespace, name) in desired_refs {
-        let key = format!("{namespace}/{name}");
-        if existing.contains(&key) {
+        if retained_router_refs.contains(&(namespace.clone(), name.clone())) {
             continue;
         }
-        cert_refs_array.push(json!({
+        retained_refs.push(json!({
             "kind": "Secret",
             "name": name,
             "namespace": namespace,
@@ -1369,34 +1736,8 @@ pub fn kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
         mutated = true;
     }
 
-    if !mutated {
-        return Ok(false);
-    }
-
-    let listeners_patch = gateway
-        .data
-        .get("spec")
-        .and_then(|spec| spec.get("listeners"))
-        .cloned()
-        .ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Gateway {gateway_namespace}/{gateway_name} has no spec.listeners after mutation"
-            ))
-        })?;
-
-    let patch = json!({
-        "spec": {
-            "listeners": listeners_patch
-        }
-    });
-
-    block_on(api.patch(gateway_name, &PatchParams::default(), &Patch::Merge(&patch))).map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Failed to patch Gateway {gateway_namespace}/{gateway_name} certificateRefs: {e}"
-        ))
-    })?;
-
-    Ok(true)
+    *certificate_refs = retained_refs;
+    mutated
 }
 
 /// kubectl_get_crash_looping_pods: gets crash looping pods.
@@ -1854,7 +2195,16 @@ pub fn kubectl_exec_delete_job(
 
 #[cfg(test)]
 mod tests {
-    use super::KubernetesServicePortForwardTarget;
+    use super::{
+        GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE,
+        KubernetesServicePortForwardTarget, gateway_certificate_refs_reconciliation_patch,
+        gateway_fallback_certificate_ref_ownership, is_engine_gateway_fallback_reference_grant,
+        is_kubernetes_optimistic_concurrency_conflict, reconcile_router_tls_certificate_refs,
+    };
+    use kube::api::ApiResource;
+    use kube::core::{DynamicObject, GroupVersionKind, Status};
+    use serde_json::json;
+    use std::collections::{BTreeMap, BTreeSet};
     use url::Url;
 
     #[test]
@@ -1876,5 +2226,287 @@ mod tests {
         let url = Url::parse("https://thanos.example.com").unwrap();
 
         assert_eq!(KubernetesServicePortForwardTarget::from_service_url(&url), None);
+    }
+
+    #[test]
+    fn reconciliation_removes_stale_router_tls_references_and_preserves_platform_certificates() {
+        let mut certificate_refs = vec![
+            json!({
+                "kind": "Secret",
+                "name": "letsencrypt-acme-qovery-cert",
+                "namespace": "cert-manager",
+            }),
+            json!({
+                "kind": "Secret",
+                "name": "router-tls-zactive",
+                "namespace": "environment-a",
+            }),
+            json!({
+                "kind": "Secret",
+                "name": "router-tls-zstale",
+                "namespace": "environment-deleted",
+            }),
+        ];
+        let desired_refs = BTreeSet::from([("environment-a".to_string(), "router-tls-zactive".to_string())]);
+
+        assert!(reconcile_router_tls_certificate_refs(
+            &mut certificate_refs,
+            &desired_refs,
+            "qovery"
+        ));
+        assert_eq!(
+            certificate_refs,
+            vec![
+                json!({
+                    "kind": "Secret",
+                    "name": "letsencrypt-acme-qovery-cert",
+                    "namespace": "cert-manager",
+                }),
+                json!({
+                    "kind": "Secret",
+                    "name": "router-tls-zactive",
+                    "namespace": "environment-a",
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn reconciliation_patch_replaces_only_certificate_refs_after_testing_resource_version() {
+        let gateway_api_resource =
+            ApiResource::from_gvk(&GroupVersionKind::gvk("gateway.networking.k8s.io", "v1", "Gateway"));
+        let mut gateway = DynamicObject::new("qovery-cluster-public-gateway", &gateway_api_resource);
+        gateway.metadata.resource_version = Some("42".to_string());
+        gateway.data = json!({
+            "spec": {
+                "listeners": [{
+                    "name": "https",
+                    "tls": {
+                        "certificateRefs": [
+                            { "name": "letsencrypt-acme-qovery-cert", "namespace": "qovery" },
+                            { "name": "router-tls-zstale", "namespace": "environment-deleted" }
+                        ]
+                    }
+                }]
+            }
+        });
+
+        let patch = gateway_certificate_refs_reconciliation_patch(
+            &gateway,
+            "https",
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            "qovery",
+        )
+        .expect("reconciliation patch creation should succeed")
+        .expect("the stale router certificateRef should produce a patch");
+
+        assert_eq!(
+            serde_json::to_value(&patch).expect("JSON Patch should serialize"),
+            json!([
+                { "op": "test", "path": "/metadata/resourceVersion", "value": "42" },
+                {
+                    "op": "replace",
+                    "path": "/spec/listeners/0/tls/certificateRefs",
+                    "value": [{ "name": "letsencrypt-acme-qovery-cert", "namespace": "qovery" }]
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn reconciliation_does_not_add_tls_to_a_non_tls_listener_without_router_references() {
+        let gateway_api_resource =
+            ApiResource::from_gvk(&GroupVersionKind::gvk("gateway.networking.k8s.io", "v1", "Gateway"));
+        let mut gateway = DynamicObject::new("qovery-cluster-public-gateway", &gateway_api_resource);
+        gateway.metadata.resource_version = Some("42".to_string());
+        gateway.data = json!({
+            "spec": {
+                "listeners": [{
+                    "name": "https",
+                    "protocol": "HTTPS",
+                    "port": 443
+                }]
+            }
+        });
+
+        let patch = gateway_certificate_refs_reconciliation_patch(
+            &gateway,
+            "https",
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            "qovery",
+        )
+        .expect("reconciliation patch creation should succeed");
+
+        assert!(patch.is_none());
+    }
+
+    #[test]
+    fn reconciliation_derives_fallback_references_from_gateway_ownership_annotations() {
+        let gateway_api_resource =
+            ApiResource::from_gvk(&GroupVersionKind::gvk("gateway.networking.k8s.io", "v1", "Gateway"));
+        let mut gateway = DynamicObject::new("qovery-cluster-public-gateway", &gateway_api_resource);
+        gateway.metadata.annotations = Some(BTreeMap::from([(
+            "qovery.com/gateway-fallback-router-tls-z1234567".to_string(),
+            "environment".to_string(),
+        )]));
+
+        assert_eq!(
+            gateway_fallback_certificate_ref_ownership(&gateway),
+            BTreeSet::from([("environment".to_string(), "router-tls-z1234567".to_string())])
+        );
+    }
+
+    #[test]
+    fn only_adopts_labeled_or_engine_managed_fallback_reference_grants() {
+        let api_resource =
+            ApiResource::from_gvk(&GroupVersionKind::gvk("gateway.networking.k8s.io", "v1", "ReferenceGrant"));
+        let mut labeled_grant = DynamicObject::new("external-grant", &api_resource);
+        labeled_grant.metadata.labels = Some(BTreeMap::from([(
+            GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL.to_string(),
+            GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE.to_string(),
+        )]));
+        assert!(is_engine_gateway_fallback_reference_grant(
+            &labeled_grant,
+            "router-tls-z1234567",
+        ));
+
+        let mut legacy_grant = DynamicObject::new("allow-gateway-to-router-tls-z1234567", &api_resource);
+        legacy_grant.metadata.managed_fields =
+            Some(vec![k8s_openapi::apimachinery::pkg::apis::meta::v1::ManagedFieldsEntry {
+                manager: Some("qovery-engine".to_string()),
+                operation: Some("Apply".to_string()),
+                ..Default::default()
+            }]);
+        assert!(is_engine_gateway_fallback_reference_grant(&legacy_grant, "router-tls-z1234567",));
+
+        let unrelated_grant = DynamicObject::new("external-grant", &api_resource);
+        assert!(!is_engine_gateway_fallback_reference_grant(
+            &unrelated_grant,
+            "router-tls-z1234567",
+        ));
+    }
+
+    #[test]
+    fn retries_only_kubernetes_conflicts_during_gateway_reconciliation() {
+        let conflict = kube::Error::Api(Status::failure("Gateway changed", "Conflict").with_code(409).boxed());
+        let validation_error = kube::Error::Api(
+            Status::failure("certificateRefs exceeds the maximum", "Invalid")
+                .with_code(422)
+                .boxed(),
+        );
+
+        assert!(is_kubernetes_optimistic_concurrency_conflict(&conflict));
+        assert!(!is_kubernetes_optimistic_concurrency_conflict(&validation_error));
+    }
+
+    #[test]
+    fn reconciliation_restores_and_migrates_a_live_legacy_fallback_reference() {
+        let gateway_api_resource =
+            ApiResource::from_gvk(&GroupVersionKind::gvk("gateway.networking.k8s.io", "v1", "Gateway"));
+        let mut gateway = DynamicObject::new("qovery-cluster-public-gateway", &gateway_api_resource);
+        gateway.metadata.resource_version = Some("42".to_string());
+        gateway.data = json!({
+            "spec": {
+                "listeners": [{
+                    "name": "https",
+                    "tls": {
+                        "certificateRefs": []
+                    }
+                }]
+            }
+        });
+        let legacy_fallback_refs = BTreeSet::from([("environment".to_string(), "router-tls-z1234567".to_string())]);
+
+        let patch = gateway_certificate_refs_reconciliation_patch(
+            &gateway,
+            "https",
+            &legacy_fallback_refs,
+            &legacy_fallback_refs,
+            &BTreeSet::new(),
+            "qovery",
+        )
+        .expect("reconciliation patch creation should succeed")
+        .expect("the legacy fallback reference should be migrated");
+
+        assert_eq!(
+            serde_json::to_value(&patch).expect("JSON Patch should serialize"),
+            json!([
+                { "op": "test", "path": "/metadata/resourceVersion", "value": "42" },
+                {
+                    "op": "replace",
+                    "path": "/spec/listeners/0/tls/certificateRefs",
+                    "value": [{
+                        "kind": "Secret",
+                        "name": "router-tls-z1234567",
+                        "namespace": "environment"
+                    }]
+                },
+                {
+                    "op": "add",
+                    "path": "/metadata/annotations",
+                    "value": {
+                        "qovery.com/gateway-fallback-router-tls-z1234567": "environment"
+                    }
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn reconciliation_prunes_a_stale_fallback_reference_and_its_ownership_marker_together() {
+        let gateway_api_resource =
+            ApiResource::from_gvk(&GroupVersionKind::gvk("gateway.networking.k8s.io", "v1", "Gateway"));
+        let mut gateway = DynamicObject::new("qovery-cluster-public-gateway", &gateway_api_resource);
+        gateway.metadata.resource_version = Some("42".to_string());
+        gateway.metadata.annotations = Some(BTreeMap::from([(
+            "qovery.com/gateway-fallback-router-tls-z1234567".to_string(),
+            "environment".to_string(),
+        )]));
+        gateway.data = json!({
+            "spec": {
+                "listeners": [{
+                    "name": "https",
+                    "tls": {
+                        "certificateRefs": [{
+                            "kind": "Secret",
+                            "name": "router-tls-z1234567",
+                            "namespace": "environment"
+                        }]
+                    }
+                }]
+            }
+        });
+        let stale_fallback_ownership = BTreeSet::from([("environment".to_string(), "router-tls-z1234567".to_string())]);
+
+        let patch = gateway_certificate_refs_reconciliation_patch(
+            &gateway,
+            "https",
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &stale_fallback_ownership,
+            "qovery",
+        )
+        .expect("reconciliation patch creation should succeed")
+        .expect("the stale fallback should be pruned");
+
+        assert_eq!(
+            serde_json::to_value(&patch).expect("JSON Patch should serialize"),
+            json!([
+                { "op": "test", "path": "/metadata/resourceVersion", "value": "42" },
+                {
+                    "op": "replace",
+                    "path": "/spec/listeners/0/tls/certificateRefs",
+                    "value": []
+                },
+                {
+                    "op": "remove",
+                    "path": "/metadata/annotations/qovery.com~1gateway-fallback-router-tls-z1234567"
+                }
+            ])
+        );
     }
 }

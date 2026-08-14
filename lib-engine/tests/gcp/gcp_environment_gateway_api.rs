@@ -3,8 +3,10 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::gcp::gcp_infra_config;
 use ::function_name::named;
 use k8s_openapi::api::core::v1::ConfigMap;
-use kube::api::ListParams;
+use kube::api::{ApiResource, DeleteParams, ListParams};
+use kube::core::GroupVersionKind;
 use kube::{Api, ResourceExt};
+use qovery_engine::cmd::kubectl::kubectl_get_listenerset_served_version;
 use qovery_engine::io_models::application::{GatewayApiStickySessionType, PortIo};
 
 use crate::helpers::kubernetes::TargetCluster;
@@ -44,6 +46,34 @@ fn retry_list_gateway_api_resources(
         }
     })
     .map_err(|e| format!("Failed to list Gateway API resources after retries: {e:?}"))
+}
+
+/// Deletes the router ListenerSet when normal environment cleanup did not reach it.
+///
+/// The normal path is Helm uninstall followed by namespace deletion. This best-effort fallback
+/// makes the shared GKE test cluster resilient to a failed assertion or a partial teardown.
+fn force_delete_router_listenerset(kube_client: kube::Client, namespace: &str, router_name: &str) {
+    let Some(api_version) = kubectl_get_listenerset_served_version(&kube_client) else {
+        return;
+    };
+
+    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &api_version, "ListenerSet");
+    let api: Api<kube::core::DynamicObject> =
+        Api::namespaced_with(kube_client, namespace, &ApiResource::from_gvk(&gvk));
+    let listenerset_name = format!("{router_name}-listeners");
+
+    match block_on(api.get_opt(&listenerset_name)) {
+        Ok(Some(_)) => match block_on(api.delete(&listenerset_name, &DeleteParams::background())) {
+            Ok(_) => tracing::info!("Deleted leftover ListenerSet {namespace}/{listenerset_name} after test cleanup"),
+            Err(error) => {
+                tracing::warn!("Failed to force-delete leftover ListenerSet {namespace}/{listenerset_name}: {error}")
+            }
+        },
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!("Failed to inspect ListenerSet {namespace}/{listenerset_name} after test cleanup: {error}")
+        }
+    }
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -11951,6 +11981,24 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() 
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
+        let cleanup_guard = scopeguard::guard((), |_| {
+            if let Err(error) =
+                environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete)
+            {
+                tracing::warn!("Failed to delete test environment during panic-safe cleanup: {error}");
+            }
+
+            match infra_ctx_for_delete.mk_kube_client() {
+                Ok(kube_client) => force_delete_router_listenerset(
+                    kube_client.client(),
+                    environment_for_delete.kube_name.as_str(),
+                    &router_name,
+                ),
+                Err(error) => {
+                    tracing::warn!("Failed to create Kubernetes client for panic-safe ListenerSet cleanup: {error}")
+                }
+            }
+        });
 
         // execute:
         let ret = environment.deploy_environment(&environment, &infra_ctx);
@@ -12114,7 +12162,15 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() 
 
         // clean up:
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        if let Ok(kube_client) = infra_ctx_for_delete.mk_kube_client() {
+            force_delete_router_listenerset(
+                kube_client.client(),
+                environment_for_delete.kube_name.as_str(),
+                &router_name,
+            );
+        }
         assert!(ret.is_ok());
+        scopeguard::ScopeGuard::into_inner(cleanup_guard);
 
         "".to_string()
     })
