@@ -338,6 +338,14 @@ impl EnvironmentTask {
                         .iter_mut()
                         .map(|terraform_service| terraform_service.as_service_mut()),
                 )
+                // Only the workflows carrying a docker fragment have anything to build; the others
+                // are dropped by the `build().is_some()` filter in `build_and_push_services`.
+                .chain(
+                    environment
+                        .agentic_workflows
+                        .iter_mut()
+                        .map(|agentic_workflow| agentic_workflow.as_service_mut()),
+                )
                 .collect();
             Self::build_and_push_services(
                 environment.long_id,

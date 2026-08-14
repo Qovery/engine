@@ -2,13 +2,29 @@ use crate::environment::models;
 use crate::environment::models::agentic_workflow::{
     AgenticWorkflowConfig, AgenticWorkflowError, AgenticWorkflowService,
 };
+use crate::infrastructure::models::build_platform::{
+    Build, BuildSource, CUSTOM_FRAGMENT_PLACEHOLDER, DockerfileFragment as BuildDockerfileFragment, Image,
+};
 use crate::infrastructure::models::cloud_provider::service::Action as DomainAction;
-use crate::io_models::Action;
+use crate::infrastructure::models::container_registry::{
+    ContainerRegistryInfo, DockerRegistryInfo, InteractWithRegistry,
+};
+use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::context::Context;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::services_common::GitCredentials;
+use crate::io_models::{Action, QoveryIdentifier, sanitized_git_url};
+use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::time::Duration;
 use uuid::Uuid;
+
+/// An agentic workflow carries no build advanced settings on the wire, so these mirror the defaults
+/// every other buildable service ships with (see `io_models::job::JobAdvancedSettings::default`).
+const BUILD_TIMEOUT_MAX_SEC: u64 = 30 * 60;
+const BUILD_CPU_MAX_IN_MILLI: u32 = 4000;
+const BUILD_RAM_MAX_IN_GIB: u32 = 8;
 
 /// Default `.spec.activeDeadlineSeconds` for an AgenticWorkflow Job. Agent (Claude Code) tasks
 /// routinely run for several minutes, well past the busybox-stub's original 300s default, so
@@ -48,10 +64,11 @@ pub struct AgenticWorkflowImage {
     pub tag: String,
 }
 
-/// Pinned first-cut agent image (`qovery-ai-runner`), manually pushed to the shared registry
-/// (§8.4). Used when the wire payload omits `image`, so the engine has a concrete default even
-/// if q-core doesn't dictate one. Bump the tag here (and q-core's `AGENTIC_WORKFLOW_IMAGE_TAG`)
-/// when a new image is published, until the per-workflow `Build` path (§8.3) makes this dynamic.
+/// Pinned agent base image (`qovery-ai-runner`), manually pushed to the shared registry (§8.4).
+/// Used when the wire payload omits `image`, so the engine has a concrete default even if q-core
+/// doesn't dictate one. Bump the tag here (and q-core's `AGENTIC_WORKFLOW_IMAGE_TAG`) when a new
+/// image is published. This stays the base a `docker_fragment` is layered onto, so bumping it also
+/// invalidates every built per-workflow image.
 fn default_image() -> AgenticWorkflowImage {
     AgenticWorkflowImage {
         repository: "public.ecr.aws/r3m4q3r9/qovery-ai-runner".to_string(),
@@ -129,10 +146,9 @@ pub struct AgenticWorkflow {
 
     #[serde(default = "default_image")]
     pub image: AgenticWorkflowImage,
-    /// Extra Dockerfile fragment injected at build time (§8.3). Not yet consumed: the engine
-    /// currently always runs the manually-pushed base image referenced by `image`. Carried
-    /// through end-to-end so the domain model / chart are already shaped for the future
-    /// per-workflow `Build` path.
+    /// Extra Dockerfile instructions layered onto `image`. When non-empty the engine builds a
+    /// per-workflow image from it (see [`AgenticWorkflow::to_build`]) and the Job runs that image
+    /// instead of `image`. Empty means no build at all: the Job runs `image` as-is.
     #[serde(default)]
     pub docker_fragment: String,
 
@@ -170,11 +186,18 @@ impl AgenticWorkflow {
     pub fn to_agentic_workflow_domain(
         self,
         context: &Context,
+        default_container_registry: &dyn InteractWithRegistry,
+        cluster: &dyn Kubernetes,
     ) -> Result<Box<dyn AgenticWorkflowService>, AgenticWorkflowError> {
         let long_id = self.long_id;
         let name = self.name.clone();
         let kube_name = self.kube_name.clone();
         let action = self.action;
+        let build = self.to_build(
+            default_container_registry.registry_info(),
+            &QoveryIdentifier::new(*cluster.long_id()),
+            cluster.cpu_architectures(),
+        )?;
         let config = self.into_domain_config()?;
 
         let service = models::agentic_workflow::AgenticWorkflow::new(
@@ -183,11 +206,116 @@ impl AgenticWorkflow {
             name,
             kube_name,
             config,
+            build,
             DomainAction::from(action),
             |transmitter| context.get_event_details(transmitter),
         )?;
 
         Ok(Box::new(service))
+    }
+
+    /// A per-workflow image layered on top of the base `image`, or `None` when there is no
+    /// `docker_fragment` to layer: then the Job runs the base image directly and nothing is built.
+    ///
+    /// The base `repository:tag` is written into the `FROM` line rather than passed as a build ARG
+    /// so that it is part of the hashed Dockerfile content. Bumping the base tag then produces a new
+    /// image tag, instead of the build being skipped as already-present in the registry.
+    fn to_build(
+        &self,
+        cr_info: &ContainerRegistryInfo,
+        cluster_id: &QoveryIdentifier,
+        architectures: Vec<CpuArchitecture>,
+    ) -> Result<Option<Build>, AgenticWorkflowError> {
+        let Some(content) = self.dockerfile_content()? else {
+            return Ok(None);
+        };
+
+        let mut build = Build {
+            source: BuildSource::Dockerfile { content },
+            image: self.to_image(cr_info, cluster_id),
+            environment_variables: BTreeMap::new(),
+            disable_buildkit_cache: false,
+            timeout: Duration::from_secs(BUILD_TIMEOUT_MAX_SEC),
+            architectures,
+            max_cpu_in_milli: BUILD_CPU_MAX_IN_MILLI,
+            max_ram_in_gib: BUILD_RAM_MAX_IN_GIB,
+            ephemeral_storage_in_gib: None,
+            registries: vec![],
+            dockerfile_fragment: Some(BuildDockerfileFragment::Inline {
+                content: self.docker_fragment.clone(),
+            }),
+        };
+        build.compute_image_tag();
+
+        Ok(Some(build))
+    }
+
+    /// The whole Dockerfile to build: the base image plus the placeholder the build platform splices
+    /// the fragment into. `USER root` comes first so fragments installing packages work, which is
+    /// the common case; `USER qovery` is restored afterward so the runner keeps the base image's
+    /// runtime user.
+    ///
+    /// `None` when there is no fragment, which is what makes the whole build path opt-in.
+    fn dockerfile_content(&self) -> Result<Option<String>, AgenticWorkflowError> {
+        if self.docker_fragment.trim().is_empty() {
+            return Ok(None);
+        }
+
+        // A fragment declaring its own `FROM` would discard the base image and build something else
+        // entirely, which is never what layering onto the agent runner means.
+        let first_instruction = self
+            .docker_fragment
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty() && !line.starts_with('#'))
+            .unwrap_or_default();
+        if first_instruction
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .eq_ignore_ascii_case("FROM")
+        {
+            return Err(AgenticWorkflowError::InvalidConfig(
+                "docker fragment must not start with a `FROM` instruction: it is layered on top of \
+                 the agent base image, it is not a Dockerfile of its own"
+                    .to_string(),
+            ));
+        }
+
+        Ok(Some(format!(
+            "FROM {}:{}\nUSER root\n{CUSTOM_FRAGMENT_PLACEHOLDER}\nUSER qovery\n",
+            self.image.repository, self.image.tag
+        )))
+    }
+
+    /// Mirrors [`crate::io_models::job::Job::to_image`], minus the shared-image feature: workflows
+    /// have no source repository to share a build across, so each one gets its own repository keyed
+    /// on its id. The shared names still have to be filled in, and are derived from a synthetic
+    /// identity standing in for the git url the other services use.
+    fn to_image(&self, cr_info: &ContainerRegistryInfo, cluster_id: &QoveryIdentifier) -> Image {
+        let identity = sanitized_git_url(&format!("agentic-workflow-{}", self.long_id));
+        let repository_name = cr_info.get_repository_name(&self.long_id.to_string());
+        let image_name = cr_info.get_image_name(&self.long_id.to_string());
+
+        Image {
+            service_id: to_short_id(&self.long_id),
+            service_long_id: self.long_id,
+            service_name: self.name.clone(),
+            name: image_name.clone(),
+            tag: "".to_string(), // computed by `Build::compute_image_tag` once the build is assembled
+            commit_id: "".to_string(),
+            registry_name: cr_info.registry_name.clone(),
+            registry_url: cr_info.get_registry_endpoint(Some(cluster_id.qovery_resource_name())),
+            registry_insecure: cr_info.insecure_registry,
+            registry_docker_json_config: cr_info.get_registry_docker_json_config(DockerRegistryInfo {
+                registry_name: Some(cr_info.registry_name.to_string()),
+                repository_name: Some(repository_name.to_string()),
+                image_name: Some(image_name),
+            }),
+            repository_name,
+            shared_repository_name: cr_info.get_shared_repository_name(cluster_id, identity),
+            shared_image_feature_enabled: false,
+        }
     }
 
     /// Build the domain [`AgenticWorkflowConfig`] from q-core's plain JSON wire fields. Split out
@@ -573,5 +701,135 @@ mod tests {
         assert_eq!(config.project_repositories[0].git_token.as_deref(), Some(""));
         assert_eq!(config.outputs[0].headers, vec![("Content-Type".to_string(), "".to_string())]);
         assert_eq!(config.outputs[0].instructions, "");
+    }
+
+    fn workflow_with_fragment(docker_fragment: &str) -> AgenticWorkflow {
+        let mut workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+        workflow.docker_fragment = docker_fragment.to_string();
+        workflow
+    }
+
+    /// No fragment means nothing to layer, so no build at all: the Job keeps running the base image
+    /// straight from its public registry, exactly as before this feature existed.
+    #[test]
+    fn no_dockerfile_is_generated_without_a_docker_fragment() {
+        for fragment in ["", "   ", "\n\t \n"] {
+            let content = workflow_with_fragment(fragment)
+                .dockerfile_content()
+                .expect("an empty fragment is valid");
+
+            assert!(content.is_none(), "fragment {fragment:?} should not produce a Dockerfile");
+        }
+    }
+
+    #[test]
+    fn generated_dockerfile_restores_the_base_image_user_after_the_fragment() {
+        let content = workflow_with_fragment("RUN apt-get install -y jq")
+            .dockerfile_content()
+            .expect("fragment is valid")
+            .expect("a fragment produces a Dockerfile");
+
+        assert_eq!(
+            content,
+            "FROM public.ecr.aws/r3m4q3r9/qovery-ai-runner:0.0.1\nUSER root\n#{{custom_fragment}}\nUSER qovery\n"
+        );
+    }
+
+    /// The build platform refuses a Dockerfile without the placeholder, so its absence here would
+    /// turn every fragment into a build failure.
+    #[test]
+    fn generated_dockerfile_carries_the_fragment_placeholder() {
+        let content = workflow_with_fragment("RUN true")
+            .dockerfile_content()
+            .expect("fragment is valid")
+            .expect("a fragment produces a Dockerfile");
+
+        assert!(content.contains(CUSTOM_FRAGMENT_PLACEHOLDER), "got:\n{content}");
+    }
+
+    /// A fragment bringing its own `FROM` would silently replace the agent runner with an unrelated
+    /// image, so it is rejected rather than built.
+    #[test]
+    fn a_fragment_declaring_its_own_from_is_rejected() {
+        for fragment in [
+            "FROM alpine:3.22",
+            "from alpine:3.22\nRUN true",
+            "\n# a comment first\n  FROM alpine:3.22",
+        ] {
+            let error = workflow_with_fragment(fragment)
+                .dockerfile_content()
+                .expect_err("a fragment starting with FROM must be rejected");
+
+            assert!(
+                matches!(&error, AgenticWorkflowError::InvalidConfig(msg) if msg.contains("FROM")),
+                "fragment {fragment:?} gave {error:?}"
+            );
+        }
+    }
+
+    /// `FROM` only matters as the leading instruction: a multi-stage `COPY --from` or a later `FROM`
+    /// inside a fragment is the author's business.
+    #[test]
+    fn from_elsewhere_in_a_fragment_is_allowed() {
+        let content = workflow_with_fragment("COPY --from=builder /app /app\nRUN chmod +x /app")
+            .dockerfile_content()
+            .expect("fragment is valid");
+
+        assert!(content.is_some());
+    }
+
+    fn image_tag_for(base_tag: &str, fragment: &str) -> String {
+        let workflow = {
+            let mut workflow = workflow_with_fragment(fragment);
+            workflow.image.tag = base_tag.to_string();
+            workflow
+        };
+        let content = workflow
+            .dockerfile_content()
+            .expect("fragment is valid")
+            .expect("a fragment produces a Dockerfile");
+
+        let mut build = Build {
+            source: BuildSource::Dockerfile { content },
+            image: Image::default(),
+            environment_variables: BTreeMap::new(),
+            disable_buildkit_cache: false,
+            timeout: Duration::from_secs(BUILD_TIMEOUT_MAX_SEC),
+            architectures: vec![CpuArchitecture::AMD64],
+            max_cpu_in_milli: BUILD_CPU_MAX_IN_MILLI,
+            max_ram_in_gib: BUILD_RAM_MAX_IN_GIB,
+            ephemeral_storage_in_gib: None,
+            registries: vec![],
+            dockerfile_fragment: Some(BuildDockerfileFragment::Inline {
+                content: workflow.docker_fragment.clone(),
+            }),
+        };
+        build.compute_image_tag();
+
+        build.image.tag
+    }
+
+    /// The build is skipped when the target tag already exists in the registry, so both the base tag
+    /// and the fragment have to move the tag. Passing the base image as a build ARG instead of
+    /// writing it into the `FROM` would break the first half of this.
+    #[test]
+    fn image_tag_changes_with_the_base_tag_and_with_the_fragment() {
+        let baseline = image_tag_for("0.0.1", "RUN apt-get install -y jq");
+
+        assert_ne!(
+            baseline,
+            image_tag_for("0.0.2", "RUN apt-get install -y jq"),
+            "bumping the base image tag must invalidate the built image"
+        );
+        assert_ne!(
+            baseline,
+            image_tag_for("0.0.1", "RUN apt-get install -y jq curl"),
+            "changing the fragment must invalidate the built image"
+        );
+        assert_eq!(
+            baseline,
+            image_tag_for("0.0.1", "RUN apt-get install -y jq"),
+            "an unchanged workflow must reuse its image"
+        );
     }
 }

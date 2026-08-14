@@ -355,7 +355,7 @@ impl<T: CloudProvider> Job<T> {
             ImageSource::Registry { source: registry } => {
                 format!("{}:{}", registry.image, registry.tag)
             }
-            ImageSource::Build { source: build } => build.git_repository.commit_id.clone(),
+            ImageSource::Build { source: build } => build.commit_id().to_string(),
         }
     }
 

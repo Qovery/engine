@@ -19,7 +19,7 @@ use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
 use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
-use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use crate::infrastructure::models::build_platform::{Build, BuildSource, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
@@ -791,7 +791,7 @@ impl Application {
         let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());
 
         let mut build = Build {
-            git_repository: GitRepository {
+            source: BuildSource::Git(Box::new(GitRepository {
                 url,
                 get_credentials: if self.git_credentials.is_none() {
                     None
@@ -807,7 +807,7 @@ impl Application {
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: self.docker_target_build_stage.clone(),
                 skip_submodules: self.advanced_settings.build_skip_git_submodules,
-            },
+            })),
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self
                 .environment_vars_with_infos

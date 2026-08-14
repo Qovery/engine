@@ -18,7 +18,7 @@ use qovery_engine::environment::models::types::{AWS as AWSType, VersionsNumber};
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::fs::workspace_directory;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
-use qovery_engine::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use qovery_engine::infrastructure::models::build_platform::{Build, BuildSource, GitRepository, Image, SshKey};
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::{
     AWS,
@@ -250,7 +250,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         4,
         5,
         Build {
-            git_repository: GitRepository {
+            source: BuildSource::Git(Box::new(GitRepository {
                 url: Url::parse("https://my_git_url.com").unwrap(),
                 get_credentials: None,
                 ssh_keys: vec![SshKey {
@@ -265,7 +265,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: None,
                 skip_submodules: false,
-            },
+            })),
             image: Image {
                 service_id: "my_application_id".to_string(),
                 service_long_id: long_id,
@@ -950,7 +950,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
         4,
         5,
         Build {
-            git_repository: GitRepository {
+            source: BuildSource::Git(Box::new(GitRepository {
                 url: Url::parse("https://my_git_url.com").unwrap(),
                 get_credentials: None,
                 ssh_keys: vec![SshKey {
@@ -965,7 +965,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: None,
                 skip_submodules: false,
-            },
+            })),
             image: Image {
                 service_id: "my_application_id".to_string(),
                 service_long_id: long_id,

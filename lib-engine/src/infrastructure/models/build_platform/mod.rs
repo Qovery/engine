@@ -122,8 +122,25 @@ pub trait BuildPlatform: Send + Sync {
     ) -> Result<(), BuildError>;
 }
 
+/// Where the Docker build context and Dockerfile come from.
+pub enum BuildSource {
+    /// Context cloned from a Git repository. Boxed because it dwarfs the other variant, which would
+    /// otherwise make every source-less `Build` carry its footprint.
+    Git(Box<GitRepository>),
+    /// No source repository: the engine synthesises the whole Dockerfile and builds it against an
+    /// empty context. Used for images that only layer extra instructions onto a base image.
+    Dockerfile { content: String },
+}
+
+/// Dockerfile name written in the build context of a [`BuildSource::Dockerfile`] build.
+pub const SYNTHESIZED_DOCKERFILE_NAME: &str = "Dockerfile.qovery";
+
+/// Placeholder a Dockerfile must carry for a [`DockerfileFragment`] to be spliced into it at build
+/// time. A Dockerfile without it is rejected when a fragment is configured.
+pub const CUSTOM_FRAGMENT_PLACEHOLDER: &str = "#{{custom_fragment}}";
+
 pub struct Build {
-    pub git_repository: GitRepository,
+    pub source: BuildSource,
     pub image: Image,
     pub environment_variables: BTreeMap<String, String>,
     pub disable_buildkit_cache: bool,
@@ -138,27 +155,65 @@ pub struct Build {
 }
 
 impl Build {
+    pub fn git_repository(&self) -> Option<&GitRepository> {
+        match &self.source {
+            BuildSource::Git(repository) => Some(repository.as_ref()),
+            BuildSource::Dockerfile { .. } => None,
+        }
+    }
+
+    /// Commit the image was built from, empty for builds without a source repository.
+    pub fn commit_id(&self) -> &str {
+        match &self.source {
+            BuildSource::Git(repository) => repository.commit_id.as_str(),
+            BuildSource::Dockerfile { .. } => "",
+        }
+    }
+
     pub fn compute_image_tag(&mut self) {
-        self.image.tag = compute_image_tag(
-            &self.git_repository.root_path,
-            &self.git_repository.dockerfile_path,
-            &self.git_repository.dockerfile_content,
-            &self.git_repository.extra_files_to_inject,
-            &self.environment_variables,
-            &self.git_repository.commit_id,
-            &self.git_repository.docker_target_build_stage,
-            &self.dockerfile_fragment,
-            self.git_repository.skip_submodules,
-        );
+        self.image.tag = match &self.source {
+            BuildSource::Git(repository) => compute_image_tag(
+                &repository.root_path,
+                &repository.dockerfile_path,
+                &repository.dockerfile_content,
+                &repository.extra_files_to_inject,
+                &self.environment_variables,
+                &repository.commit_id,
+                &repository.docker_target_build_stage,
+                &self.dockerfile_fragment,
+                repository.skip_submodules,
+            ),
+            // No repository, so no commit id to key on: the hash of the Dockerfile content and of
+            // the fragment is what makes the tag unique.
+            BuildSource::Dockerfile { content } => compute_image_tag(
+                PathBuf::from("."),
+                &Some(PathBuf::from(SYNTHESIZED_DOCKERFILE_NAME)),
+                &Some(content.clone()),
+                &[],
+                &self.environment_variables,
+                "",
+                &None,
+                &self.dockerfile_fragment,
+                true,
+            ),
+        };
     }
 
     pub fn compute_cache_tag(&self) -> String {
-        compute_cache_tag(
-            &self.git_repository.root_path,
-            &self.git_repository.dockerfile_path,
-            &self.git_repository.extra_files_to_inject,
-            &self.git_repository.docker_target_build_stage,
-        )
+        match &self.source {
+            BuildSource::Git(repository) => compute_cache_tag(
+                &repository.root_path,
+                &repository.dockerfile_path,
+                &repository.extra_files_to_inject,
+                &repository.docker_target_build_stage,
+            ),
+            BuildSource::Dockerfile { .. } => compute_cache_tag(
+                PathBuf::from("."),
+                &Some(PathBuf::from(SYNTHESIZED_DOCKERFILE_NAME)),
+                &[],
+                &None,
+            ),
+        }
     }
 }
 

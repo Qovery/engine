@@ -358,7 +358,7 @@ impl EnvironmentRequest {
             .agentic_workflows
             .iter()
             .cloned()
-            .map(|agentic_workflow| agentic_workflow.to_agentic_workflow_domain(context))
+            .map(|agentic_workflow| agentic_workflow.to_agentic_workflow_domain(context, container_registry, cluster))
             .collect();
         let agentic_workflows = agentic_workflows?;
 

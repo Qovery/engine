@@ -21,7 +21,8 @@ use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
 use crate::infrastructure::models::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::infrastructure::models::build_platform::{
-    Build, BuildError, BuildPlatform, DockerfileFragment, Kind, to_build_error,
+    Build, BuildError, BuildPlatform, BuildSource, CUSTOM_FRAGMENT_PLACEHOLDER, DockerfileFragment, Kind,
+    SYNTHESIZED_DOCKERFILE_NAME, to_build_error,
 };
 
 use crate::cmd::git;
@@ -40,10 +41,6 @@ const DOCKER_IGNORE: &str = r#"
 .git
 .gitignore
 "#;
-
-/// Placeholder in Dockerfile templates that gets replaced with custom fragment content.
-/// Used by the inject_custom_build_fragment function.
-const CUSTOM_FRAGMENT_PLACEHOLDER: &str = "#{{custom_fragment}}";
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -81,10 +78,11 @@ impl LocalDocker {
         dockerfile_content: &str,
         build_context_path: &Path,
         dockerfile_fragment: Option<&DockerfileFragment>,
+        service_id: &str,
     ) -> Result<String, BuildError> {
         if !dockerfile_content.contains(CUSTOM_FRAGMENT_PLACEHOLDER) && dockerfile_fragment.is_some() {
             return Err(BuildError::InvalidConfig {
-                application: "terraform".to_string(),
+                application: service_id.to_string(),
                 raw_error_message: format!(
                     "Dockerfile does not contain the required placeholder `{CUSTOM_FRAGMENT_PLACEHOLDER}` for injecting custom fragment"
                 ),
@@ -114,7 +112,7 @@ impl LocalDocker {
                     }
                     Err(e) => {
                         return Err(BuildError::IoError {
-                            application: "terraform".to_string(),
+                            application: service_id.to_string(),
                             action_description: format!(
                                 "reading dockerfile fragment from {fragment_path:?} (configured path: {path})"
                             ),
@@ -287,7 +285,9 @@ impl LocalDocker {
             &mut |line| logger.send_progress(line),
             &mut |line| logger.send_progress(line),
             &CommandKiller::from(build.timeout, abort),
-            build.git_repository.docker_target_build_stage.as_ref(),
+            build
+                .git_repository()
+                .and_then(|repository| repository.docker_target_build_stage.as_ref()),
         );
 
         if let Err(err) = exit_status {
@@ -404,6 +404,66 @@ impl LocalDocker {
         Ok(builder_handle)
     }
 
+    /// Builds an image that has no source repository: the Dockerfile is fully synthesized by the
+    /// engine and written into an otherwise empty build context. Only its `FROM` base image and the
+    /// fragment spliced into it contribute to the result, so there is nothing to clone.
+    fn build_from_dockerfile(
+        &self,
+        build: &mut Build,
+        dockerfile_content: &str,
+        logger: &EnvLogger,
+        metrics_registry: Arc<dyn MetricsRegistry>,
+        abort: &dyn Abort,
+    ) -> Result<(), BuildError> {
+        let app_id = build.image.service_id.clone();
+        let build_context_path = self.get_repository_build_root_path(build)?;
+
+        logger.send_progress("📝 Preparing build context for the generated Dockerfile".to_string());
+
+        // The workspace is reused across deployments of the same service, so start from a clean
+        // context: a leftover file would silently end up in the image.
+        if build_context_path.exists() {
+            fs::remove_dir_all(&build_context_path).map_err(|err| BuildError::IoError {
+                application: app_id.clone(),
+                action_description: "cleaning old build context".to_string(),
+                raw_error: err,
+            })?;
+        }
+        fs::create_dir_all(&build_context_path).map_err(|err| BuildError::IoError {
+            application: app_id.clone(),
+            action_description: "creating build context".to_string(),
+            raw_error: err,
+        })?;
+
+        let dockerfile_content = Self::inject_custom_build_fragment(
+            dockerfile_content,
+            &build_context_path,
+            build.dockerfile_fragment.as_ref(),
+            &app_id,
+        )?;
+
+        let dockerfile_path = build_context_path.join(SYNTHESIZED_DOCKERFILE_NAME);
+        fs::write(&dockerfile_path, dockerfile_content).map_err(|err| BuildError::IoError {
+            application: app_id.clone(),
+            action_description: "writing dockerfile content".to_string(),
+            raw_error: err,
+        })?;
+        fs::write(build_context_path.join(".dockerignore"), DOCKER_IGNORE).map_err(|err| BuildError::IoError {
+            application: app_id,
+            action_description: "writing .dockerignore content".to_string(),
+            raw_error: err,
+        })?;
+
+        self.build_image_with_docker(
+            build,
+            dockerfile_path.to_str().unwrap_or_default(),
+            build_context_path.to_str().unwrap_or_default(),
+            logger,
+            metrics_registry,
+            abort,
+        )
+    }
+
     fn get_repository_build_root_path(&self, build: &Build) -> Result<PathBuf, BuildError> {
         workspace_directory(
             self.context.workspace_root_dir(),
@@ -449,12 +509,25 @@ impl BuildPlatform for LocalDocker {
             });
         }
 
+        let synthesized_dockerfile = match &build.source {
+            BuildSource::Git(_) => None,
+            BuildSource::Dockerfile { content } => Some(content.clone()),
+        };
+        if let Some(content) = synthesized_dockerfile {
+            return self.build_from_dockerfile(build, &content, logger, metrics_registry, abort);
+        }
+
+        let git_repository = build.git_repository().ok_or_else(|| BuildError::InvalidConfig {
+            application: build.image.service_id.clone(),
+            raw_error_message: "Build has no git repository to clone".to_string(),
+        })?;
+
         // LOGGING
         let repository_root_path = self.get_repository_build_root_path(build)?;
-        logger.send_progress(format!("📥 Cloning repository {}", build.git_repository.url));
+        logger.send_progress(format!("📥 Cloning repository {}", git_repository.url));
 
         // Retrieve git credentials
-        let git_user_creds = match build.git_repository.credentials() {
+        let git_user_creds = match git_repository.credentials() {
             None => None,
             Some(Ok(creds)) => Some(creds),
             Some(Err(err)) => {
@@ -466,8 +539,8 @@ impl BuildPlatform for LocalDocker {
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key
         let get_credentials = |user: &str| {
-            let mut creds: Vec<(CredentialType, Cred)> = Vec::with_capacity(build.git_repository.ssh_keys.len() + 1);
-            for ssh_key in build.git_repository.ssh_keys.iter() {
+            let mut creds: Vec<(CredentialType, Cred)> = Vec::with_capacity(git_repository.ssh_keys.len() + 1);
+            for ssh_key in git_repository.ssh_keys.iter() {
                 let public_key = ssh_key.public_key.as_deref();
                 let passphrase = ssh_key.passphrase.as_deref();
                 if let Ok(cred) = Cred::ssh_key_from_memory(user, public_key, &ssh_key.private_key, passphrase) {
@@ -506,11 +579,11 @@ impl BuildPlatform for LocalDocker {
                 context,
                 raw_error,
             }) = git::clone_at_commit(
-                &build.git_repository.url,
-                &build.git_repository.commit_id,
+                &git_repository.url,
+                &git_repository.commit_id,
                 &repository_root_path,
                 &get_credentials,
-                build.git_repository.skip_submodules,
+                git_repository.skip_submodules,
             ) {
                 let message = raw_error.message();
                 let git_error_class = raw_error.class();
@@ -569,7 +642,7 @@ impl BuildPlatform for LocalDocker {
         };
         let cmd_killer = CommandKiller::from_cancelable(abort);
         let size_estimate_kb = git_lfs
-            .files_size_estimate_in_kb(&repository_root_path, &build.git_repository.commit_id, &cmd_killer)
+            .files_size_estimate_in_kb(&repository_root_path, &git_repository.commit_id, &cmd_killer)
             .unwrap_or(0);
 
         if size_estimate_kb > 0 {
@@ -584,8 +657,7 @@ impl BuildPlatform for LocalDocker {
 
             info!("fetching git-lfs files");
             logger.send_progress("🗜️ Fetching git-lfs files for repository".to_string());
-            match git_lfs.checkout_files_for_commit(&repository_root_path, &build.git_repository.commit_id, &cmd_killer)
-            {
+            match git_lfs.checkout_files_for_commit(&repository_root_path, &git_repository.commit_id, &cmd_killer) {
                 Ok(_) => {}
                 Err(GitLfsError::Aborted { .. }) => return Err(BuildError::Aborted { application: app_id }),
                 Err(GitLfsError::Timeout { .. }) => return Err(BuildError::Aborted { application: app_id }),
@@ -607,13 +679,13 @@ impl BuildPlatform for LocalDocker {
         }
 
         // Check that the build context is correct
-        let build_context_path = repository_root_path.join(&build.git_repository.root_path);
+        let build_context_path = repository_root_path.join(&git_repository.root_path);
         if !build_context_path.is_dir() {
             return Err(BuildError::InvalidConfig {
                 application: app_id,
                 raw_error_message: format!(
                     "Specified build context path {:?} does not exist within the repository",
-                    build.git_repository.root_path
+                    git_repository.root_path
                 ),
             });
         }
@@ -628,13 +700,12 @@ impl BuildPlatform for LocalDocker {
                 application: app_id,
                 raw_error_message: format!(
                     "Specified build context path {:?} tries to access directory outside of his git repository",
-                    build.git_repository.root_path,
+                    git_repository.root_path,
                 ),
             });
         }
 
-        let dockerfile_path = build
-            .git_repository
+        let dockerfile_path = git_repository
             .dockerfile_path
             .as_ref()
             .ok_or(BuildError::InvalidConfig {
@@ -645,11 +716,12 @@ impl BuildPlatform for LocalDocker {
         let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
 
         // if the dockerfile content is provided, write it to the file before building
-        if let Some(dockerfile_content) = &build.git_repository.dockerfile_content {
+        if let Some(dockerfile_content) = &git_repository.dockerfile_content {
             let dockerfile_content = Self::inject_custom_build_fragment(
                 dockerfile_content,
                 &build_context_path,
                 build.dockerfile_fragment.as_ref(),
+                &app_id,
             )?;
 
             fs::write(&dockerfile_absolute_path, dockerfile_content).map_err(|err| BuildError::IoError {
@@ -670,7 +742,7 @@ impl BuildPlatform for LocalDocker {
         }
 
         // if the extra files are provided, write them to the file before building
-        for extra_file_to_inject in &build.git_repository.extra_files_to_inject {
+        for extra_file_to_inject in &git_repository.extra_files_to_inject {
             let extra_file_absolute_path = repository_root_path.join(extra_file_to_inject.path.clone());
             fs::write(&extra_file_absolute_path, &extra_file_to_inject.content).map_err(|err| BuildError::IoError {
                 application: app_id.clone(),
@@ -730,8 +802,13 @@ USER app"#;
             path: "/custom/fragment.dockerfile".to_string(),
         });
 
-        let result =
-            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
+        let result = LocalDocker::inject_custom_build_fragment(
+            dockerfile_template,
+            temp_dir.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        )
+        .unwrap();
 
         assert!(result.contains("RUN apk add --no-cache jq curl"));
         assert!(result.contains("RUN echo 'custom fragment'"));
@@ -754,8 +831,13 @@ USER app"#;
             content: inline_content.to_string(),
         });
 
-        let result =
-            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
+        let result = LocalDocker::inject_custom_build_fragment(
+            dockerfile_template,
+            temp_dir.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        )
+        .unwrap();
 
         assert!(result.contains("RUN apk add --no-cache aws-cli jq curl"));
         assert!(!result.contains("#{{custom_fragment}}"));
@@ -773,7 +855,9 @@ RUN chmod +x entrypoint.sh
 USER app"#;
 
         // No fragment configured - V2 behavior: placeholder is replaced with empty string
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), None).unwrap();
+        let result =
+            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), None, "my_service_id")
+                .unwrap();
 
         // Placeholder should be replaced with empty string
         assert!(!result.contains("#{{custom_fragment}}"));
@@ -791,8 +875,13 @@ RUN chmod +x entrypoint.sh"#;
 
         let fragment = Some(DockerfileFragment::Inline { content: String::new() });
 
-        let result =
-            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
+        let result = LocalDocker::inject_custom_build_fragment(
+            dockerfile_template,
+            temp_dir.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        )
+        .unwrap();
 
         assert!(!result.contains("#{{custom_fragment}}"));
         assert!(result.contains("FROM alpine:3.22"));
@@ -811,7 +900,12 @@ RUN chmod +x entrypoint.sh"#;
             content: "RUN apk add jq".to_string(),
         });
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref());
+        let result = LocalDocker::inject_custom_build_fragment(
+            dockerfile_template,
+            temp_dir.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        );
 
         // Should return an error since there's no placeholder but a fragment is provided
         assert!(result.is_err());
@@ -832,7 +926,12 @@ RUN chmod +x entrypoint.sh"#;
             path: "/non-existent/fragment.dockerfile".to_string(),
         });
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref());
+        let result = LocalDocker::inject_custom_build_fragment(
+            dockerfile_template,
+            temp_dir.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        );
 
         assert!(result.is_err());
         if let Err(BuildError::IoError { action_description, .. }) = result {
@@ -853,10 +952,43 @@ RUN chmod +x entrypoint.sh"#;
             content: fragment_content.to_string(),
         });
 
-        let result =
-            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
+        let result = LocalDocker::inject_custom_build_fragment(
+            dockerfile_template,
+            temp_dir.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        )
+        .unwrap();
 
         // Fragment content should be preserved exactly, including newlines and escapes
         assert!(result.contains(fragment_content));
+    }
+
+    /// A source-less build has an empty build context, so its Dockerfile is only ever the
+    /// engine-generated content plus the spliced fragment. This is what the agentic workflow relies
+    /// on to layer onto its base image without a repository to clone.
+    #[test]
+    fn inject_fragment_into_a_synthesized_dockerfile_needs_no_build_context() {
+        let empty_context = tempdir().unwrap();
+        let dockerfile_template =
+            format!("FROM public.ecr.aws/r3m4q3r9/qovery-ai-runner:0.0.3\nUSER root\n{CUSTOM_FRAGMENT_PLACEHOLDER}\n");
+
+        let fragment = Some(DockerfileFragment::Inline {
+            content: "RUN apt-get update && apt-get install -y jq".to_string(),
+        });
+
+        let result = LocalDocker::inject_custom_build_fragment(
+            &dockerfile_template,
+            empty_context.path(),
+            fragment.as_ref(),
+            "my_service_id",
+        )
+        .unwrap();
+
+        assert_eq!(
+            result,
+            "FROM public.ecr.aws/r3m4q3r9/qovery-ai-runner:0.0.3\nUSER root\nRUN apt-get update && apt-get install -y jq\n"
+        );
+        assert!(!result.contains(CUSTOM_FRAGMENT_PLACEHOLDER));
     }
 }
