@@ -1183,6 +1183,70 @@ mod tests {
         assert_eq!(limits.memory, "16Gi");
     }
 
+    #[test]
+    fn test_karpenter_configuration_with_diverged_per_pool_spot() {
+        let yaml = generate_chart_yaml(
+            KUBERNETES_VERSION,
+            false,
+            KarpenterNodePool {
+                requirements: vec![KarpenterNodePoolRequirement {
+                    key: KarpenterNodePoolRequirementKey::InstanceCategory,
+                    operator: Some(KarpenterRequirementOperator::In),
+                    values: vec!["c".to_string()],
+                }],
+                stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: Some(false),
+                    budgets: vec![],
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                },
+                default_override: Some(KarpenterDefaultNodePoolOverride {
+                    spot_enabled: Some(true),
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                }),
+                gpu_override: None,
+                cronjob_override: Some(KarpenterCronjobNodePoolOverride {
+                    spot_enabled: Some(true),
+                    budgets: vec![],
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                }),
+                default_public_override: None,
+                default_private_override: None,
+            },
+        );
+
+        let documents = parse_documents(&yaml);
+
+        for (pool_name, expected_capacity_types) in [
+            ("default", vec!["spot", "on-demand"]),
+            ("stable", vec!["on-demand"]),
+            ("cronjob", vec!["spot", "on-demand"]),
+        ] {
+            let node_pool = find_resource(&documents, "NodePool", pool_name)
+                .unwrap_or_else(|| panic!("{pool_name} NodePool expected"));
+            assert_eq!(
+                capacity_type_values(node_pool),
+                expected_capacity_types,
+                "{pool_name} node pool should use its own spot_enabled instead of the cluster one"
+            );
+        }
+    }
+
+    fn capacity_type_values(node_pool: &Value) -> Vec<&str> {
+        node_pool["spec"]["template"]["spec"]["requirements"]
+            .as_sequence()
+            .expect("requirements expected")
+            .iter()
+            .find(|requirement| requirement["key"].as_str() == Some("karpenter.sh/capacity-type"))
+            .and_then(|requirement| requirement["values"].as_sequence())
+            .expect("capacity-type requirement expected")
+            .iter()
+            .filter_map(Value::as_str)
+            .collect_vec()
+    }
+
     #[derive(Debug)]
     struct TestCase {
         with_spot: bool,

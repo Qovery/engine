@@ -5,7 +5,7 @@ use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, Kuber
 use duration_str::deserialize_duration;
 use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
-use serde_with::DisplayFromStr;
+use serde_with::{DefaultOnNull, DisplayFromStr};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::time::Duration;
@@ -124,10 +124,15 @@ impl fmt::Display for KarpenterRequirementOperator {
     }
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterStableNodePoolOverride {
     #[serde(default)]
     pub spot_enabled: Option<bool>,
+    // Core's spot backfill sends override blocks holding only `spot_enabled`, with the other
+    // keys either absent or explicitly null. `serde(default)` alone only covers the absent case.
+    #[serde(default)]
+    #[serde_as(as = "DefaultOnNull")]
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
@@ -196,10 +201,14 @@ impl fmt::Display for KarpenterNodePoolDisruptionReason {
     }
 }
 
+#[serde_with::serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterCronjobNodePoolOverride {
     #[serde(default)]
     pub spot_enabled: Option<bool>,
+    // See KarpenterStableNodePoolOverride::budgets: absent and null must both yield no budgets.
+    #[serde(default)]
+    #[serde_as(as = "DefaultOnNull")]
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
@@ -746,5 +755,147 @@ mod tests {
                 consolidate_after_in_seconds: Some(60),
             }
         )
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_overrides_only_hold_spot_enabled() {
+        // given: what core's spot backfill migration produces
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": false,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": ["z1d"]
+              }
+            ],
+            "stable_override": {
+              "spot_enabled": false
+            },
+            "default_override": {
+              "spot_enabled": true
+            },
+            "cronjob_override": {
+              "spot_enabled": true
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok(), "should be Ok but was: {:?}", result.err());
+        let qovery_node_pools = result.expect("should be Ok").qovery_node_pools;
+        assert_eq!(
+            qovery_node_pools.stable_override,
+            KarpenterStableNodePoolOverride {
+                spot_enabled: Some(false),
+                budgets: vec![],
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        );
+        assert_eq!(
+            qovery_node_pools
+                .default_override
+                .expect("default_override should be present"),
+            KarpenterDefaultNodePoolOverride {
+                spot_enabled: Some(true),
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        );
+        assert_eq!(
+            qovery_node_pools
+                .cronjob_override
+                .expect("cronjob_override should be present"),
+            KarpenterCronjobNodePoolOverride {
+                spot_enabled: Some(true),
+                budgets: vec![],
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        );
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_overrides_hold_spot_enabled_and_explicit_nulls() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": ["z1d"]
+              }
+            ],
+            "stable_override": {
+              "spot_enabled": true,
+              "budgets": null,
+              "limits": null,
+              "consolidate_after_in_seconds": null
+            },
+            "default_override": {
+              "spot_enabled": false,
+              "limits": null,
+              "consolidate_after_in_seconds": null
+            },
+            "cronjob_override": {
+              "spot_enabled": false,
+              "budgets": null,
+              "limits": null,
+              "consolidate_after_in_seconds": null
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok(), "should be Ok but was: {:?}", result.err());
+        let qovery_node_pools = result.expect("should be Ok").qovery_node_pools;
+        assert_eq!(
+            qovery_node_pools.stable_override,
+            KarpenterStableNodePoolOverride {
+                spot_enabled: Some(true),
+                budgets: vec![],
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        );
+        assert_eq!(
+            qovery_node_pools
+                .default_override
+                .expect("default_override should be present"),
+            KarpenterDefaultNodePoolOverride {
+                spot_enabled: Some(false),
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        );
+        assert_eq!(
+            qovery_node_pools
+                .cronjob_override
+                .expect("cronjob_override should be present"),
+            KarpenterCronjobNodePoolOverride {
+                spot_enabled: Some(false),
+                budgets: vec![],
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        );
     }
 }
