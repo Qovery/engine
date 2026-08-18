@@ -381,26 +381,59 @@ jq -n \
   --arg canonicalRef "$catalog_canonical_ref" \
   '{version: $version, ref: $ref, digest: $digest, canonicalRef: $canonicalRef, activated: false}' > "$CATALOG_OUTPUT"
 
-activate_catalog() {
+set_service_version() {
   local api_host="$1"
+  local service_type="$2"
+  local version="$3"
+  local action="$4"
   local api_url="$api_host"
   case "$api_url" in
     http://*|https://*) ;;
     *) api_url="https://$api_url" ;;
   esac
-  echo "--- activating catalog $catalog_canonical_ref on $api_url"
+  echo "--- $action on $api_url"
   curl --fail-with-body --silent --show-error --request PUT \
     --header 'Content-Type: application/json' \
     --header "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" \
     --get "$api_url/engine/serviceVersion" \
-    --data-urlencode 'serviceType=PLATFORM_CATALOG' \
-    --data-urlencode "version=$catalog_canonical_ref" >/dev/null
+    --data-urlencode "serviceType=$service_type" \
+    --data-urlencode "version=$version" >/dev/null
+}
+
+published_operator_chart_version() {
+  jq -er '
+    [.[] | select(.chart == "qovery-operator") | .version] as $versions
+    | if (($versions | length) == 1
+          and ($versions[0] | type) == "string"
+          and ($versions[0] | length) > 0)
+      then $versions[0]
+      else error("expected exactly one published qovery-operator chart version")
+      end
+  ' "$CHART_OUTPUT"
+}
+
+activate_environment() {
+  local api_host="$1"
+  local operator_chart_version="$2"
+
+  set_service_version \
+    "$api_host" \
+    "PLATFORM_CATALOG" \
+    "$catalog_canonical_ref" \
+    "activating catalog $catalog_canonical_ref"
+
+  set_service_version \
+    "$api_host" \
+    "QOVERY_OPERATOR_CHART" \
+    "$operator_chart_version" \
+    "declaring Qovery Operator chart $operator_chart_version"
 }
 
 if [ "${PLATFORM_CATALOG_ACTIVATE:-false}" = "true" ]; then
   [ -n "${CI_ENGINE_VERSION_CONTROLLER_TOKEN:-}" ] || fatal "CI_ENGINE_VERSION_CONTROLLER_TOKEN is required to activate the catalog"
-  activate_catalog "${QOVERY_ADMIN_DEV_API:-api-admin-dev.qovery.com}"
-  activate_catalog "${QOVERY_ADMIN_API:-api-admin.qovery.com}"
+  operator_chart_version="$(published_operator_chart_version)"
+  activate_environment "${QOVERY_ADMIN_DEV_API:-api-admin-dev.qovery.com}" "$operator_chart_version"
+  activate_environment "${QOVERY_ADMIN_API:-api-admin.qovery.com}" "$operator_chart_version"
   jq '.activated = true' "$CATALOG_OUTPUT" > "$work_dir/catalog-output.json"
   mv "$work_dir/catalog-output.json" "$CATALOG_OUTPUT"
 fi

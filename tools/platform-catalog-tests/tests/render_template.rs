@@ -202,14 +202,27 @@ fn missing_referenced_config_fails_before_writing_a_template() {
 #[test]
 fn wrong_chart_version_fails_complete_graph_validation() {
     let mut fixture = RenderFixture::new();
-    fixture.chart_entries[0] = chart_entry("qovery-operator", "9.9.9");
+    let operator_chart = fixture
+        .chart_entries
+        .iter_mut()
+        .find(|entry| entry["chart"].as_str() == Some("qovery-operator"))
+        .expect("qovery-operator must be published");
+    let expected_chart_version = operator_chart["version"]
+        .as_str()
+        .expect("chart version must be a string")
+        .to_string();
+    *operator_chart = chart_entry("qovery-operator", "9.9.9");
     fixture.write_outputs();
 
     let output = fixture.render("0.1.0");
+    let stderr = String::from_utf8_lossy(&output.stderr);
 
     assert!(!output.status.success());
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("chart qovery-operator:0.2.0 has no verified publication")
+        stderr.contains(&format!(
+            "chart qovery-operator:{expected_chart_version} has no verified publication"
+        )),
+        "unexpected render error:\n{stderr}"
     );
 }
 
