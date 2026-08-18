@@ -19,7 +19,7 @@ UUID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.IGNORECASE,
 )
-LOKI_BASE_URL = "https://loki-engine-infra-static.z6d9f665a.rustrocks.space"
+LOKI_BASE_URL = "https://loki-engine-infra-static-envoy.z6d9f665a.rustrocks.space"
 LOKI_LIMIT = 5000
 RETRY_MAX_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 2
