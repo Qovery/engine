@@ -36,6 +36,10 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           env:
+            - name: "OPERATOR_VERSION"
+              value: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+            - name: "OPERATOR_CHART_VERSION"
+              value: {{ .Chart.Version | quote }}
             - name: "QOVERY_OPERATOR_NAMESPACE"
               value: {{ .Values.namespace | quote }}
             - name: "QOVERY_ENGINE_WORKER_SERVICE_ACCOUNT"
