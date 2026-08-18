@@ -23,6 +23,20 @@ pub struct EsoExternalSecretsPreBuild {
     pub terraform_external_secrets_values: Vec<DeployExternalSecretsResult>,
 }
 
+/// Reports an external secret deployment error to the user
+fn send_external_secret_deployment_error(env_logger: &EnvLogger, err: &EngineError) {
+    if let Some(underlying) = err.underlying_error()
+        && let Some(full_details) = underlying.message_raw()
+    {
+        if full_details.contains("failed calling webhook") {
+            env_logger.send_warning("External Secrets Operator webhook is unreachable, external secret(s) cannot be created. Please reach to Qovery support".to_string());
+        } else {
+            let message_safe = underlying.message_safe();
+            env_logger.send_warning(format!("Unexpected issue when deploying external secret: {message_safe}"));
+        }
+    }
+}
+
 /// Deploy all Services ExternalSecrets defined in separate helm release
 /// (we need to deploy them separately to compute the image tag needed for buildable services)
 /// Returns the kube names of services that need to be cleaned up if any
@@ -72,7 +86,7 @@ pub fn handle_service_external_secrets(
                     app.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
-                .inspect_err(|err| env_logger.send_error(*err.clone()))
+                .inspect_err(|err| send_external_secret_deployment_error(&env_logger, err))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -105,7 +119,7 @@ pub fn handle_service_external_secrets(
                     container.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
-                .inspect_err(|err| env_logger.send_error(*err.clone()))
+                .inspect_err(|err| send_external_secret_deployment_error(&env_logger, err))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -144,7 +158,7 @@ pub fn handle_service_external_secrets(
                     job.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
-                .inspect_err(|err| env_logger.send_error(*err.clone()))
+                .inspect_err(|err| send_external_secret_deployment_error(&env_logger, err))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -181,7 +195,7 @@ pub fn handle_service_external_secrets(
                     helm_chart.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
-                .inspect_err(|err| env_logger.send_error(*err.clone()))
+                .inspect_err(|err| send_external_secret_deployment_error(&env_logger, err))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -209,7 +223,7 @@ pub fn handle_service_external_secrets(
                     terraform_service.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
-                .inspect_err(|err| env_logger.send_error(*err.clone()))
+                .inspect_err(|err| send_external_secret_deployment_error(&env_logger, err))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
