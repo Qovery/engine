@@ -72,6 +72,7 @@ pub fn handle_service_external_secrets(
                     app.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
+                .inspect_err(|err| env_logger.send_error(*err.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -104,6 +105,7 @@ pub fn handle_service_external_secrets(
                     container.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
+                .inspect_err(|err| env_logger.send_error(*err.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -142,6 +144,7 @@ pub fn handle_service_external_secrets(
                     job.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
+                .inspect_err(|err| env_logger.send_error(*err.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -178,6 +181,7 @@ pub fn handle_service_external_secrets(
                     helm_chart.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
+                .inspect_err(|err| env_logger.send_error(*err.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -205,6 +209,7 @@ pub fn handle_service_external_secrets(
                     terraform_service.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
+                .inspect_err(|err| env_logger.send_error(*err.clone()))
             })
             .collect::<Result<Vec<_>, _>>()?;
 
