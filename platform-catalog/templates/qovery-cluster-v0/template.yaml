@@ -9,6 +9,7 @@ platformTemplateRelease:
     operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
     operator.imageTag: f9aff159d23551c56813d3d3a9aa832be38317f4
     engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine
+    engineWorker.imageTagSuffix: ""
   bootstrap:
     component:
       key: qovery-operator
@@ -51,6 +52,11 @@ platformTemplateRelease:
           source:
             kind: qcoreValue
             key: engineWorker.imageRepository
+          required: true
+        - name: engineWorker.imageTagSuffix
+          source:
+            kind: qcoreValue
+            key: engineWorker.imageTagSuffix
           required: true
         - name: operator.imageRepository
           source:

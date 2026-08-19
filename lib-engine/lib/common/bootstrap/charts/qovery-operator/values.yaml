@@ -18,6 +18,7 @@ environmentVariables:
   CLUSTER_ID: ""
   CLUSTER_JWT_TOKEN: ""
   QOVERY_ENGINE_WORKER_IMAGE_REPOSITORY: "public.ecr.aws/r3m4q3r9/engine"
+  QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: ""
 
 imagePullSecrets: []
 nameOverride: ""

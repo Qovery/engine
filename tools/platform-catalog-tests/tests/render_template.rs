@@ -1,5 +1,6 @@
 use platform_catalog_tests::{
-    REGISTRY, contains_string, mapping_string, mappings_for_key, parse_yaml_file, repository_path, run,
+    REGISTRY, contains_string, mapping_string, mappings_for_key, parse_yaml_file, repository_path, run, yaml_path,
+    yaml_string,
 };
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
@@ -182,6 +183,39 @@ fn every_component_release_uses_the_protected_qovery_namespace() {
             "every catalog component release must stay inside q-core's protected namespace"
         );
     }
+}
+
+#[test]
+fn engine_worker_image_tag_suffix_defaults_to_empty_and_comes_from_qcore() {
+    let template = parse_yaml_file(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml"));
+    assert_eq!(
+        yaml_string(
+            &template,
+            &[
+                "platformTemplateRelease",
+                "runtimeSourceValues",
+                "engineWorker.imageTagSuffix"
+            ]
+        ),
+        Some("")
+    );
+
+    let runtime_inputs = yaml_path(
+        &template,
+        &["platformTemplateRelease", "bootstrap", "component", "runtimeInputs"],
+    )
+    .and_then(serde_yaml::Value::as_sequence)
+    .expect("bootstrap runtimeInputs must be a sequence");
+    let suffix_input = runtime_inputs
+        .iter()
+        .find(|input| yaml_string(input, &["name"]) == Some("engineWorker.imageTagSuffix"))
+        .expect("engineWorker.imageTagSuffix runtime input must be declared");
+
+    assert_eq!(yaml_string(suffix_input, &["source", "kind"]), Some("qcoreValue"));
+    assert_eq!(
+        yaml_string(suffix_input, &["source", "key"]),
+        Some("engineWorker.imageTagSuffix")
+    );
 }
 
 #[test]

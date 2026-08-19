@@ -102,6 +102,56 @@ fn cluster_agent_does_not_receive_the_legacy_loki_url() {
     assert!(!any_document_contains(&documents, "LOKI_URL"));
 }
 
+fn assert_operator_image_tag_suffix_renders(expected_suffix: &str) {
+    let runtime_values = write_runtime_values(&format!(
+        "environmentVariables:\n  QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: {expected_suffix:?}\n"
+    ));
+    let documents = render(
+        "qovery-operator",
+        "lib-engine/lib/common/bootstrap/charts/qovery-operator",
+        "qovery",
+        &[runtime_values.path().to_owned()],
+        &[],
+    );
+    let secret = document_by_kind_and_name(&documents, "Secret", "qovery-operator")
+        .expect("qovery-operator Secret must be rendered");
+
+    assert_eq!(
+        yaml_string(secret, &["stringData", "QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX"]),
+        Some(expected_suffix)
+    );
+
+    if !expected_suffix.is_empty() {
+        let deployment = document_by_kind_and_name(&documents, "Deployment", "qovery-operator")
+            .expect("qovery-operator Deployment must be rendered");
+        let environment = yaml_path(deployment, &["spec", "template", "spec", "containers"])
+            .and_then(Value::as_sequence)
+            .and_then(|containers| containers.first())
+            .and_then(|container| yaml_path(container, &["env"]))
+            .and_then(Value::as_sequence)
+            .expect("qovery-operator container environment must be rendered");
+        let suffix_environment = environment
+            .iter()
+            .find(|entry| yaml_string(entry, &["name"]) == Some("QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX"))
+            .expect("non-empty Engine worker image tag suffix must be exposed to the Operator");
+
+        assert_eq!(
+            yaml_string(suffix_environment, &["valueFrom", "secretKeyRef", "key"]),
+            Some("QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX")
+        );
+    }
+}
+
+#[test]
+fn operator_renders_an_empty_engine_worker_image_tag_suffix() {
+    assert_operator_image_tag_suffix_renders("");
+}
+
+#[test]
+fn operator_renders_the_slim_engine_worker_image_tag_suffix() {
+    assert_operator_image_tag_suffix_renders("-slim");
+}
+
 #[test]
 fn alloy_renders_the_expected_public_image_resources_and_loki_pipeline() {
     let value_file = values("platform-catalog/components/alloy/config/static-values/base.yaml");
