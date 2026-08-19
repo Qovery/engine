@@ -216,6 +216,10 @@ fn engine_worker_image_tag_suffix_defaults_to_empty_and_comes_from_qcore() {
         yaml_string(suffix_input, &["source", "key"]),
         Some("engineWorker.imageTagSuffix")
     );
+    assert_eq!(
+        yaml_path(suffix_input, &["allowEmpty"]).and_then(serde_yaml::Value::as_bool),
+        Some(true)
+    );
 }
 
 #[test]

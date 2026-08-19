@@ -58,6 +58,7 @@ platformTemplateRelease:
             kind: qcoreValue
             key: engineWorker.imageTagSuffix
           required: true
+          allowEmpty: true
         - name: operator.imageRepository
           source:
             kind: qcoreValue
