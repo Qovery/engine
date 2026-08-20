@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.compile
+
+import "context.pkl"
+import "profile.pkl"
+
+function compile(config: Mapping, clusterContext: Mapping?): Mapping =
+  new Mapping {
+    ["environmentVariables"] = new Mapping {
+      when (context.isDemo(clusterContext)) {
+        ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = profile.cpuArchitectures(config) as String
+      }
+    }
+  }

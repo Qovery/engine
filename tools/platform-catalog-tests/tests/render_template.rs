@@ -186,7 +186,7 @@ fn every_component_release_uses_the_protected_qovery_namespace() {
 }
 
 #[test]
-fn engine_worker_image_tag_suffix_defaults_to_empty_and_comes_from_qcore() {
+fn demo_worker_configuration_comes_from_the_operator_evaluator() {
     let template = parse_yaml_file(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml"));
     assert_eq!(
         yaml_string(
@@ -197,7 +197,7 @@ fn engine_worker_image_tag_suffix_defaults_to_empty_and_comes_from_qcore() {
                 "engineWorker.imageTagSuffix"
             ]
         ),
-        Some("")
+        None
     );
 
     let runtime_inputs = yaml_path(
@@ -206,19 +206,51 @@ fn engine_worker_image_tag_suffix_defaults_to_empty_and_comes_from_qcore() {
     )
     .and_then(serde_yaml::Value::as_sequence)
     .expect("bootstrap runtimeInputs must be a sequence");
-    let suffix_input = runtime_inputs
-        .iter()
-        .find(|input| yaml_string(input, &["name"]) == Some("engineWorker.imageTagSuffix"))
-        .expect("engineWorker.imageTagSuffix runtime input must be declared");
+    assert!(
+        runtime_inputs
+            .iter()
+            .all(|input| yaml_string(input, &["name"]) != Some("engineWorker.imageTagSuffix"))
+    );
 
-    assert_eq!(yaml_string(suffix_input, &["source", "kind"]), Some("qcoreValue"));
     assert_eq!(
-        yaml_string(suffix_input, &["source", "key"]),
-        Some("engineWorker.imageTagSuffix")
+        yaml_string(
+            &template,
+            &[
+                "platformTemplateRelease",
+                "bootstrap",
+                "component",
+                "configRef",
+                "evaluator",
+                "kind"
+            ],
+        ),
+        Some("PKL")
     );
     assert_eq!(
-        yaml_path(suffix_input, &["allowEmpty"]).and_then(serde_yaml::Value::as_bool),
-        Some(true)
+        yaml_string(
+            &template,
+            &[
+                "platformTemplateRelease",
+                "bootstrap",
+                "component",
+                "configRef",
+                "evaluator",
+                "entrypoint"
+            ],
+        ),
+        Some("runtime-values/model.pkl")
+    );
+
+    let overlay = parse_yaml_file(repository_path(
+        "platform-catalog/components/qovery-operator/config/static-values/overlays/qovery-demo.yaml",
+    ));
+    assert_eq!(
+        yaml_string(&overlay, &["environmentVariables", "QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX"]),
+        Some("-slim")
+    );
+    assert_eq!(
+        yaml_string(&overlay, &["environmentVariables", "QOVERY_ENVIRONMENT_ENGINE_WORKER_PROFILE"]),
+        Some("LOCAL_DEMO")
     );
 }
 

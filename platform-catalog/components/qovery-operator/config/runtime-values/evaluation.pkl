@@ -1,0 +1,21 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.evaluation
+
+import "compile.pkl"
+import "contract.pkl"
+import "describe.pkl"
+import "sdk/request.pkl" as sdkRequest
+import "sdk/result.pkl" as sdkResult
+import "validate.pkl"
+
+function evaluate(request: Mapping): contract.EvaluationResult =
+  let (operation = sdkRequest.operation(request))
+  let (config = sdkRequest.profileConfig(request))
+  let (clusterContext = sdkRequest.clusterContext(request))
+    sdkResult.envelope(
+      operation,
+      describe.fieldsFor(clusterContext),
+      List(),
+      validate.violations(operation, config, clusterContext),
+      () -> compile.compile(config, clusterContext),
+    )

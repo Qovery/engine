@@ -7,4 +7,3 @@ environmentVariables:
   CLUSTER_ID: "${cluster.id}"
   CLUSTER_JWT_TOKEN: "${cluster.jwtToken}"
   QOVERY_ENGINE_WORKER_IMAGE_REPOSITORY: "${engineWorker.imageRepository}"
-  QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: "${engineWorker.imageTagSuffix}"

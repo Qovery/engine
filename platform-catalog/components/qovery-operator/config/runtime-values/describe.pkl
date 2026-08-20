@@ -1,0 +1,20 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.describe
+
+import "contract.pkl"
+import "context.pkl"
+import "profile.pkl"
+
+function fieldsFor(clusterContext: Mapping?): List<contract.Field> = List(
+  new contract.Field {
+    key = "cpuArchitectures"
+    type = contract.stringFieldType
+    required = context.isDemo(clusterContext)
+    defaultValue = null
+    label = "CPU architectures"
+    description = "Native CPU architecture used by the local demo builder."
+    constraints = new { allowedValues = profile.allowedCpuArchitectures }
+  },
+)
+
+fieldKeys: Set<String> = fieldsFor(null).map((field) -> field.key).toSet()

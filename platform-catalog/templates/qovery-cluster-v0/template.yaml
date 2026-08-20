@@ -9,7 +9,6 @@ platformTemplateRelease:
     operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
     operator.imageTag: f9aff159d23551c56813d3d3a9aa832be38317f4
     engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine
-    engineWorker.imageTagSuffix: ""
   bootstrap:
     component:
       key: qovery-operator
@@ -24,6 +23,9 @@ platformTemplateRelease:
       configRef:
         chart: qovery-operator
         version: v1
+        evaluator:
+          kind: PKL
+          entrypoint: runtime-values/model.pkl
         # Replaced from platform-config-publish.json before the root artifact is published.
         digest: __PUBLISHED_CONFIG_DIGEST__
       runtimeInputs:
@@ -53,12 +55,6 @@ platformTemplateRelease:
             kind: qcoreValue
             key: engineWorker.imageRepository
           required: true
-        - name: engineWorker.imageTagSuffix
-          source:
-            kind: qcoreValue
-            key: engineWorker.imageTagSuffix
-          required: true
-          allowEmpty: true
         - name: operator.imageRepository
           source:
             kind: qcoreValue

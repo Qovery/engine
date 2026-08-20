@@ -1,0 +1,4 @@
+# Applied only when q-core derives QOVERY_DEMO from the persisted is_demo cluster state.
+environmentVariables:
+  QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: "-slim"
+  QOVERY_ENVIRONMENT_ENGINE_WORKER_PROFILE: "LOCAL_DEMO"

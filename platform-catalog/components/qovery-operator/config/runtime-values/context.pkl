@@ -1,0 +1,9 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.context
+
+demoCapability: String = "QOVERY_DEMO"
+
+function isDemo(clusterContext: Mapping?): Boolean =
+  ((clusterContext?.getOrNull("capabilities") as Listing?) ?? new Listing {})
+    .toList()
+    .contains(demoCapability)

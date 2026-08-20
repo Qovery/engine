@@ -1,0 +1,11 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.profile
+
+allowedCpuArchitectures: List<String> = List("AMD64", "ARM64")
+
+function cpuArchitectures(config: Mapping): String? =
+  let (value = config.getOrNull("cpuArchitectures"))
+    if (value is String) value else null
+
+function hasCpuArchitectures(config: Mapping): Boolean =
+  config.keys.contains("cpuArchitectures")

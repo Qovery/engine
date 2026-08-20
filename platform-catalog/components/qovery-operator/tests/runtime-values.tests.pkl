@@ -1,0 +1,46 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/evaluation.pkl"
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+
+local function evaluate(
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  isDemo: Boolean,
+): contract.EvaluationResult =
+  let (capabilities = if (isDemo) new Listing { "QOVERY_DEMO" } else new Listing {})
+    evaluation.evaluate(
+      sdkRequest.build(
+        operation,
+        profileConfig,
+        new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS"; ["capabilities"] = capabilities },
+        new Mapping {},
+        List(),
+      ),
+    )
+
+facts {
+  ["STANDARD compiles no demo worker settings"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {}, false))
+      result.violations.isEmpty
+        && ((result.helmValues as Mapping)["environmentVariables"] as Mapping).isEmpty
+  }
+
+  ["QOVERY_DEMO requires cpuArchitectures"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {}, true))
+      result.helmValues == null
+        && result.violations.any((violation) -> violation.fieldPath == "cpuArchitectures")
+  }
+
+  ["QOVERY_DEMO compiles the configured CPU architecture"] {
+    let (result = evaluate(
+      contract.compileOperation,
+      new Mapping { ["cpuArchitectures"] = "ARM64" },
+      true,
+    ))
+    let (environment = (result.helmValues as Mapping)["environmentVariables"] as Mapping)
+      result.violations.isEmpty
+        && environment["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] == "ARM64"
+  }
+}

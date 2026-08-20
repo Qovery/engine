@@ -1,0 +1,71 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.configuration.contract
+
+// Canonical language-neutral contract consumed by q-core. Component bundles vendor this file
+// because q-core deliberately resolves Pkl imports only inside one digest-pinned OCI bundle.
+// Keep property names aligned with ComponentConfigurationEvaluationResult.
+
+typealias Operation = "DESCRIBE" | "RESOLVE_REQUIREMENTS" | "VALIDATE" | "COMPILE"
+
+typealias InputScope = "PLATFORM_PROFILE" | "CLUSTER"
+
+typealias FieldType = "string" | "number" | "bool"
+
+describeOperation: Operation = "DESCRIBE"
+resolveRequirementsOperation: Operation = "RESOLVE_REQUIREMENTS"
+validateOperation: Operation = "VALIDATE"
+compileOperation: Operation = "COMPILE"
+
+platformProfileScope: InputScope = "PLATFORM_PROFILE"
+clusterScope: InputScope = "CLUSTER"
+
+stringFieldType: FieldType = "string"
+numberFieldType: FieldType = "number"
+booleanFieldType: FieldType = "bool"
+
+class Constraints {
+  allowedValues: List<String>? = null
+  min: Int? = null
+  max: Int? = null
+  minLength: Int? = null
+  maxLength: Int? = null
+  pattern: String? = null
+}
+
+// Describes one product setting that the Console can render generically.
+class Field {
+  key: String
+  type: FieldType
+  required: Boolean
+  defaultValue: String?
+  label: String
+  description: String?
+  sensitive: Boolean = false
+  constraints: Constraints = new {}
+}
+
+// Describes an input that becomes necessary only for the selected configuration.
+// Example: choosing S3 activates the bucket name and IAM role requirements.
+class LogicalInput {
+  key: String
+  type: String
+  scope: InputScope
+  label: String
+  description: String?
+  sensitive: Boolean = false
+  constraints: Constraints = new {}
+}
+
+// Stable machine-readable validation error returned to q-core and the Console.
+class Violation {
+  code: String
+  fieldPath: String
+  message: String
+}
+
+class EvaluationResult {
+  fields: List<Field> = List()
+  requiredInputs: List<LogicalInput> = List()
+  violations: List<Violation> = List()
+  helmValues: Mapping? = null
+}

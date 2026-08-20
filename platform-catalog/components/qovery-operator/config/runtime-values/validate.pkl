@@ -1,0 +1,31 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.validate
+
+import "contract.pkl"
+import "context.pkl"
+import "describe.pkl"
+import "profile.pkl"
+import "sdk/validate.pkl" as sdkValidate
+
+function violations(
+  operation: contract.Operation,
+  config: Mapping,
+  clusterContext: Mapping?,
+): List<contract.Violation> =
+  if (operation == contract.describeOperation)
+    List()
+  else
+    sdkValidate.unknownFields(config, describe.fieldKeys, "Qovery Operator") + fieldViolations(config, clusterContext)
+
+local function fieldViolations(config: Mapping, clusterContext: Mapping?): List<contract.Violation> =
+  let (cpuArchitectures = profile.cpuArchitectures(config))
+    sdkValidate.collect(List(
+      if (profile.hasCpuArchitectures(config) && cpuArchitectures == null)
+        sdkValidate.violation("INVALID_TYPE", "cpuArchitectures", "Qovery Operator cpuArchitectures must be a string")
+      else if (context.isDemo(clusterContext) && cpuArchitectures == null)
+        sdkValidate.violation("REQUIRED_FIELD_MISSING", "cpuArchitectures", "Qovery Operator cpuArchitectures is required for QOVERY_DEMO")
+      else if (cpuArchitectures != null && !profile.allowedCpuArchitectures.contains(cpuArchitectures))
+        sdkValidate.violation("VALUE_NOT_ALLOWED", "cpuArchitectures", "Qovery Operator cpuArchitectures must be AMD64 or ARM64")
+      else
+        null,
+    ))
