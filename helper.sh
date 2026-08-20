@@ -193,6 +193,68 @@ engineResources.requests.cpu="300m",\
 engineResources.requests.memory="4Gi"
 }
 
+function deploy_engines_infra_public() { ## Release infra engines consuming the public-pool queue (QOV-2107), pods pinned to qovery-default-public nodes
+  tag=$(generate_image_tag)
+  case $1 in
+    "prod")
+      name="qovery-engine-infra-public"
+      cluster_id="1f969697-a62f-473d-a65f-8d671130c21c"
+      jwt_token="$INFRA_CLUSTER_INFRA_PROD_PUBLIC_IP_JWT_TOKEN"
+      ;;
+    "staging")
+      name="qovery-engine-infra-public-staging"
+      cluster_id="4772e88b-8118-4be4-9cf2-4690363f3c9a"
+      jwt_token="$INFRA_CLUSTER_INFRA_STAGING_PUBLIC_IP_JWT_TOKEN"
+      ;;
+    *)
+      echo "deploy_engines_infra_public: no public pool identity for channel '$1'" >&2
+      return 1
+      ;;
+  esac
+
+  AWS_ACCESS_KEY_ID="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$AWS_PROD_INFRA_STATIC_IP_DEPLOY_SECRET_KEY" \
+  AWS_DEFAULT_REGION="$AWS_PROD_INFRA_STATIC_IP_DEFAULT_REGION" \
+  helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace $name qovery-engine \
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set \
+tolerations[0].key="node.kubernetes.io/not-ready",\
+tolerations[0].operator="Exists",\
+tolerations[0].effect="NoExecute",\
+tolerations[0].tolerationSeconds=21600,\
+tolerations[1].key="nodepool/qovery-default-public",\
+tolerations[1].operator="Exists",\
+tolerations[1].effect="NoSchedule" \
+  --set-string \
+image.tag="$tag",\
+fullnameOverride="$name",\
+nodeSelector."karpenter\.sh/nodepool"="qovery-default-public",\
+nodeSelector."kubernetes\.io/arch"="amd64",\
+environmentVariables.CLOUD_PROVIDER="aws",\
+environmentVariables.ENGINE_TAG_VERSION="$tag",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.DEPLOYMENT_TYPE="INFRASTRUCTURE",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
+environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
+environmentVariables.CLUSTER_ID="$cluster_id",\
+environmentVariables.CLUSTER_JWT_TOKEN="$jwt_token",\
+environmentVariables.QOVERY_AWS_APN_ID="$QOVERY_AWS_APN_ID",\
+rbac.clusterPermission="none",\
+buildContainer.enabled="false",\
+metrics.enabled="true",\
+terminationGracePeriodSeconds="14400",\
+autoscaler.enabled="true",\
+autoscaler.maxReplicas="50",\
+autoscaler.minReplicas="1",\
+autoscaler.averageValue="0.5",\
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="5Gi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="4Gi"
+}
+
 function deploy_engines_environment_static_ip() { ## Release GA to prod
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
@@ -608,6 +670,10 @@ set_release_ga)
 # Deploy the engines dedicated for infra deployments on cluster with static ip
 deploy_engines_infra_static_ip)
   deploy_engines_infra_static_ip $channel
+  ;;
+# Deploy the infra engines consuming the public-pool queue (QOV-2107)
+deploy_engines_infra_public)
+  deploy_engines_infra_public $channel
   ;;
 # Deploy on the engines dedicated for customer's environments deployments on cluster with static ip
 deploy_engines_environment_static_ip)

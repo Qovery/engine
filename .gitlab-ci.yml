@@ -1131,6 +1131,21 @@ publish-platform-catalog:
     - if: $CI_COMMIT_TAG
       when: manual
 
+
+.deploy-qovery-infra-engines-public:
+  extends: [.needs-docker, .resources-minimal]
+  retry: 0
+  needs:
+    - gitlab-release
+  script:
+    - ./helper.sh deploy_engines_infra_public $CHANNEL
+  tags:
+    - k8s-runner
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+
+
 1-deploy-qovery-infra-engines-staging:
   stage: deploy-staging
   extends: .deploy-qovery-infra-engines
@@ -1195,6 +1210,17 @@ publish-platform-catalog:
   environment:
     name: cluster-analysis-staging
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/cef5383b-c50d-496d-b19f-d42914408888/settings/general
+    deployment_tier: staging
+
+
+5-deploy-qovery-infra-engines-public-staging:
+  stage: deploy-staging
+  extends: .deploy-qovery-infra-engines-public
+  variables:
+    CHANNEL: staging
+  environment:
+    name: infra-public-staging
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/4772e88b-8118-4be4-9cf2-4690363f3c9a/settings/general
     deployment_tier: staging
 
 
@@ -1312,4 +1338,15 @@ publish-platform-catalog:
   environment:
     name: cluster-analysis-production
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/6d9f665a-c203-4b02-8d49-ee05ad3f1137/settings/general
+    deployment_tier: production
+
+
+9-deploy-qovery-infra-engines-public-prod:
+  stage: deploy-prod
+  extends: .deploy-qovery-infra-engines-public
+  variables:
+    CHANNEL: prod
+  environment:
+    name: infra-public-production
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/1f969697-a62f-473d-a65f-8d671130c21c/settings/general
     deployment_tier: production
