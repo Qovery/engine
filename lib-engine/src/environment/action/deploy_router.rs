@@ -15,11 +15,10 @@ use crate::io_models::models::CustomDomain;
 use crate::runtime::block_on;
 use crate::{
     cmd::kubectl::{
-        GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE,
         gateway_fallback_certificate_ref_annotation_key, is_engine_gateway_fallback_reference_grant,
-        kubectl_check_gateway_api_crds_available, kubectl_gateway_crd_supports_allowed_listeners,
-        kubectl_get_gateway_api_served_version, kubectl_get_reference_grant_served_version,
-        kubectl_reconcile_gateway_certrefs_for_router_tls_secrets,
+        kubectl_check_gateway_api_crds_available, kubectl_ensure_gateway_to_secret_reference_grant,
+        kubectl_gateway_crd_supports_allowed_listeners, kubectl_get_gateway_api_served_version,
+        kubectl_get_reference_grant_served_version, kubectl_reconcile_gateway_certrefs_for_router_tls_secrets,
     },
     errors::CommandError,
 };
@@ -189,9 +188,12 @@ fn maybe_patch_gateway_cert_refs_for_custom_domains<T: CloudProvider>(
         "GKE Gateway API ListenerSet fallback: ensuring Gateway uses TLS secret {secret_namespace}/{secret_name}."
     ));
 
-    if let Err(e) =
-        ensure_gateway_to_secret_reference_grant(target.kube.client(), "qovery", &secret_namespace, &secret_name)
-    {
+    if let Err(e) = kubectl_ensure_gateway_to_secret_reference_grant(
+        &target.kube.client(),
+        "qovery",
+        &secret_namespace,
+        &secret_name,
+    ) {
         logger.warning(format!(
             "Failed to ensure ReferenceGrant for Gateway TLS secret {secret_namespace}/{secret_name}: {e}"
         ));
@@ -233,51 +235,6 @@ fn maybe_patch_gateway_cert_refs_for_custom_domains<T: CloudProvider>(
             )));
         }
     }
-
-    Ok(())
-}
-
-fn ensure_gateway_to_secret_reference_grant(
-    kube_client: kube::Client,
-    gateway_namespace: &str,
-    secret_namespace: &str,
-    secret_name: &str,
-) -> Result<(), CommandError> {
-    let api_version = kubectl_get_reference_grant_served_version(&kube_client).unwrap_or_else(|| "v1beta1".to_string());
-    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &api_version, "ReferenceGrant");
-    let api: Api<kube::core::DynamicObject> =
-        Api::namespaced_with(kube_client, secret_namespace, &ApiResource::from_gvk(&gvk));
-
-    let grant_name = format!("allow-gateway-to-{secret_name}");
-    let grant = json!({
-        "apiVersion": format!("gateway.networking.k8s.io/{api_version}"),
-        "kind": "ReferenceGrant",
-        "metadata": {
-            "name": grant_name,
-            "namespace": secret_namespace,
-            "labels": {
-                GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL: GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE
-            }
-        },
-        "spec": {
-            "from": [{
-                "group": "gateway.networking.k8s.io",
-                "kind": "Gateway",
-                "namespace": gateway_namespace
-            }],
-            "to": [{
-                "group": "",
-                "kind": "Secret",
-                "name": secret_name
-            }]
-        }
-    });
-
-    block_on(api.patch(&grant_name, &PatchParams::apply("qovery-engine"), &Patch::Apply(&grant))).map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Failed to apply ReferenceGrant {secret_namespace}/{grant_name}: {e}"
-        ))
-    })?;
 
     Ok(())
 }
@@ -731,12 +688,12 @@ fn is_kubernetes_conflict(error: &kube::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE,
         MAX_GATEWAY_CERTIFICATE_REFS, combine_gateway_fallback_cleanup_results,
         ensure_gateway_certificate_ref_capacity, gateway_certificate_ref_ensure_patch,
         gateway_certificate_ref_remove_patch, is_engine_gateway_fallback_reference_grant, is_kubernetes_conflict,
         reference_grant_allows_gateway_to_secret,
     };
+    use crate::cmd::kubectl::{GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE};
     use crate::errors::CommandError;
     use kube::api::ApiResource;
     use kube::core::{DynamicObject, GroupVersionKind, Status};
