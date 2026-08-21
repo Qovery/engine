@@ -102,6 +102,33 @@ fn cluster_agent_does_not_receive_the_legacy_loki_url() {
     assert!(!any_document_contains(&documents, "LOKI_URL"));
 }
 
+#[test]
+fn shell_agent_preserves_the_legacy_resource_names() {
+    let documents = render(
+        "shell-agent",
+        "lib-engine/lib/common/bootstrap/charts/qovery-shell-agent",
+        "qovery",
+        &[values(
+            "platform-catalog/components/shell-agent/config/static-values/base.yaml",
+        )],
+        &[],
+    );
+
+    for kind in [
+        "Deployment",
+        "Secret",
+        "ServiceAccount",
+        "ClusterRole",
+        "ClusterRoleBinding",
+    ] {
+        assert!(
+            document_by_kind_and_name(&documents, kind, "qovery-shell-agent").is_some(),
+            "missing rendered {kind}/qovery-shell-agent"
+        );
+    }
+    assert!(document_by_kind_and_name(&documents, "Deployment", "shell-agent-qovery-shell-agent").is_none());
+}
+
 fn assert_operator_image_tag_suffix_renders(expected_suffix: &str) {
     let runtime_values = write_runtime_values(&format!(
         "environmentVariables:\n  QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: {expected_suffix:?}\n"
@@ -367,6 +394,33 @@ fn cert_manager_disables_gateway_and_service_monitor_features() {
         yaml_string(&static_values, &["global", "leaderElection", "namespace"]),
         Some("qovery")
     );
+}
+
+#[test]
+fn cert_manager_demo_overlay_uses_the_chart_resource_defaults() {
+    let documents = render(
+        "cert-manager",
+        "lib-engine/lib/common/bootstrap/charts/cert-manager",
+        "qovery",
+        &[
+            values("platform-catalog/components/cert-manager/config/static-values/base.yaml"),
+            values("platform-catalog/components/cert-manager/config/static-values/overlays/qovery-demo.yaml"),
+        ],
+        &[],
+    );
+
+    for name in ["cert-manager", "cert-manager-webhook", "cert-manager-cainjector"] {
+        let deployment = document_by_kind_and_name(&documents, "Deployment", name)
+            .unwrap_or_else(|| panic!("missing rendered Deployment/{name}"));
+        let resources = yaml_path(deployment, &["spec", "template", "spec", "containers"])
+            .and_then(Value::as_sequence)
+            .and_then(|containers| containers.first())
+            .and_then(|container| yaml_path(container, &["resources"]));
+        assert!(
+            resources.is_none() || resources.is_some_and(Value::is_null),
+            "unexpected resources on {name}"
+        );
+    }
 }
 
 #[test]

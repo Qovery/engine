@@ -1,0 +1,6 @@
+# Local demos use the chart defaults to keep the laptop footprint small.
+resources: null
+webhook:
+  resources: null
+cainjector:
+  resources: null

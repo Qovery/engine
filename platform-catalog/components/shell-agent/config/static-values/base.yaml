@@ -1,1 +1,2 @@
 # Source 1 — Qovery-owned base values for shell-agent.
+fullnameOverride: qovery-shell-agent
