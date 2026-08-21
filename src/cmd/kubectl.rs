@@ -1234,6 +1234,7 @@ pub fn kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
         let legacy_fallback_refs =
             gateway_legacy_reference_grant_certificate_refs(kube_client, gateway_namespace, &fallback_ownership)?;
         desired_refs.extend(legacy_fallback_refs.iter().cloned());
+        ensure_gateway_reference_grants_for_router_tls_secrets(kube_client, gateway_namespace, &desired_refs)?;
         let Some(patch) = gateway_certificate_refs_reconciliation_patch(
             &gateway,
             listener_name,
@@ -1347,6 +1348,117 @@ fn gateway_router_tls_certificate_refs(kube_client: &Client) -> Result<BTreeSet<
 pub(crate) const GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL: &str = "qovery.com/gateway-fallback-router-tls";
 pub(crate) const GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE: &str = "true";
 const QOVERY_ENGINE_FIELD_MANAGER: &str = "qovery-engine";
+
+/// Ensures every cross-namespace router TLS Secret has granted the shared Gateway access.
+///
+/// The Gateway TLS reconciliation runs only for GKE. Its fallback places router TLS Secrets from
+/// environment namespaces directly on the shared Gateway, which requires a ReferenceGrant in each
+/// Secret namespace before the Gateway certificate reference can be valid.
+fn ensure_gateway_reference_grants_for_router_tls_secrets(
+    kube_client: &Client,
+    gateway_namespace: &str,
+    router_tls_certificate_refs: &BTreeSet<(String, String)>,
+) -> Result<(), CommandError> {
+    if !router_tls_certificate_refs
+        .iter()
+        .any(|(secret_namespace, _)| secret_namespace != gateway_namespace)
+    {
+        return Ok(());
+    }
+
+    let api_version = kubectl_get_reference_grant_served_version(kube_client).unwrap_or_else(|| "v1beta1".to_string());
+    for (secret_namespace, secret_name) in router_tls_certificate_refs {
+        if secret_namespace == gateway_namespace {
+            continue;
+        }
+        ensure_gateway_to_secret_reference_grant_with_api_version(
+            kube_client,
+            &api_version,
+            gateway_namespace,
+            secret_namespace,
+            secret_name,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Creates or updates the ReferenceGrant allowing a Gateway to use a TLS Secret in another namespace.
+pub(crate) fn kubectl_ensure_gateway_to_secret_reference_grant(
+    kube_client: &Client,
+    gateway_namespace: &str,
+    secret_namespace: &str,
+    secret_name: &str,
+) -> Result<(), CommandError> {
+    let api_version = kubectl_get_reference_grant_served_version(kube_client).unwrap_or_else(|| "v1beta1".to_string());
+    ensure_gateway_to_secret_reference_grant_with_api_version(
+        kube_client,
+        &api_version,
+        gateway_namespace,
+        secret_namespace,
+        secret_name,
+    )
+}
+
+fn ensure_gateway_to_secret_reference_grant_with_api_version(
+    kube_client: &Client,
+    api_version: &str,
+    gateway_namespace: &str,
+    secret_namespace: &str,
+    secret_name: &str,
+) -> Result<(), CommandError> {
+    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", api_version, "ReferenceGrant");
+    let api: Api<kube::core::DynamicObject> =
+        Api::namespaced_with(kube_client.clone(), secret_namespace, &ApiResource::from_gvk(&gvk));
+    let grant_name = format!("allow-gateway-to-{secret_name}");
+    let grant =
+        gateway_to_secret_reference_grant_manifest(api_version, gateway_namespace, secret_namespace, secret_name);
+
+    block_on(api.patch(
+        &grant_name,
+        &PatchParams::apply(QOVERY_ENGINE_FIELD_MANAGER),
+        &Patch::Apply(&grant),
+    ))
+    .map_err(|error| {
+        CommandError::new_from_safe_message(format!(
+            "Failed to apply ReferenceGrant {secret_namespace}/{grant_name}: {error}"
+        ))
+    })?;
+
+    Ok(())
+}
+
+fn gateway_to_secret_reference_grant_manifest(
+    api_version: &str,
+    gateway_namespace: &str,
+    secret_namespace: &str,
+    secret_name: &str,
+) -> Value {
+    let grant_name = format!("allow-gateway-to-{secret_name}");
+    json!({
+        "apiVersion": format!("gateway.networking.k8s.io/{api_version}"),
+        "kind": "ReferenceGrant",
+        "metadata": {
+            "name": grant_name,
+            "namespace": secret_namespace,
+            "labels": {
+                GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL: GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE
+            }
+        },
+        "spec": {
+            "from": [{
+                "group": "gateway.networking.k8s.io",
+                "kind": "Gateway",
+                "namespace": gateway_namespace
+            }],
+            "to": [{
+                "group": "",
+                "kind": "Secret",
+                "name": secret_name
+            }]
+        }
+    })
+}
 
 fn gateway_legacy_reference_grant_certificate_refs(
     kube_client: &Client,
@@ -2198,8 +2310,9 @@ mod tests {
     use super::{
         GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE,
         KubernetesServicePortForwardTarget, gateway_certificate_refs_reconciliation_patch,
-        gateway_fallback_certificate_ref_ownership, is_engine_gateway_fallback_reference_grant,
-        is_kubernetes_optimistic_concurrency_conflict, reconcile_router_tls_certificate_refs,
+        gateway_fallback_certificate_ref_ownership, gateway_to_secret_reference_grant_manifest,
+        is_engine_gateway_fallback_reference_grant, is_kubernetes_optimistic_concurrency_conflict,
+        reconcile_router_tls_certificate_refs,
     };
     use kube::api::ApiResource;
     use kube::core::{DynamicObject, GroupVersionKind, Status};
@@ -2357,6 +2470,36 @@ mod tests {
         assert_eq!(
             gateway_fallback_certificate_ref_ownership(&gateway),
             BTreeSet::from([("environment".to_string(), "router-tls-z1234567".to_string())])
+        );
+    }
+
+    #[test]
+    fn reference_grant_manifest_authorizes_the_shared_gateway_for_a_router_tls_secret() {
+        assert_eq!(
+            gateway_to_secret_reference_grant_manifest("v1", "qovery", "environment-a", "router-tls-z1234567",),
+            json!({
+                "apiVersion": "gateway.networking.k8s.io/v1",
+                "kind": "ReferenceGrant",
+                "metadata": {
+                    "name": "allow-gateway-to-router-tls-z1234567",
+                    "namespace": "environment-a",
+                    "labels": {
+                        "qovery.com/gateway-fallback-router-tls": "true"
+                    }
+                },
+                "spec": {
+                    "from": [{
+                        "group": "gateway.networking.k8s.io",
+                        "kind": "Gateway",
+                        "namespace": "qovery"
+                    }],
+                    "to": [{
+                        "group": "",
+                        "kind": "Secret",
+                        "name": "router-tls-z1234567"
+                    }]
+                }
+            })
         );
     }
 
