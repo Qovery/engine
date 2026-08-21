@@ -1,0 +1,357 @@
+platformTemplateRelease:
+  key: qovery-demo-v0
+  version: 0.1.0
+  runtimeSourceValues:
+    clusterAgent.imageRepository: public.ecr.aws/r3m4q3r9/cluster-agent
+    clusterAgent.imageTag: 23234aee9339cb61d2a3619a4c1c76e95f1ec222
+    shellAgent.imageRepository: public.ecr.aws/r3m4q3r9/shell-agent
+    shellAgent.imageTag: 2a2fb514aa6029fd80147180d68017c29c6ea4d2
+    operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
+    operator.imageTag: f9aff159d23551c56813d3d3a9aa832be38317f4
+    engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine
+  bootstrap:
+    component:
+      key: qovery-operator
+      kind: HELM
+      release:
+        name: qovery-operator
+        namespace: qovery
+      chart:
+        repository: oci://public.ecr.aws/r3m4q3r9/charts/
+        name: qovery-operator
+        version: 0.2.1
+      configRef:
+        chart: qovery-operator
+        version: v1
+        evaluator:
+          kind: PKL
+          entrypoint: runtime-values/model.pkl
+        # Replaced from platform-config-publish.json before the root artifact is published.
+        digest: __PUBLISHED_CONFIG_DIGEST__
+      runtimeInputs:
+        - name: qovery.engineGatewayUrl
+          source:
+            kind: qcoreValue
+            key: engine.gatewayUrl
+          required: true
+        - name: cluster.organizationId
+          source:
+            kind: qcoreValue
+            key: cluster.organizationId
+          required: true
+        - name: cluster.id
+          source:
+            kind: qcoreValue
+            key: cluster.id
+          required: true
+        - name: cluster.jwtToken
+          source:
+            kind: qcoreValue
+            key: cluster.jwt
+          required: true
+          sensitive: true
+        - name: engineWorker.imageRepository
+          source:
+            kind: qcoreValue
+            key: engineWorker.imageRepository
+          required: true
+        - name: operator.imageRepository
+          source:
+            kind: qcoreValue
+            key: operator.imageRepository
+          required: true
+        - name: operator.imageTag
+          source:
+            kind: qcoreValue
+            key: operator.imageTag
+          required: true
+      images:
+        - key: qovery-operator
+          repositoryRuntimeInput: operator.imageRepository
+          tagRuntimeInput: operator.imageTag
+    compatibility:
+      minControllerVersion: 0.1.0
+      minOperatorVersion: 0.1.0
+      minRequestSchemaVersion: "1"
+      requestSchemaVersion: "1"
+  layers:
+    - key: qovery-stack
+      applicability:
+        modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]
+      mandatory: true
+      enabledByDefault: true
+      components:
+        - key: cluster-agent
+          kind: HELM
+          release:
+            name: cluster-agent
+            namespace: qovery
+          chart:
+            # The trailing slash preserves the /charts path when the worker joins the chart name.
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-cluster-agent
+            version: 0.1.0
+          configRef:
+            chart: cluster-agent
+            version: v2
+            digest: __PUBLISHED_CONFIG_DIGEST__
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+          runtimeInputs:
+            - name: qovery.agentGatewayUrl
+              source:
+                kind: qcoreValue
+                key: agent.gatewayUrl
+              required: true
+            - name: cluster.organizationId
+              source:
+                kind: qcoreValue
+                key: cluster.organizationId
+              required: true
+            - name: cluster.id
+              source:
+                kind: qcoreValue
+                key: cluster.id
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true
+            - name: image.repository
+              source:
+                kind: qcoreValue
+                key: clusterAgent.imageRepository
+              required: true
+            - name: image.tag
+              source:
+                kind: qcoreValue
+                key: clusterAgent.imageTag
+              required: true
+        - key: shell-agent
+          kind: HELM
+          release:
+            name: shell-agent
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-shell-agent
+            version: 0.1.0
+          configRef:
+            chart: shell-agent
+            version: v2
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: qovery.agentGatewayUrl
+              source:
+                kind: qcoreValue
+                key: agent.gatewayUrl
+              required: true
+            - name: cluster.organizationId
+              source:
+                kind: qcoreValue
+                key: cluster.organizationId
+              required: true
+            - name: cluster.id
+              source:
+                kind: qcoreValue
+                key: cluster.id
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true
+            - name: image.repository
+              source:
+                kind: qcoreValue
+                key: shellAgent.imageRepository
+              required: true
+            - name: image.tag
+              source:
+                kind: qcoreValue
+                key: shellAgent.imageTag
+              required: true
+        - key: qovery-priority-class
+          kind: HELM
+          release:
+            name: qovery-priority-class
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-priority-class
+            version: 0.2.0
+          configRef:
+            chart: qovery-priority-class
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+    - key: dns-certificates
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+      mandatory: true
+      enabledByDefault: true
+      components:
+        - key: cert-manager
+          kind: HELM
+          release:
+            name: cert-manager
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: cert-manager
+            version: v1.20.0
+          configRef:
+            chart: cert-manager
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: qovery-cert-manager-webhook
+          kind: HELM
+          release:
+            name: qovery-cert-manager-webhook
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-cert-manager-webhook
+            version: 0.2.0
+          dependsOn:
+            - component: cert-manager
+              kind: requires
+          configRef:
+            chart: qovery-cert-manager-webhook
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: external-dns-secret
+          kind: HELM
+          release:
+            name: external-dns-secret
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: external-dns-secret
+            version: 1.0.0
+          configRef:
+            chart: external-dns-secret
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.providerKind
+              source:
+                kind: qcoreValue
+                key: dns.providerKind
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true
+        - key: external-dns
+          kind: HELM
+          release:
+            name: external-dns
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: external-dns
+            version: 1.21.1
+          dependsOn:
+            - component: external-dns-secret
+              kind: requires
+          configRef:
+            chart: external-dns
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.providerKind
+              source:
+                kind: qcoreValue
+                key: dns.providerKind
+              required: true
+            - name: dns.managedDomain
+              source:
+                kind: qcoreValue
+                key: dns.managedDomain
+              required: true
+            - name: dns.qovery.apiUrl
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiUrl
+              required: true
+            - name: dns.qovery.apiEndpoint
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiEndpoint
+              required: true
+            - name: cluster.id
+              source:
+                kind: qcoreValue
+                key: cluster.id
+              required: true
+            - name: cluster.jwtKid
+              source:
+                kind: qcoreValue
+                key: cluster.jwtKid
+              required: true
+        - key: cert-manager-configs
+          kind: HELM
+          release:
+            name: cert-manager-configs
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: cert-manager-configs
+            version: 0.1.0
+          dependsOn:
+            - component: cert-manager
+              kind: requires
+            - component: qovery-cert-manager-webhook
+              kind: requires
+          configRef:
+            chart: cert-manager-configs
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.providerKind
+              source:
+                kind: qcoreValue
+                key: dns.providerKind
+              required: true
+            - name: dns.managedDomain
+              source:
+                kind: qcoreValue
+                key: dns.managedDomain
+              required: true
+            - name: dns.qovery.apiUrl
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiUrl
+              required: true
+            - name: dns.qovery.apiEndpoint
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiEndpoint
+              required: true
+            - name: dns.qovery.apiPort
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiPort
+              required: true
+            - name: certificate.acmeEmail
+              source:
+                kind: qcoreValue
+                key: certificate.acmeEmail
+              required: true
+            - name: certificate.acmeServerUrl
+              source:
+                kind: qcoreValue
+                key: certificate.acmeServerUrl
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true

@@ -183,6 +183,12 @@ template source may contain an explicit
 rendering fails unless every reference has a matching verified publication
 output.
 
+Each root template may reference only the component and chart subset needed by
+that platform shape. The catalog test suite verifies that the union of all
+declared templates still covers every component bundle and chart listed for
+publication, while the renderer rejects missing, unknown, or duplicate
+references inside each root.
+
 Publication order is an invariant: bundles first, charts second, root templates
 third, and the complete catalog snapshot last. A partial selection is accepted
 only when the resulting outputs still cover the complete root graph. ECR

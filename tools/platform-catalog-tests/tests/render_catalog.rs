@@ -28,12 +28,20 @@ fn layer_components(template: &Value, layer_key: &str) -> Vec<String> {
 }
 
 fn write_template_output(path: &Path, version: &str) {
-    let output = json!([{
-        "key": "qovery-cluster-v0",
-        "version": version,
-        "ref": format!("{REGISTRY}/platform-templates/qovery-cluster-v0:{version}"),
-        "digest": DIGEST,
-    }]);
+    let output = json!([
+        {
+            "key": "qovery-cluster-v0",
+            "version": version,
+            "ref": format!("{REGISTRY}/platform-templates/qovery-cluster-v0:{version}"),
+            "digest": DIGEST,
+        },
+        {
+            "key": "qovery-demo-v0",
+            "version": version,
+            "ref": format!("{REGISTRY}/platform-templates/qovery-demo-v0:{version}"),
+            "digest": DIGEST,
+        },
+    ]);
     fs::write(path, serde_json::to_vec(&output).expect("publication output must serialize"))
         .expect("publication output must be writable");
 }
@@ -79,6 +87,55 @@ fn template_layers_keep_the_expected_component_order() {
 }
 
 #[test]
+fn demo_template_contains_only_the_legacy_demo_components() {
+    let template = parse_yaml_file(repository_path("platform-catalog/templates/qovery-demo-v0/template.yaml"));
+
+    assert_eq!(
+        layer_components(&template, "qovery-stack"),
+        ["cluster-agent", "shell-agent", "qovery-priority-class"]
+    );
+    assert_eq!(
+        layer_components(&template, "dns-certificates"),
+        [
+            "cert-manager",
+            "qovery-cert-manager-webhook",
+            "external-dns-secret",
+            "external-dns",
+            "cert-manager-configs",
+        ]
+    );
+
+    let layers = yaml_path(&template, &["platformTemplateRelease", "layers"])
+        .and_then(Value::as_sequence)
+        .expect("demo template must declare layers");
+    assert_eq!(layers.len(), 2);
+    assert!(layers.iter().all(|layer| {
+        yaml_path(layer, &["mandatory"]).and_then(Value::as_bool) == Some(true)
+            && yaml_path(layer, &["enabledByDefault"]).and_then(Value::as_bool) == Some(true)
+    }));
+    assert!(!contains_component(&template, "loki"));
+    assert!(!contains_component(&template, "alloy"));
+    assert!(!contains_component(&template, "qovery-engine"));
+    assert!(!contains_component(&template, "ingress-nginx"));
+}
+
+fn contains_component(template: &Value, component_key: &str) -> bool {
+    yaml_path(template, &["platformTemplateRelease", "layers"])
+        .and_then(Value::as_sequence)
+        .is_some_and(|layers| {
+            layers.iter().any(|layer| {
+                yaml_path(layer, &["components"])
+                    .and_then(Value::as_sequence)
+                    .is_some_and(|components| {
+                        components
+                            .iter()
+                            .any(|component| yaml_string(component, &["key"]) == Some(component_key))
+                    })
+            })
+        })
+}
+
+#[test]
 fn complete_template_publication_renders_a_digest_pinned_catalog() {
     let temporary_directory = TempDir::new().expect("temporary directory must be created");
     let input = temporary_directory.path().join("templates.json");
@@ -99,15 +156,29 @@ fn complete_template_publication_renders_a_digest_pinned_catalog() {
     assert_eq!(yaml_string(&catalog, &["defaultRelease", "key"]), Some("qovery-cluster-v0"));
     assert_eq!(yaml_string(&catalog, &["defaultRelease", "version"]), Some("0.1.0"));
 
-    let release = yaml_path(&catalog, &["releases"])
+    let releases = yaml_path(&catalog, &["releases"])
         .and_then(Value::as_sequence)
-        .and_then(|releases| releases.first())
+        .expect("catalog must contain releases");
+    assert_eq!(releases.len(), 2);
+    let release = releases
+        .iter()
+        .find(|release| yaml_string(release, &["key"]) == Some("qovery-cluster-v0"))
         .expect("catalog must contain its default release");
     assert_eq!(
         yaml_string(release, &["repository"]),
         Some("public.ecr.aws/r3m4q3r9/platform-templates/qovery-cluster-v0")
     );
     assert_eq!(yaml_string(release, &["digest"]), Some(DIGEST));
+
+    let demo_release = releases
+        .iter()
+        .find(|release| yaml_string(release, &["key"]) == Some("qovery-demo-v0"))
+        .expect("catalog must contain its demo release");
+    assert_eq!(
+        yaml_string(demo_release, &["repository"]),
+        Some("public.ecr.aws/r3m4q3r9/platform-templates/qovery-demo-v0")
+    );
+    assert_eq!(yaml_string(demo_release, &["digest"]), Some(DIGEST));
 }
 
 #[test]

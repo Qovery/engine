@@ -186,7 +186,7 @@ render_template() (
     }
     END {
       for (key in digests) {
-        if (seen[key] != 1) {
+        if (seen[key] > 1) {
           print "ERROR: verified config publication " labels[key] " is referenced " (seen[key] + 0) " time(s)" > "/dev/stderr"
           errors++
         }
@@ -274,7 +274,7 @@ render_template() (
     END {
       if (in_chart) verify_chart()
       for (key in refs) {
-        if (seen[key] != 1) {
+        if (seen[key] > 1) {
           print "ERROR: verified chart publication " labels[key] " is referenced " (seen[key] + 0) " time(s)" > "/dev/stderr"
           errors++
         }

@@ -4,6 +4,7 @@ use platform_catalog_tests::{
 };
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -15,6 +16,7 @@ const CHART_DIGEST: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 struct Catalog {
     components: Vec<CatalogComponent>,
     charts: Vec<CatalogChart>,
+    templates: Vec<CatalogTemplate>,
 }
 
 #[derive(Deserialize)]
@@ -26,6 +28,11 @@ struct CatalogComponent {
 #[derive(Deserialize)]
 struct CatalogChart {
     name: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+struct CatalogTemplate {
     path: String,
 }
 
@@ -84,15 +91,21 @@ impl RenderFixture {
     }
 
     fn render(&self, version: &str) -> Output {
+        self.render_source(
+            "platform-catalog/templates/qovery-cluster-v0/template.yaml",
+            "qovery-cluster-v0",
+            version,
+        )
+    }
+
+    fn render_source(&self, source: &str, key: &str, version: &str) -> Output {
         run(Command::new(repository_path("scripts/publish-platform-catalog.sh")).args([
             "render",
-            repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml")
-                .to_str()
-                .expect("repository path must be UTF-8"),
+            repository_path(source).to_str().expect("repository path must be UTF-8"),
             self.config_output.to_str().expect("temporary path must be UTF-8"),
             self.chart_output.to_str().expect("temporary path must be UTF-8"),
             self.destination.to_str().expect("temporary path must be UTF-8"),
-            "qovery-cluster-v0",
+            key,
             version,
             REGISTRY,
         ]))
@@ -170,18 +183,92 @@ fn every_config_reference_is_pinned_from_verified_publication_outputs() {
 }
 
 #[test]
-fn every_component_release_uses_the_protected_qovery_namespace() {
-    let template = parse_yaml_file(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml"));
-    let mut releases = Vec::new();
-    mappings_for_key(&template, "release", &mut releases);
+fn demo_template_renders_from_the_verified_publication_outputs() {
+    let fixture = RenderFixture::new();
+    fixture.write_outputs();
 
-    assert!(!releases.is_empty(), "platform template must declare component releases");
-    for release in releases {
-        assert_eq!(
-            mapping_string(release, "namespace"),
-            Some("qovery"),
-            "every catalog component release must stay inside q-core's protected namespace"
-        );
+    let output = fixture.render_source(
+        "platform-catalog/templates/qovery-demo-v0/template.yaml",
+        "qovery-demo-v0",
+        "0.1.0",
+    );
+
+    assert!(
+        output.status.success(),
+        "render failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rendered_source = fs::read_to_string(&fixture.destination).expect("rendered template must exist");
+    assert!(!rendered_source.contains("__PUBLISHED_CONFIG_DIGEST__"));
+}
+
+#[test]
+fn published_components_and_charts_are_referenced_by_the_template_set() {
+    let catalog = read_catalog();
+    let expected_configs = catalog
+        .components
+        .iter()
+        .map(|component| (component.name.clone(), component.version.clone()))
+        .collect::<BTreeSet<_>>();
+    let expected_charts = catalog
+        .charts
+        .iter()
+        .map(|chart| {
+            let metadata = read_chart_metadata(&chart.path);
+            (chart.name.clone(), metadata.version)
+        })
+        .collect::<BTreeSet<_>>();
+
+    let mut referenced_configs = BTreeSet::new();
+    let mut referenced_charts = BTreeSet::new();
+    for catalog_template in &catalog.templates {
+        let template = parse_yaml_file(repository_path(&catalog_template.path));
+        let mut config_references = Vec::new();
+        mappings_for_key(&template, "configRef", &mut config_references);
+        referenced_configs.extend(config_references.into_iter().map(|reference| {
+            (
+                mapping_string(reference, "chart")
+                    .expect("config reference must declare a chart")
+                    .to_owned(),
+                mapping_string(reference, "version")
+                    .expect("config reference must declare a version")
+                    .to_owned(),
+            )
+        }));
+
+        let mut chart_references = Vec::new();
+        mappings_for_key(&template, "chart", &mut chart_references);
+        referenced_charts.extend(chart_references.into_iter().map(|reference| {
+            (
+                mapping_string(reference, "name")
+                    .expect("chart reference must declare a name")
+                    .to_owned(),
+                mapping_string(reference, "version")
+                    .expect("chart reference must declare a version")
+                    .to_owned(),
+            )
+        }));
+    }
+
+    assert_eq!(referenced_configs, expected_configs);
+    assert_eq!(referenced_charts, expected_charts);
+}
+
+#[test]
+fn every_component_release_uses_the_protected_qovery_namespace() {
+    for catalog_template in read_catalog().templates {
+        let template = parse_yaml_file(repository_path(&catalog_template.path));
+        let mut releases = Vec::new();
+        mappings_for_key(&template, "release", &mut releases);
+
+        assert!(!releases.is_empty(), "platform template must declare component releases");
+        for release in releases {
+            assert_eq!(
+                mapping_string(release, "namespace"),
+                Some("qovery"),
+                "every catalog component release must stay inside q-core's protected namespace"
+            );
+        }
     }
 }
 
