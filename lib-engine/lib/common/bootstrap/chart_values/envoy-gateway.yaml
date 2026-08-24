@@ -6,6 +6,10 @@ config:
       level:
         default: warn
 
+# CRDs are installed by the dedicated envoy-gateway-crd chart.
+crds:
+  enabled: false
+
 service:
   annotations: {} # set-by-engine
 

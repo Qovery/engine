@@ -41,8 +41,24 @@ pub struct ValuesFile {
     pub qovery_operator: QoveryOperator,
     #[serde(rename = "qovery-engine", default, skip_serializing_if = "Option::is_none")]
     pub qovery_engine: Option<QoveryEngine>,
-    #[serde(rename = "ingress-nginx")]
-    pub ingress_nginx: ChartConfig,
+    #[serde(rename = "ingress-nginx", default, skip_serializing_if = "Option::is_none")]
+    pub ingress_nginx: Option<ChartConfig>,
+    #[serde(rename = "envoy-gateway-crd", default, skip_serializing_if = "Option::is_none")]
+    pub envoy_gateway_crd: Option<ChartConfig>,
+    #[serde(rename = "envoy-gateway", default, skip_serializing_if = "Option::is_none")]
+    pub envoy_gateway: Option<ChartConfig>,
+    #[serde(
+        rename = "qovery-gateway-class",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub qovery_gateway_class: Option<ChartConfig>,
+    #[serde(
+        rename = "qovery-cluster-gateway",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub qovery_cluster_gateway: Option<ChartConfig>,
     #[serde(rename = "external-dns")]
     pub external_dns: ChartConfig,
     pub alloy: ChartConfig,
@@ -207,6 +223,14 @@ pub struct QoveryServices {
 pub struct IngressServices {
     #[serde(rename = "ingress-nginx")]
     pub ingress_nginx: ServiceEnabled,
+    #[serde(rename = "envoy-gateway-crd")]
+    pub envoy_gateway_crd: ServiceEnabled,
+    #[serde(rename = "envoy-gateway")]
+    pub envoy_gateway: ServiceEnabled,
+    #[serde(rename = "qovery-gateway-class")]
+    pub qovery_gateway_class: ServiceEnabled,
+    #[serde(rename = "qovery-cluster-gateway")]
+    pub qovery_cluster_gateway: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]

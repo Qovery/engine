@@ -1,0 +1,31 @@
+config:
+  envoyGateway:
+    gateway:
+      controllerName: qovery.com/gateway-controller
+    logging:
+      level:
+        default: warn
+
+# CRDs are installed by the dedicated envoy-gateway-crd chart.
+crds:
+  enabled: false
+
+service:
+  annotations: {}
+
+hpa:
+  enabled: false
+
+deployment:
+  replicas: 1
+  envoyGateway:
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+podDisruptionBudget:
+  maxUnavailable: 1

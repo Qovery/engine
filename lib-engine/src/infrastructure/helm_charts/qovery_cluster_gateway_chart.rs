@@ -87,6 +87,7 @@ pub struct QoveryClusterGatewayChartOptions {
     pub hpa_config: Option<HpaConfig>,         // HPA for the Gateway-level EnvoyProxy that owns the data plane
     pub access_log_format: Option<String>,     // custom JSON access log format to apply on cluster-level EnvoyProxy
     pub reconcile_gateway_cert_refs: bool,     // reconcile Gateway TLS certificateRefs post-install/upgrade
+    pub cert_manager_namespace: HelmChartNamespaces,
 }
 
 pub struct QoveryClusterGatewayChart {
@@ -330,6 +331,11 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
         chart_set_values.push(ChartSetValue {
             key: "metrics.podMonitor.enabled".to_string(),
             value: self.metrics_enabled.to_string(),
+        });
+
+        chart_set_values.push(ChartSetValue {
+            key: "certManagerNamespace".to_string(),
+            value: self.chart_options.cert_manager_namespace.to_string(),
         });
 
         Ok(CommonChart {

@@ -569,6 +569,7 @@ pub(super) fn gke_helm_charts(
                         .cluster_advanced_settings
                         .k8s_use_api_gateway
                         .unwrap_or(false),
+                    cert_manager_namespace: HelmChartNamespaces::Qovery,
                 },
                 chart_config_prerequisites.metrics_parameters.is_some(),
                 false,

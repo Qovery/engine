@@ -1,25 +1,14 @@
 gatewayClass:
   qoveryPublic:
     enable: true
+    accessLog:
+      format: ""
     hpa:
       enabled: false
       minReplicas: 1
       maxReplicas: 1
       targetCPUUtilizationPercentage: null
       targetMemoryUtilizationPercentage: null
-    accessLog:
-      # format: Specify a custom JSON string to override the default format
-      # Leave empty ("") to use the default format defined in the template
-      # Example custom format (single line):
-      # format: '{"start_time": "%START_TIME%", "method": "%REQ(:METHOD)%", "response_code": "%RESPONSE_CODE%"}'
-      # Or multiline:
-      # format: |
-      #   {
-      #     "start_time": "%START_TIME%",
-      #     "method": "%REQ(:METHOD)%",
-      #     "response_code": "%RESPONSE_CODE%"
-      #   }
-      format: ""
     affinity: {}
     topologySpreadConstraints:
       - labelSelector:
@@ -41,25 +30,14 @@ gatewayClass:
       maxUnavailable: 1
   qoveryPrivate:
     enable: true
+    accessLog:
+      format: ""
     hpa:
       enabled: false
       minReplicas: 1
       maxReplicas: 1
       targetCPUUtilizationPercentage: null
       targetMemoryUtilizationPercentage: null
-    accessLog:
-      # format: Specify a custom JSON string to override the default format
-      # Leave empty ("") to use the default format defined in the template
-      # Example custom format (single line):
-      # format: '{"start_time": "%START_TIME%", "method": "%REQ(:METHOD)%", "response_code": "%RESPONSE_CODE%"}'
-      # Or multiline:
-      # format: |
-      #   {
-      #     "start_time": "%START_TIME%",
-      #     "method": "%REQ(:METHOD)%",
-      #     "response_code": "%RESPONSE_CODE%"
-      #   }
-      format: ""
     affinity: {}
     topologySpreadConstraints:
       - labelSelector:

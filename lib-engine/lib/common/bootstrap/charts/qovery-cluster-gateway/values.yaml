@@ -38,7 +38,7 @@ envoyProxy:
       kubernetes:
         envoyDeployment:
           pod:
-            affinity: null
+            affinity: {}
             topologySpreadConstraints:
               - labelSelector:
                   matchLabels:
@@ -52,7 +52,7 @@ envoyProxy:
                 topologyKey: kubernetes.io/hostname
                 maxSkew: 1
                 whenUnsatisfiable: ScheduleAnyway
-            tolerations: null
+            tolerations: []
         envoyHpa: {}
         envoyPDB:
           maxUnavailable: 1

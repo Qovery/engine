@@ -9,8 +9,8 @@ gatewayClass:
       maxReplicas: set-by-engine
       targetCPUUtilizationPercentage: set-by-engine
       targetMemoryUtilizationPercentage: set-by-engine
-    affinity: null
-    tolerations: null
+    affinity: {}
+    tolerations: []
   qoveryPrivate:
     enable: set-by-engine
     accessLog:
@@ -21,5 +21,5 @@ gatewayClass:
       maxReplicas: set-by-engine
       targetCPUUtilizationPercentage: set-by-engine
       targetMemoryUtilizationPercentage: set-by-engine
-    affinity: null
-    tolerations: null
+    affinity: {}
+    tolerations: []

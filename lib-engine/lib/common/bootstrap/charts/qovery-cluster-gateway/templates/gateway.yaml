@@ -54,7 +54,20 @@ spec:
     type: Kubernetes
     kubernetes:
       {{- with .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyDeployment }}
-      envoyDeployment: {{- toYaml . | nindent 8 }}
+        {{- $pod := .pod }}
+        {{- if or $pod.affinity $pod.topologySpreadConstraints $pod.tolerations }}
+      envoyDeployment:
+        pod:
+          {{- if $pod.affinity }}
+          affinity: {{- toYaml $pod.affinity | nindent 12 }}
+          {{- end }}
+          {{- if $pod.topologySpreadConstraints }}
+          topologySpreadConstraints: {{- toYaml $pod.topologySpreadConstraints | nindent 12 }}
+          {{- end }}
+          {{- if $pod.tolerations }}
+          tolerations: {{- toYaml $pod.tolerations | nindent 12 }}
+          {{- end }}
+        {{- end }}
       {{- end }}
       {{- with .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa }}
       envoyHpa: {{- toYaml . | nindent 8 }}
