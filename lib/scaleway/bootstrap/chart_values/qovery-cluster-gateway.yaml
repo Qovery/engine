@@ -2,7 +2,7 @@ dns:
   domain: set-by-engine-code
   cloudflareProxied: false # set-by-engine-code
 
-certManagerNamespace: "cert-manager"
+certManagerNamespace: "qovery" # set-by-engine-code
 
 gateway:
   qoveryPublic:
@@ -47,7 +47,7 @@ envoyProxy:
       kubernetes:
         envoyDeployment:
           pod:
-            affinity: null
+            affinity: {}
             topologySpreadConstraints:
               - labelSelector:
                   matchLabels:
@@ -61,7 +61,7 @@ envoyProxy:
                 topologyKey: kubernetes.io/hostname
                 maxSkew: 1
                 whenUnsatisfiable: ScheduleAnyway
-            tolerations: null
+            tolerations: []
         envoyHpa: {}
         envoyPDB:
           maxUnavailable: 1

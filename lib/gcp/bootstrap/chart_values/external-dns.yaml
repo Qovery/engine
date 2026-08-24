@@ -1,0 +1,9 @@
+# TODO: Remove `ingress` once the NGINX to Gateway API rollout is complete.
+sources:
+  - service
+  - ingress
+  - gateway-httproute
+  - gateway-grpcroute
+
+# Envoy Gateway installs the ListenerSet CRD through envoy-gateway-crd.
+enableGatewayListenerSets: true

@@ -622,6 +622,7 @@ pub fn kapsule_helm_charts(
                             .clone(),
                     }),
                     reconcile_gateway_cert_refs: false,
+                    cert_manager_namespace: HelmChartNamespaces::CertManager,
                 },
                 chart_config_prerequisites.metrics_parameters.is_some(),
                 false,

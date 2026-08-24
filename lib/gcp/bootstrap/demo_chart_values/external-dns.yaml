@@ -19,11 +19,6 @@ sources:
   - ingress
   - gateway-httproute
   - gateway-grpcroute
-  # - gateway-tlsroute
-# HACK(QOV-2106): external-dns 0.21.0 watches TLSRoute through the deprecated
-# `gateway.networking.k8s.io/v1alpha2` API, while current Gateway API CRDs only serve it at `v1`.
-# Re-enable `gateway-tlsroute` after upstream fixes
-# https://github.com/kubernetes-sigs/external-dns/issues/6247 and bump the chart.
 
 enableGatewayListenerSets: true
 

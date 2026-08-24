@@ -81,14 +81,15 @@ pub enum HelmAction {
     Destroy,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub enum HelmChartNamespaces {
+    #[default]
+    Qovery,
     KubeSystem,
     Prometheus,
     Logging,
     CertManager,
     NginxIngress,
-    Qovery,
     Custom(String),
 }
 

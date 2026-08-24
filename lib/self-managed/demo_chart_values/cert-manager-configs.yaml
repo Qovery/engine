@@ -2,6 +2,9 @@ fullnameOverride: cert-manager-configs
 externalDnsProvider: pdns # Qovery DNS
 namespace: "qovery"
 managedDns: [*domain]
+k8sDeployApiGateway: true
+k8sUseApiGateway: true
+k8sRemoveNginx: true
 acme:
   letsEncrypt:
     emailReport: *acmeEmailAddr

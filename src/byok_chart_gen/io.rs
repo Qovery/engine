@@ -73,10 +73,11 @@ impl ChartDotYaml {
             println!("for chart.yaml, parsing: {chart_file_path}");
             let f = std::fs::File::open(chart_file_path).map_err(ChartDotYamlError::ReadFile)?;
             let chart_version: ChartDotYaml = serde_yaml::from_reader(f).map_err(ChartDotYamlError::SerdeYaml)?;
+            let chart_alias = (chart_version.name != chart_meta.name.to_string()).then(|| chart_meta.name.to_string());
 
             deps.push(ChartDotYamlDependencies {
-                name: chart_meta.name.to_string(),
-                alias: None,
+                name: chart_version.name,
+                alias: chart_alias,
                 condition: format!("services.{}.{}.enabled", chart_meta.category, chart_meta.name),
                 version: chart_version.version,
                 repository: format!("file://charts/{}", chart_meta.name),
@@ -118,6 +119,28 @@ impl ChartDotYaml {
 }
 
 impl ValuesFile {
+    fn enable_envoy_ingress(&mut self) {
+        self.services.ingress.ingress_nginx.enabled = false;
+        self.services.ingress.envoy_gateway_crd.enabled = true;
+        self.services.ingress.envoy_gateway.enabled = true;
+        self.services.ingress.qovery_gateway_class.enabled = true;
+        self.services.ingress.qovery_cluster_gateway.enabled = true;
+
+        self.ingress_nginx = None;
+        self.envoy_gateway_crd = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::EnvoyGatewayCrd.to_string()),
+        });
+        self.envoy_gateway = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::EnvoyGateway.to_string()),
+        });
+        self.qovery_gateway_class = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::QoveryGatewayClass.to_string()),
+        });
+        self.qovery_cluster_gateway = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::QoveryClusterGateway.to_string()),
+        });
+    }
+
     pub fn new_minimal() -> ValuesFile {
         ValuesFile {
             services: ServicesEnabler {
@@ -130,6 +153,10 @@ impl ValuesFile {
                 },
                 ingress: IngressServices {
                     ingress_nginx: ServiceEnabled { enabled: false },
+                    envoy_gateway_crd: ServiceEnabled { enabled: false },
+                    envoy_gateway: ServiceEnabled { enabled: false },
+                    qovery_gateway_class: ServiceEnabled { enabled: false },
+                    qovery_cluster_gateway: ServiceEnabled { enabled: false },
                 },
                 dns: DnsServices {
                     external_dns: ServiceEnabled { enabled: false },
@@ -240,7 +267,11 @@ impl ValuesFile {
                     ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
                 ]),
             }),
-            ingress_nginx: ChartConfig { override_chart: None },
+            ingress_nginx: Some(ChartConfig { override_chart: None }),
+            envoy_gateway_crd: None,
+            envoy_gateway: None,
+            qovery_gateway_class: None,
+            qovery_cluster_gateway: None,
             aws_load_balancer_controller: None,
             external_dns: ChartConfig { override_chart: None },
             alloy: ChartConfig { override_chart: None },
@@ -259,8 +290,7 @@ impl ValuesFile {
     pub fn new_aws() -> ValuesFile {
         let mut value = Self::new_minimal();
 
-        value.services.ingress.ingress_nginx.enabled = true;
-        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+        value.enable_envoy_ingress();
 
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
@@ -309,8 +339,7 @@ impl ValuesFile {
     pub fn new_gcp() -> ValuesFile {
         let mut value = Self::new_minimal();
 
-        value.services.ingress.ingress_nginx.enabled = true;
-        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+        value.enable_envoy_ingress();
 
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
@@ -355,8 +384,7 @@ impl ValuesFile {
     pub fn new_scaleway() -> ValuesFile {
         let mut value = Self::new_minimal();
 
-        value.services.ingress.ingress_nginx.enabled = true;
-        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+        value.enable_envoy_ingress();
 
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
@@ -401,8 +429,7 @@ impl ValuesFile {
     pub fn new_azure() -> ValuesFile {
         let mut value = Self::new_minimal();
 
-        value.services.ingress.ingress_nginx.enabled = true;
-        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+        value.enable_envoy_ingress();
 
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
@@ -447,7 +474,9 @@ impl ValuesFile {
         let mut value = Self::new_minimal();
 
         value.services.ingress.ingress_nginx.enabled = true;
-        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+        value.ingress_nginx = Some(ChartConfig {
+            override_chart: Some(SupportedCharts::IngressNginx.to_string()),
+        });
 
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
@@ -514,6 +543,12 @@ impl ValuesFile {
         value
     }
 
+    pub fn new_demo_local() -> ValuesFile {
+        let mut value = Self::new_local();
+        value.enable_envoy_ingress();
+        value
+    }
+
     pub fn save_to_file(&self, destination: &Path, filename: String) -> Result<(), ChartDotYamlError> {
         let file_destination = format!("{}/{filename}", destination.to_string_lossy());
         let f = std::fs::File::create(Path::new(&file_destination)).map_err(ChartDotYamlError::WriteFile)?;
@@ -531,6 +566,116 @@ mod tests {
         let values = ValuesFile::new_minimal();
 
         assert!(!values.services.qovery.qovery_operator.enabled);
+    }
+
+    #[test]
+    fn byok_values_enable_envoy_and_disable_nginx() {
+        for values in [
+            ValuesFile::new_aws(),
+            ValuesFile::new_gcp(),
+            ValuesFile::new_scaleway(),
+            ValuesFile::new_azure(),
+            ValuesFile::new_demo_local(),
+        ] {
+            assert!(!values.services.ingress.ingress_nginx.enabled);
+            assert!(values.services.ingress.envoy_gateway_crd.enabled);
+            assert!(values.services.ingress.envoy_gateway.enabled);
+            assert!(values.services.ingress.qovery_gateway_class.enabled);
+            assert!(values.services.ingress.qovery_cluster_gateway.enabled);
+            assert!(values.ingress_nginx.is_none());
+            assert_eq!(
+                values
+                    .envoy_gateway_crd
+                    .as_ref()
+                    .and_then(|config| config.override_chart.as_deref()),
+                Some("envoy-gateway-crd")
+            );
+            assert_eq!(
+                values
+                    .envoy_gateway
+                    .as_ref()
+                    .and_then(|config| config.override_chart.as_deref()),
+                Some("envoy-gateway")
+            );
+            assert_eq!(
+                values
+                    .qovery_cluster_gateway
+                    .as_ref()
+                    .and_then(|config| config.override_chart.as_deref()),
+                Some("qovery-cluster-gateway")
+            );
+        }
+    }
+
+    #[test]
+    fn envoy_gateway_overrides_disable_bundled_crds() {
+        for override_values in [
+            include_str!("../../lib/common/bootstrap/chart_values/envoy-gateway.yaml"),
+            include_str!("../../lib/self-managed/demo_chart_values/envoy-gateway.yaml"),
+        ] {
+            let values: serde_yaml::Value = serde_yaml::from_str(override_values).expect("valid Envoy values");
+
+            assert_eq!(values["crds"]["enabled"], false);
+        }
+    }
+
+    #[test]
+    fn envoy_gateway_overrides_set_qovery_controller_name() {
+        for override_values in [
+            include_str!("../../lib/common/bootstrap/chart_values/envoy-gateway.yaml"),
+            include_str!("../../lib/self-managed/demo_chart_values/envoy-gateway.yaml"),
+        ] {
+            let values: serde_yaml::Value = serde_yaml::from_str(override_values).expect("valid Envoy values");
+
+            assert_eq!(
+                values["config"]["envoyGateway"]["gateway"]["controllerName"],
+                "qovery.com/gateway-controller"
+            );
+        }
+    }
+
+    #[test]
+    fn dedicated_envoy_gateway_crd_override_enables_gateway_api_and_envoy_crds() {
+        let values: serde_yaml::Value =
+            serde_yaml::from_str(include_str!("../../lib/common/bootstrap/chart_values/envoy-gateway-crd.yaml"))
+                .expect("valid Envoy Gateway CRD values");
+
+        assert_eq!(values["crds"]["gatewayAPI"]["enabled"], true);
+        assert_eq!(values["crds"]["envoyGateway"]["enabled"], true);
+    }
+
+    #[test]
+    fn demo_external_dns_watches_gateway_api_resources_without_tls_route() {
+        assert_external_dns_gateway_api_sources_without_tls_route(include_str!(
+            "../../lib/self-managed/demo_chart_values/external-dns.yaml"
+        ));
+    }
+
+    #[test]
+    fn byok_external_dns_watches_gateway_api_resources_without_tls_route() {
+        assert_external_dns_gateway_api_sources_without_tls_route(include_str!(
+            "../../lib/self-managed/chart_values/external-dns.yaml"
+        ));
+    }
+
+    #[test]
+    fn gcp_external_dns_watches_gateway_api_resources_without_tls_route() {
+        for values in [
+            include_str!("../../lib/gcp/bootstrap/chart_values/external-dns.yaml"),
+            include_str!("../../lib/gcp/bootstrap/demo_chart_values/external-dns.yaml"),
+        ] {
+            assert_external_dns_gateway_api_sources_without_tls_route(values);
+        }
+    }
+
+    fn assert_external_dns_gateway_api_sources_without_tls_route(values: &str) {
+        for source in ["service", "ingress", "gateway-httproute", "gateway-grpcroute"] {
+            assert!(values.contains(&format!("  - {source}\n")));
+        }
+        assert!(!values.contains("  - gateway-tcproute\n"));
+        assert!(!values.contains("  - gateway-udproute\n"));
+        assert!(!values.contains("  - gateway-tlsroute\n"));
+        assert!(values.contains("enableGatewayListenerSets: true"));
     }
 }
 

@@ -998,7 +998,7 @@ impl KubernetesDto {
                     )
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     logger,
-                    ClusterAdvancedSettings::default(),
+                    self.advanced_settings.clone(),
                     self.kubeconfig.clone(),
                     temp_dir,
                 ) {

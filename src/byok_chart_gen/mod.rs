@@ -98,10 +98,14 @@ pub enum ValuesSourcePath {
     CommonBoostrapChartValues,
     #[display("lib/gcp/bootstrap/chart_values")]
     GcpBootstrapChartValues,
+    #[display("lib/gcp/bootstrap/demo_chart_values")]
+    GcpDemoChartValues,
     #[display("lib/scaleway/bootstrap/chart_values")]
     ScalewayBootstrapChartValues,
     #[display("lib/azure/bootstrap/chart_values")]
     AzureBootstrapChartValues,
+    #[display("lib/self-managed/chart_values")]
+    SelfManagedChartValues,
     #[display("lib/self-managed/demo_chart_values")]
     DemoChartValues,
 }
@@ -120,6 +124,14 @@ pub enum SupportedCharts {
     AlbController,
     #[display("ingress-nginx")]
     IngressNginx,
+    #[display("envoy-gateway-crd")]
+    EnvoyGatewayCrd,
+    #[display("envoy-gateway")]
+    EnvoyGateway,
+    #[display("qovery-gateway-class")]
+    QoveryGatewayClass,
+    #[display("qovery-cluster-gateway")]
+    QoveryClusterGateway,
     #[display("external-dns")]
     ExternalDNS,
     #[display("alloy")]
@@ -153,7 +165,7 @@ mod tests {
     use regex::Regex;
     use tera::{Context, Tera};
 
-    use super::{ChartMeta, QoverySelfManagedChart, SupportedCharts, values_dot_yaml::ValuesFile};
+    use super::{ChartMeta, QoverySelfManagedChart, SupportedCharts, ValuesSourcePath, values_dot_yaml::ValuesFile};
 
     pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(&destination)?;
@@ -179,62 +191,83 @@ mod tests {
             let string_to_replace = match chart.values_source_path.clone() {
                 None => "".to_string(),
                 Some(x) => {
-                    let mut override_values_file_path = None;
-
-                    let override_values_file_path_with_jinja =
-                        format!("{}/{}/{}.j2.yaml", prefix.clone(), x, chart.name);
-                    if fs::metadata(&override_values_file_path_with_jinja).is_ok() {
-                        override_values_file_path = Some(override_values_file_path_with_jinja)
-                    } else {
-                        let override_values_file_path_without_jinja =
-                            format!("{}/{}/{}.yaml", prefix.clone(), x, chart.name);
-                        if fs::metadata(&override_values_file_path_without_jinja).is_ok() {
-                            override_values_file_path = Some(override_values_file_path_without_jinja)
+                    let values_source_paths = match (chart.name.clone(), x.clone()) {
+                        (SupportedCharts::ExternalDNS, ValuesSourcePath::SelfManagedChartValues)
+                        | (SupportedCharts::ExternalDNS, ValuesSourcePath::GcpBootstrapChartValues) => {
+                            vec![ValuesSourcePath::CommonBoostrapChartValues, x]
                         }
-                    }
-
-                    let file = match override_values_file_path {
-                        None => {
-                            panic!(
-                                "for values.yaml, parsing: No file found (j2 or yaml) for chart {}. Debug info: {:?}",
-                                chart.name, &chart
-                            )
-                        }
-                        Some(x) => {
-                            println!("for values.yaml, parsing: {x}");
-                            x
-                        }
+                        _ => vec![x],
                     };
+                    let override_values = values_source_paths
+                        .into_iter()
+                        .map(|values_source_path| {
+                            let override_values_file_path_with_jinja = format!(
+                                "{}/{}/{}.j2.yaml",
+                                prefix.clone(),
+                                values_source_path,
+                                chart.name
+                            );
+                            let override_values_file_path_without_jinja = format!(
+                                "{}/{}/{}.yaml",
+                                prefix.clone(),
+                                values_source_path,
+                                chart.name
+                            );
+                            let file = if fs::metadata(&override_values_file_path_with_jinja).is_ok() {
+                                override_values_file_path_with_jinja
+                            } else if fs::metadata(&override_values_file_path_without_jinja).is_ok() {
+                                override_values_file_path_without_jinja
+                            } else {
+                                panic!(
+                                    "for values.yaml, parsing: No file found (j2 or yaml) for chart {}. Debug info: {:?}",
+                                    chart.name, &chart
+                                )
+                            };
+                            println!("for values.yaml, parsing: {file}");
 
-                    let override_values = fs::read_to_string(file).unwrap();
-                    let override_values = match chart.name {
-                        SupportedCharts::Alloy => {
-                            let mut tera = Tera::default();
-                            match tera.add_raw_template("self-managed-template-alloy", &override_values) {
-                                Ok(_) => {}
-                                Err(_) => return override_values,
+                            let override_values = fs::read_to_string(file).unwrap();
+                            match chart.name {
+                                SupportedCharts::Alloy => {
+                                    let mut tera = Tera::default();
+                                    match tera.add_raw_template("self-managed-template-alloy", &override_values) {
+                                        Ok(_) => {}
+                                        Err(_) => return override_values,
+                                    }
+
+                                    let mut context = Context::new();
+                                    context.insert("prometheus_enabled", &false);
+
+                                    tera.render("self-managed-template-alloy", &context)
+                                        .unwrap_or(override_values)
+                                }
+                                SupportedCharts::IngressNginx => {
+                                    let mut tera = Tera::default();
+                                    match tera.add_raw_template("self-managed-template-nginx", &override_values) {
+                                        Ok(_) => {}
+                                        Err(_) => return override_values,
+                                    }
+
+                                    let mut context = Context::new();
+                                    context.insert("enable_karpenter", &false);
+
+                                    tera.render("self-managed-template-nginx", &context)
+                                        .unwrap_or(override_values)
+                                }
+                                _ => override_values,
                             }
-
-                            let mut context = Context::new();
-                            context.insert("prometheus_enabled", &false);
-
-                            tera.render("self-managed-template-alloy", &context)
-                                .unwrap_or(override_values)
+                        })
+                        .collect::<Vec<_>>();
+                    let override_values = match override_values.as_slice() {
+                        [override_values] => override_values.clone(),
+                        [base_values, overlay_values] => {
+                            let mut merged_values: serde_yaml::Value =
+                                serde_yaml::from_str(base_values).expect("valid base YAML values");
+                            let overlay_values: serde_yaml::Value =
+                                serde_yaml::from_str(overlay_values).expect("valid overlay YAML values");
+                            merge_yaml_values(&mut merged_values, overlay_values);
+                            serde_yaml::to_string(&merged_values).expect("serialize merged YAML values")
                         }
-                        SupportedCharts::IngressNginx => {
-                            let mut tera = Tera::default();
-                            match tera.add_raw_template("self-managed-template-nginx", &override_values) {
-                                Ok(_) => {}
-                                Err(_) => return override_values,
-                            }
-
-                            let mut context = Context::new();
-                            context.insert("enable_karpenter", &false);
-
-                            tera.render("self-managed-template-nginx", &context)
-                                .unwrap_or(override_values)
-                        }
-                        _ => override_values,
+                        _ => unreachable!("a chart override has at most one base and one overlay values file"),
                     };
 
                     let replace_values = override_values
@@ -287,6 +320,60 @@ mod tests {
         values_file_content
     }
 
+    fn merge_yaml_values(base: &mut serde_yaml::Value, overlay: serde_yaml::Value) {
+        match (base, overlay) {
+            (serde_yaml::Value::Mapping(base), serde_yaml::Value::Mapping(overlay)) => {
+                for (key, overlay_value) in overlay {
+                    match base.get_mut(&key) {
+                        Some(base_value) => merge_yaml_values(base_value, overlay_value),
+                        None => {
+                            base.insert(key, overlay_value);
+                        }
+                    }
+                }
+            }
+            (base, overlay) => *base = overlay,
+        }
+    }
+
+    #[test]
+    fn byok_external_dns_overlay_preserves_common_configuration() {
+        let mut values: serde_yaml::Value =
+            serde_yaml::from_str(include_str!("../../lib/common/bootstrap/chart_values/external-dns.yaml"))
+                .expect("valid common ExternalDNS values");
+        let overlay: serde_yaml::Value =
+            serde_yaml::from_str(include_str!("../../lib/self-managed/chart_values/external-dns.yaml"))
+                .expect("valid BYOK ExternalDNS values");
+        merge_yaml_values(&mut values, overlay);
+
+        assert_eq!(values["provider"], "set-by-engine-code");
+        assert!(values["domainFilters"].as_sequence().is_some_and(Vec::is_empty));
+        assert_eq!(values["txtOwnerId"], "set-by-engine-code");
+        assert_eq!(values["updateStrategy"]["type"], "set-by-engine-code");
+        assert_eq!(values["resources"]["limits"]["cpu"], "50m");
+        assert!(
+            values["sources"]
+                .as_sequence()
+                .expect("ExternalDNS sources")
+                .iter()
+                .any(|source| source.as_str() == Some("gateway-httproute"))
+        );
+    }
+
+    #[test]
+    fn byok_qovery_cluster_gateway_overlay_keeps_dns_domain_placeholder() {
+        for values in [
+            include_str!("../../lib/aws/bootstrap/chart_values/qovery-cluster-gateway.yaml"),
+            include_str!("../../lib/gcp/bootstrap/chart_values/qovery-cluster-gateway.yaml"),
+            include_str!("../../lib/scaleway/bootstrap/chart_values/qovery-cluster-gateway.yaml"),
+            include_str!("../../lib/azure/bootstrap/chart_values/qovery-cluster-gateway.yaml"),
+        ] {
+            let values: serde_yaml::Value = serde_yaml::from_str(values).expect("valid Qovery cluster gateway values");
+
+            assert_eq!(values["dns"]["domain"], "set-by-engine-code");
+        }
+    }
+
     pub fn generate_config_file(
         values: ValuesFile,
         filename: String,
@@ -333,6 +420,9 @@ mod tests {
         dotenv::dotenv().ok();
         let prefix = std::env::var("WORKSPACE_ROOT_DIR").unwrap();
         let qovery_chart_path = format!("{}/.qovery-workspace/qovery_chart", &prefix);
+        if Path::new(&qovery_chart_path).exists() {
+            fs::remove_dir_all(&qovery_chart_path).expect("failed to remove previous generated chart");
+        }
         fs::create_dir_all(&qovery_chart_path).unwrap();
         let qovery_chart_templates_path = format!("{}/templates", &qovery_chart_path);
         fs::create_dir_all(qovery_chart_templates_path).unwrap();
@@ -371,7 +461,25 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
@@ -380,7 +488,7 @@ mod tests {
                 name: SupportedCharts::ExternalDNS,
                 category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::SelfManagedChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Alloy,
@@ -467,10 +575,28 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::AlbController,
@@ -568,7 +694,25 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
@@ -577,7 +721,7 @@ mod tests {
                 name: SupportedCharts::ExternalDNS,
                 category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Alloy,
@@ -657,16 +801,34 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
                 category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+                values_source_path: Some(ValuesSourcePath::GcpDemoChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Alloy,
@@ -746,7 +908,25 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
@@ -755,7 +935,7 @@ mod tests {
                 name: SupportedCharts::ExternalDNS,
                 category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::SelfManagedChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Alloy,
@@ -835,10 +1015,28 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
@@ -924,7 +1122,25 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
@@ -933,7 +1149,7 @@ mod tests {
                 name: SupportedCharts::ExternalDNS,
                 category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::SelfManagedChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Alloy,
@@ -1013,10 +1229,28 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
@@ -1096,7 +1330,25 @@ mod tests {
         let mut local_demo_charts = minimal_qovery_chart.clone();
         local_demo_charts.charts_source_path = vec![
             ChartMeta {
-                name: SupportedCharts::IngressNginx,
+                name: SupportedCharts::EnvoyGatewayCrd,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::EnvoyGateway,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryGatewayClass,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterGateway,
                 category: ChartCategory::Ingress,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
@@ -1157,7 +1409,7 @@ mod tests {
             },
         ];
         generate_config_file(
-            ValuesFile::new_local(),
+            ValuesFile::new_demo_local(),
             "values-demo-local.yaml".to_string(),
             local_demo_charts.clone(),
             prefix.clone(),
@@ -1181,11 +1433,29 @@ mod tests {
         scaleway_qovery_chart.charts_source_path.iter().for_each(|chart| {
             x.push(chart.clone());
         });
+        azure_qovery_chart.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        aws_qovery_chart_demo.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        gcp_qovery_chart_demo.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        scaleway_qovery_chart_demo.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        azure_qovery_chart_demo.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
+        local_demo_charts.charts_source_path.iter().for_each(|chart| {
+            x.push(chart.clone());
+        });
         x.sort();
         x.dedup();
         all_charts.charts_source_path = x;
 
-        let chart_dot_yaml = ChartDotYaml::from_qovery_self_managed_chart(prefix.clone(), all_charts)
+        let chart_dot_yaml = ChartDotYaml::from_qovery_self_managed_chart(prefix.clone(), all_charts.clone())
             .map_err(|e| {
                 println!("{e}");
             })
@@ -1194,12 +1464,8 @@ mod tests {
             .save_to_file(aws_qovery_chart.destination)
             .expect("failed to save Chart.yaml");
 
-        // copy charts
-        // let chart_copy = [(
-        //     aws_qovery_chart.charts_source_path,
-        //     aws_qovery_chart.destination.to_string_lossy(),
-        // )];
-        for chart in aws_qovery_chart.charts_source_path {
+        // Copy the complete dependency set, including charts only used by demo profiles.
+        for chart in all_charts.charts_source_path {
             let source_path = format!("{}/{}", prefix.clone(), chart.source_path);
             let destination_path = format!("{}/charts", aws_qovery_chart.destination.to_string_lossy());
             fs::create_dir_all(&destination_path).unwrap();
@@ -1208,33 +1474,22 @@ mod tests {
             println!("copying {src} to {dst}");
             copy_recursively(src, dst).unwrap();
         }
-        for chart in gcp_qovery_chart.charts_source_path {
-            let source_path = format!("{}/{}", prefix.clone(), chart.source_path);
-            let destination_path = format!("{}/charts", gcp_qovery_chart.destination.to_string_lossy());
-            fs::create_dir_all(&destination_path).unwrap();
-            let src = format!("{}/{}", source_path, chart.name);
-            let dst = format!("{destination_path}/{}", chart.name);
-            println!("copying {src} to {dst}");
-            copy_recursively(src, dst).unwrap();
-        }
-        for chart in scaleway_qovery_chart.charts_source_path {
-            let source_path = format!("{}/{}", prefix.clone(), chart.source_path);
-            let destination_path = format!("{}/charts", scaleway_qovery_chart.destination.to_string_lossy());
-            fs::create_dir_all(&destination_path).unwrap();
-            let src = format!("{}/{}", source_path, chart.name);
-            let dst = format!("{destination_path}/{}", chart.name);
-            println!("copying {src} to {dst}");
-            copy_recursively(src, dst).unwrap();
-        }
 
-        // helm lint generated chart
-        match Command::new("helm")
-            .args(["lint", &aws_qovery_chart.destination.to_string_lossy()])
-            .spawn()
-        {
-            Ok(_) => println!("helm lint ok"),
-            Err(e) => panic!("helm lint failed: {e}"),
-        }
+        let generated_chart_path = aws_qovery_chart.destination.to_string_lossy();
+        let helm_dependency_update_status = Command::new("helm")
+            .args(["dependency", "update", &generated_chart_path])
+            .status()
+            .expect("failed to run helm dependency update");
+        assert!(
+            helm_dependency_update_status.success(),
+            "helm dependency update failed with status {helm_dependency_update_status}"
+        );
+
+        let helm_lint_status = Command::new("helm")
+            .args(["lint", &generated_chart_path])
+            .status()
+            .expect("failed to run helm lint");
+        assert!(helm_lint_status.success(), "helm lint failed with status {helm_lint_status}");
 
         // assert all generated files do not contain jinja templating like '{{ }}' or '{% %}'
         for entry in WalkDir::new(aws_qovery_chart.destination).max_depth(1) {

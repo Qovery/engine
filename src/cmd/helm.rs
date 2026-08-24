@@ -2167,7 +2167,7 @@ mod unit_tests {
     use super::{Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, append_helm_diff_secret_visibility_arg};
     use crate::cmd::command::CommandKiller;
     use crate::helm::{ChartInfo, ChartValuesGenerated};
-    use std::path::Path;
+    use std::{fs::File, path::Path};
 
     #[test]
     fn helm_diff_secret_visibility_appends_expected_cli_arg() {
@@ -2183,13 +2183,11 @@ mod unit_tests {
     #[test]
     fn helm_diff_values_file_write_error_is_classified_as_diff() {
         let temporary_directory = tempfile::tempdir().unwrap();
+        let chart_path = temporary_directory.path().join("chart-file");
+        File::create(&chart_path).unwrap();
         let chart = ChartInfo {
             name: "test-release".to_string(),
-            path: temporary_directory
-                .path()
-                .join("missing-chart-directory")
-                .to_string_lossy()
-                .into_owned(),
+            path: chart_path.to_string_lossy().into_owned(),
             yaml_files_content: vec![ChartValuesGenerated::new(
                 "values".to_string(),
                 "key: value".to_string(),
@@ -2204,7 +2202,11 @@ mod unit_tests {
 
         assert!(matches!(
             error,
-            HelmError::CmdError(release_name, HelmCommand::DIFF, _) if release_name == "test-release"
+            HelmError::CmdError(release_name, HelmCommand::DIFF, command_error)
+                if release_name == "test-release"
+                    && command_error
+                        .message_safe()
+                        .starts_with("Error while writing yaml content to file")
         ));
     }
 }
