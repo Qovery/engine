@@ -1135,15 +1135,15 @@ publish-platform-catalog:
 .deploy-qovery-infra-engines-public:
   extends: [.needs-docker, .resources-minimal]
   retry: 0
-  needs:
-    - gitlab-release
   script:
     - ./helper.sh deploy_engines_infra_public $CHANNEL
   tags:
     - k8s-runner
+  # Chained to the private infra deploy of the same channel (see needs: below),
+  # so a release can never leave the public fleets on a stale engine version
   rules:
     - if: $CI_COMMIT_TAG
-      when: manual
+      when: on_success
 
 
 1-deploy-qovery-infra-engines-staging:
@@ -1216,6 +1216,8 @@ publish-platform-catalog:
 5-deploy-qovery-infra-engines-public-staging:
   stage: deploy-staging
   extends: .deploy-qovery-infra-engines-public
+  needs:
+    - job: 1-deploy-qovery-infra-engines-staging
   variables:
     CHANNEL: staging
   environment:
@@ -1344,6 +1346,8 @@ publish-platform-catalog:
 9-deploy-qovery-infra-engines-public-prod:
   stage: deploy-prod
   extends: .deploy-qovery-infra-engines-public
+  needs:
+    - job: 2-deploy-qovery-infra-engines-prod
   variables:
     CHANNEL: prod
   environment:

@@ -165,9 +165,19 @@ function deploy_engines_infra_static_ip() { ## Release GA to prod
   AWS_DEFAULT_REGION="$AWS_PROD_INFRA_STATIC_IP_DEFAULT_REGION" \
   helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace $name qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set \
+tolerations[0].key="node.kubernetes.io/not-ready",\
+tolerations[0].operator="Exists",\
+tolerations[0].effect="NoExecute",\
+tolerations[0].tolerationSeconds=21600,\
+tolerations[1].key="nodepool/qovery-default-private",\
+tolerations[1].operator="Exists",\
+tolerations[1].effect="NoSchedule" \
   --set-string \
   image.tag="$tag",\
 fullnameOverride="$name",\
+nodeSelector."karpenter\.sh/nodepool"="qovery-default-private",\
+nodeSelector."kubernetes\.io/arch"="amd64",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.ENGINE_TAG_VERSION="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
