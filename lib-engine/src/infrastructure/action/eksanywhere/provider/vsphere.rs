@@ -5,16 +5,12 @@ mod tags;
 #[path = "vsphere_template.rs"]
 mod template;
 
-use super::{ParsedEksAnywhereClusterConfig, ProviderPreflightError};
+use super::{EksAnywhereKubernetesVersion, ParsedEksAnywhereClusterConfig, ProviderPreflightError};
 #[cfg(test)]
 use crate::errors::CommandError;
 use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
-#[cfg(test)]
-use serde::Deserialize;
-#[cfg(test)]
-use serde_yaml::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 // ── Shared types ─────────────────────────────────────────────────────────────
@@ -24,6 +20,7 @@ pub(super) struct VSphereTemplateRef {
     pub machine_config_name: String,
     pub template: Option<String>,
     pub os_family: Option<String>,
+    pub target_kubernetes_versions: BTreeSet<EksAnywhereKubernetesVersion>,
     pub datastore: Option<String>,
     pub resource_pool: Option<String>,
     pub folder: Option<String>,
@@ -136,7 +133,8 @@ fn extract_vsphere_cluster_metadata_from_parsed_config(
     let mut metadata = VSphereClusterMetadata {
         kubernetes_version: parsed_cluster_config
             .cluster_spec()
-            .and_then(|cluster| cluster.kubernetes_version.clone()),
+            .and_then(|cluster| cluster.kubernetes_version.as_ref())
+            .map(|version| version.as_str().to_string()),
         ..VSphereClusterMetadata::default()
     };
 
@@ -158,6 +156,8 @@ fn extract_vsphere_templates_from_parsed_config(
             machine_config_name: machine_config.name.clone(),
             template: machine_config.template.clone(),
             os_family: machine_config.os_family.clone(),
+            target_kubernetes_versions: parsed_cluster_config
+                .effective_kubernetes_versions_for_machine_config(machine_config.name.as_str()),
             datastore: machine_config.datastore.clone(),
             resource_pool: machine_config.resource_pool.clone(),
             folder: machine_config.folder.clone(),
@@ -237,108 +237,14 @@ fn summarize_vsphere_templates_for_user(templates: &[VSphereTemplateRef], cluste
 
 #[cfg(test)]
 fn extract_vsphere_cluster_metadata_from_yaml(content: &str) -> Result<VSphereClusterMetadata, CommandError> {
-    let mut metadata = VSphereClusterMetadata::default();
-
-    for yaml_doc in serde_yaml::Deserializer::from_str(content) {
-        let value = Value::deserialize(yaml_doc).map_err(|e| {
-            CommandError::new(
-                "Cannot parse EKS Anywhere cluster YAML while inspecting vSphere metadata".to_string(),
-                Some(e.to_string()),
-                None,
-            )
-        })?;
-
-        match value.get("kind").and_then(Value::as_str) {
-            Some("Cluster") => {
-                metadata.kubernetes_version = value
-                    .get("spec")
-                    .and_then(|s| s.get("kubernetesVersion"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string);
-            }
-            Some("VSphereDatacenterConfig") => {
-                metadata.vcenter_server = value
-                    .get("spec")
-                    .and_then(|s| s.get("server"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string);
-                metadata.insecure = value
-                    .get("spec")
-                    .and_then(|s| s.get("insecure"))
-                    .and_then(Value::as_bool);
-                metadata.network = value
-                    .get("spec")
-                    .and_then(|s| s.get("network"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string);
-            }
-            _ => {}
-        }
-    }
-
-    Ok(metadata)
+    let parsed_cluster_config = super::parse_eks_anywhere_cluster_config_from_yaml(content)?;
+    Ok(extract_vsphere_cluster_metadata_from_parsed_config(&parsed_cluster_config))
 }
 
 #[cfg(test)]
 fn extract_vsphere_templates_from_yaml(content: &str) -> Result<Vec<VSphereTemplateRef>, CommandError> {
-    let mut templates = Vec::new();
-
-    for yaml_doc in serde_yaml::Deserializer::from_str(content) {
-        let value = Value::deserialize(yaml_doc).map_err(|e| {
-            CommandError::new(
-                "Cannot parse EKS Anywhere cluster YAML while inspecting vSphere templates".to_string(),
-                Some(e.to_string()),
-                None,
-            )
-        })?;
-
-        if value.get("kind").and_then(Value::as_str) != Some("VSphereMachineConfig") {
-            continue;
-        }
-
-        let machine_config_name = value
-            .get("metadata")
-            .and_then(|m| m.get("name"))
-            .and_then(Value::as_str)
-            .unwrap_or("<unknown>")
-            .to_string();
-        let template = value
-            .get("spec")
-            .and_then(|s| s.get("template"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let os_family = value
-            .get("spec")
-            .and_then(|s| s.get("osFamily"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let datastore = value
-            .get("spec")
-            .and_then(|s| s.get("datastore"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let resource_pool = value
-            .get("spec")
-            .and_then(|s| s.get("resourcePool"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-        let folder = value
-            .get("spec")
-            .and_then(|s| s.get("folder"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-
-        templates.push(VSphereTemplateRef {
-            machine_config_name,
-            template,
-            os_family,
-            datastore,
-            resource_pool,
-            folder,
-        });
-    }
-
-    Ok(templates)
+    let parsed_cluster_config = super::parse_eks_anywhere_cluster_config_from_yaml(content)?;
+    Ok(extract_vsphere_templates_from_parsed_config(&parsed_cluster_config))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -360,6 +266,7 @@ mod tests {
         extract_vsphere_templates_from_yaml, summarize_vsphere_templates_for_user,
     };
     use crate::errors::CommandError;
+    use std::collections::BTreeSet;
 
     #[test]
     fn should_extract_vsphere_templates_from_multi_document_yaml() {
@@ -391,6 +298,7 @@ spec:
                     machine_config_name: "cp-machine".to_string(),
                     template: Some("bottlerocket-vmware-k8s-1.32-x86_64-1.51.0-47438798".to_string()),
                     os_family: Some("bottlerocket".to_string()),
+                    target_kubernetes_versions: BTreeSet::new(),
                     datastore: None,
                     resource_pool: None,
                     folder: None,
@@ -399,12 +307,80 @@ spec:
                     machine_config_name: "worker-machine".to_string(),
                     template: Some("bottlerocket-vmware-k8s-1.32-x86_64-1.51.0-47438798".to_string()),
                     os_family: Some("bottlerocket".to_string()),
+                    target_kubernetes_versions: BTreeSet::new(),
                     datastore: None,
                     resource_pool: None,
                     folder: None,
                 }
             ]
         );
+    }
+
+    #[test]
+    fn should_associate_machine_configs_with_their_effective_kubernetes_versions() {
+        let yaml = r#"
+kind: Cluster
+spec:
+  kubernetesVersion: "1.35"
+  controlPlaneConfiguration:
+    machineGroupRef:
+      name: cp-machine
+  externalEtcdConfiguration:
+    machineGroupRef:
+      name: etcd-machine
+  workerNodeGroupConfigurations:
+    - name: workers-pinned
+      kubernetesVersion: "1.34"
+      machineGroupRef:
+        name: worker-134-machine
+    - name: workers-inherited
+      machineGroupRef:
+        name: worker-135-machine
+---
+kind: VSphereMachineConfig
+metadata:
+  name: cp-machine
+spec:
+  osFamily: bottlerocket
+  template: /dc/vm/Templates/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64
+---
+kind: VSphereMachineConfig
+metadata:
+  name: etcd-machine
+spec:
+  osFamily: bottlerocket
+  template: /dc/vm/Templates/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64
+---
+kind: VSphereMachineConfig
+metadata:
+  name: worker-134-machine
+spec:
+  osFamily: bottlerocket
+  template: /dc/vm/Templates/bottlerocket-v1.34.3-eks-d-1-34-14-eks-a-116-amd64
+---
+kind: VSphereMachineConfig
+metadata:
+  name: worker-135-machine
+spec:
+  osFamily: bottlerocket
+  template: /dc/vm/Templates/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64
+"#;
+
+        let refs = extract_vsphere_templates_from_yaml(yaml).expect("YAML should parse");
+        let target_versions = |machine_config_name: &str| {
+            refs.iter()
+                .find(|template_ref| template_ref.machine_config_name == machine_config_name)
+                .expect("machine config should be extracted")
+                .target_kubernetes_versions
+                .iter()
+                .map(|version| version.as_str())
+                .collect::<BTreeSet<_>>()
+        };
+
+        assert_eq!(target_versions("cp-machine"), BTreeSet::from(["1.35"]));
+        assert_eq!(target_versions("etcd-machine"), BTreeSet::from(["1.35"]));
+        assert_eq!(target_versions("worker-134-machine"), BTreeSet::from(["1.34"]));
+        assert_eq!(target_versions("worker-135-machine"), BTreeSet::from(["1.35"]));
     }
 
     #[test]
@@ -423,6 +399,7 @@ spec: {}
                 machine_config_name: "cp-machine".to_string(),
                 template: None,
                 os_family: None,
+                target_kubernetes_versions: BTreeSet::new(),
                 datastore: None,
                 resource_pool: None,
                 folder: None,
@@ -438,6 +415,7 @@ spec: {}
                     machine_config_name: "eksa-powens-controlplane".to_string(),
                     template: Some("/dc/vm/Templates/template-a".to_string()),
                     os_family: Some("bottlerocket".to_string()),
+                    target_kubernetes_versions: BTreeSet::new(),
                     datastore: None,
                     resource_pool: None,
                     folder: None,
@@ -446,6 +424,7 @@ spec: {}
                     machine_config_name: "eksa-powens-nodes".to_string(),
                     template: Some("/dc/vm/Templates/template-a".to_string()),
                     os_family: Some("bottlerocket".to_string()),
+                    target_kubernetes_versions: BTreeSet::new(),
                     datastore: None,
                     resource_pool: None,
                     folder: None,
@@ -454,6 +433,7 @@ spec: {}
                     machine_config_name: "eksa-powens-etcd".to_string(),
                     template: Some("/dc/vm/Templates/template-a".to_string()),
                     os_family: Some("bottlerocket".to_string()),
+                    target_kubernetes_versions: BTreeSet::new(),
                     datastore: None,
                     resource_pool: None,
                     folder: None,

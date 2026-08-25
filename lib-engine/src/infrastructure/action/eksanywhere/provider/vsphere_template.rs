@@ -14,13 +14,63 @@ use super::tags::{
     is_inventory_object_not_found_error, is_tag_directly_attached_to_object, is_tagging_cardinality_violation,
 };
 use super::{VSphereClusterMetadata, VSphereTemplateInstallConfig, VSphereTemplateRef};
+use crate::infrastructure::action::eksanywhere::provider::EksAnywhereKubernetesVersion;
 
-type TemplateIndexEntry = (BTreeSet<String>, BTreeSet<String>, Vec<VSphereTemplateRef>);
+#[derive(Debug, Clone, Default)]
+struct TemplateIndexEntry {
+    machine_configs: BTreeSet<String>,
+    os_families: BTreeSet<String>,
+    target_kubernetes_versions: BTreeSet<EksAnywhereKubernetesVersion>,
+    refs: Vec<VSphereTemplateRef>,
+}
+
+impl TemplateIndexEntry {
+    fn add(&mut self, template_ref: &VSphereTemplateRef) {
+        self.machine_configs.insert(template_ref.machine_config_name.clone());
+        if let Some(os_family) = template_ref.os_family.as_ref() {
+            self.os_families.insert(os_family.to_lowercase());
+        }
+        self.target_kubernetes_versions
+            .extend(template_ref.target_kubernetes_versions.iter().cloned());
+        self.refs.push(template_ref.clone());
+    }
+
+    fn machine_configs_for_target(&self, target: &EksAnywhereKubernetesVersion) -> BTreeSet<String> {
+        self.refs
+            .iter()
+            .filter(|template_ref| template_ref.target_kubernetes_versions.contains(target))
+            .map(|template_ref| template_ref.machine_config_name.clone())
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TemplateVersionMismatch {
+    configured_template_path: String,
+    target_kubernetes_version: EksAnywhereKubernetesVersion,
+    target_minor: String,
+    machine_configs: BTreeSet<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RetagEligibility {
     Eligible,
     NotEligible(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OvaArchitecture {
+    Amd64,
+    Arm64,
+}
+
+impl OvaArchitecture {
+    fn token(self) -> &'static str {
+        match self {
+            Self::Amd64 => "amd64",
+            Self::Arm64 => "arm64",
+        }
+    }
 }
 
 pub(super) fn check_templates_with_govc(
@@ -41,14 +91,7 @@ pub(super) fn check_templates_with_govc(
             continue;
         };
 
-        let (machine_configs, os_families, refs) = templates_index
-            .entry(template.clone())
-            .or_insert_with(|| (BTreeSet::new(), BTreeSet::new(), Vec::new()));
-        machine_configs.insert(template_ref.machine_config_name.clone());
-        if let Some(os_family) = template_ref.os_family.as_ref() {
-            os_families.insert(os_family.to_lowercase());
-        }
-        refs.push(template_ref.clone());
+        templates_index.entry(template.clone()).or_default().add(template_ref);
     }
 
     if !missing_template_field.is_empty() {
@@ -63,16 +106,35 @@ pub(super) fn check_templates_with_govc(
         )));
     }
 
-    let expected_eksd_fragment = metadata
+    validate_templates_match_target_kubernetes_version(&templates_index, cluster_config_path, logger)?;
+
+    let root_expected_eksd_fragment = metadata
         .kubernetes_version
         .as_deref()
         .and_then(expected_eksd_release_fragment_from_kubernetes_version);
-    let expected_eksd_tag = expected_eksd_release_tag.map(str::to_string);
+    let root_expected_eksd_tag = expected_eksd_release_tag.map(str::to_string);
 
     logger.info("🧪 Running vSphere template checks.");
     logger.info(format!("🔎 Validating {} unique template(s) with govc.", templates_index.len()));
 
-    for (template, (_machine_configs, os_families, refs)) in templates_index {
+    for (template, entry) in templates_index {
+        let TemplateIndexEntry {
+            os_families,
+            target_kubernetes_versions,
+            refs,
+            ..
+        } = entry;
+        let expected_eksd_fragment = if target_kubernetes_versions.is_empty() {
+            root_expected_eksd_fragment.clone()
+        } else {
+            expected_eksd_release_fragment_for_targets(&target_kubernetes_versions)
+        };
+        let expected_eksd_tag = expected_eksd_release_tag_for_template(
+            template.as_str(),
+            &target_kubernetes_versions,
+            metadata.kubernetes_version.as_deref(),
+            root_expected_eksd_tag.as_deref(),
+        );
         let mut planned_retag_tag: Option<String> = None;
         let template_exists = is_template_present_for_inventory_path(template.as_str(), govc_env, logger)?;
         if !template_exists {
@@ -813,6 +875,173 @@ fn run_eksctl_list_ovas(
     Ok(stdout)
 }
 
+fn validate_templates_match_target_kubernetes_version(
+    templates_index: &BTreeMap<String, TemplateIndexEntry>,
+    cluster_config_path: &Path,
+    logger: &impl InfraLogger,
+) -> Result<(), CommandError> {
+    let Some(mismatch) = find_bottlerocket_template_version_mismatch(templates_index) else {
+        return Ok(());
+    };
+
+    logger.info("⏳ Resolving the vSphere template expected for the target Kubernetes version.");
+    let stdout = run_eksctl_list_ovas(cluster_config_path, |trimmed| {
+        if trimmed == "Command still running. No output available. Waiting for next line..." {
+            logger.info("⏳ `eksctl anywhere list ovas` is still running...");
+        } else if !trimmed.is_empty() {
+            warn!("eksctl list ovas: {}", trimmed);
+        }
+    })?;
+    let ova_urls = extract_http_urls(&stdout);
+    let expected_template_path = expected_bottlerocket_template_path_for_target(
+        mismatch.configured_template_path.as_str(),
+        mismatch.target_minor.as_str(),
+        &ova_urls,
+    )?;
+    let configured_machine_configs = mismatch
+        .machine_configs
+        .iter()
+        .map(|name| super::backtick(name))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Err(CommandError::new_from_safe_message(format!(
+        "Configured vSphere template `{}` does not match target Kubernetes version `{}` for VSphereMachineConfig(s) [{configured_machine_configs}]. \
+Expected template: `{expected_template_path}`. Update `spec.template` in the cluster YAML and retry the deployment.",
+        mismatch.configured_template_path,
+        mismatch.target_kubernetes_version.as_str(),
+    )))
+}
+
+fn find_bottlerocket_template_version_mismatch(
+    templates_index: &BTreeMap<String, TemplateIndexEntry>,
+) -> Option<TemplateVersionMismatch> {
+    for (configured_template_path, entry) in templates_index {
+        if !is_bottlerocket_template(configured_template_path, entry) {
+            continue;
+        }
+
+        for target_kubernetes_version in &entry.target_kubernetes_versions {
+            let Some(target_minor) = kubernetes_minor_token_from_kubernetes_version(target_kubernetes_version.as_str())
+            else {
+                continue;
+            };
+            if !template_targets_different_kubernetes_minor(configured_template_path, target_minor.as_str()) {
+                continue;
+            }
+
+            let machine_configs = entry.machine_configs_for_target(target_kubernetes_version);
+            return Some(TemplateVersionMismatch {
+                configured_template_path: configured_template_path.clone(),
+                target_kubernetes_version: target_kubernetes_version.clone(),
+                target_minor,
+                machine_configs,
+            });
+        }
+    }
+
+    None
+}
+
+fn is_bottlerocket_template(configured_template_path: &str, entry: &TemplateIndexEntry) -> bool {
+    match entry.os_families.len() {
+        0 => super::template_name_from_path(configured_template_path)
+            .is_some_and(|template_name| template_name.to_lowercase().contains("bottlerocket")),
+        1 => entry
+            .os_families
+            .first()
+            .is_some_and(|os_family| os_family.eq_ignore_ascii_case("bottlerocket")),
+        _ => false,
+    }
+}
+
+fn template_targets_different_kubernetes_minor(template_path: &str, target_minor: &str) -> bool {
+    super::template_name_from_path(template_path)
+        .and_then(|template_name| kubernetes_minor_token_from_template_name(template_name.as_str()))
+        .is_some_and(|configured_minor| configured_minor != target_minor)
+}
+
+fn expected_bottlerocket_template_path_for_target(
+    configured_template_path: &str,
+    target_minor: &str,
+    ova_urls: &[String],
+) -> Result<String, CommandError> {
+    let configured_template_name = super::template_name_from_path(configured_template_path).ok_or_else(|| {
+        CommandError::new_from_safe_message(format!(
+            "Invalid template path `{configured_template_path}` in VSphereMachineConfig (cannot resolve template name)"
+        ))
+    })?;
+    let architecture = ova_architecture_from_template_name(configured_template_name.as_str()).ok_or_else(|| {
+        CommandError::new_from_safe_message(format!(
+            "Cannot determine the OVA architecture for vSphere template `{configured_template_path}`. The template name must contain `amd64` or `arm64`."
+        ))
+    })?;
+    let expected_ova_url = select_bottlerocket_ova_url_for_target(target_minor, architecture, ova_urls).ok_or_else(
+        || {
+            CommandError::new(
+                format!(
+                    "Cannot resolve the expected Bottlerocket/{} OVA for Kubernetes `{}` from `eksctl anywhere list ovas` output",
+                    architecture.token(),
+                    target_minor.replace('-', "."),
+                ),
+                Some(ova_urls.join("\n")),
+                None,
+            )
+        },
+    )?;
+    let expected_template_name = template_name_from_ova_url(expected_ova_url.as_str()).ok_or_else(|| {
+        CommandError::new(
+            format!("Cannot extract template name from OVA URL `{expected_ova_url}`"),
+            None,
+            None,
+        )
+    })?;
+    let configured_template_folder = Path::new(configured_template_path).parent().ok_or_else(|| {
+        CommandError::new_from_safe_message(format!(
+            "Invalid template path `{configured_template_path}` in VSphereMachineConfig (cannot resolve template folder)"
+        ))
+    })?;
+
+    Ok(configured_template_folder
+        .join(expected_template_name)
+        .to_string_lossy()
+        .to_string())
+}
+
+fn select_bottlerocket_ova_url_for_target(
+    target_minor: &str,
+    architecture: OvaArchitecture,
+    urls: &[String],
+) -> Option<String> {
+    let target_minor_path = format!("/{target_minor}/");
+    let architecture_suffix = format!("-{}.ova", architecture.token());
+    let mut matching_urls = urls
+        .iter()
+        .filter(|url| {
+            let lower = url.to_lowercase();
+            lower.contains(target_minor_path.as_str())
+                && lower.contains("bottlerocket")
+                && lower.ends_with(architecture_suffix.as_str())
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    matching_urls.sort();
+    matching_urls.dedup();
+
+    (matching_urls.len() == 1).then(|| matching_urls.remove(0))
+}
+
+fn ova_architecture_from_template_name(template_name: &str) -> Option<OvaArchitecture> {
+    let lower = template_name.to_lowercase();
+    if lower.contains("amd64") || lower.contains("x86_64") {
+        return Some(OvaArchitecture::Amd64);
+    }
+    if lower.contains("arm64") || lower.contains("aarch64") {
+        return Some(OvaArchitecture::Arm64);
+    }
+    None
+}
+
 fn find_ova_url_in_output(template_name: &str, stdout: &[String]) -> Result<String, CommandError> {
     let urls = extract_http_urls(stdout);
     if let Some(url) = select_ova_url_for_template(template_name, &urls) {
@@ -962,6 +1191,74 @@ fn kubernetes_minor_token_from_template_name(template_name: &str) -> Option<Stri
     None
 }
 
+fn kubernetes_minor_token_from_kubernetes_version(kubernetes_version: &str) -> Option<String> {
+    let version = kubernetes_version.trim().trim_start_matches('v');
+    parse_kubernetes_minor_token(version)
+}
+
+fn kubernetes_minor_tokens_for_targets(
+    target_kubernetes_versions: &BTreeSet<EksAnywhereKubernetesVersion>,
+) -> BTreeSet<String> {
+    target_kubernetes_versions
+        .iter()
+        .filter_map(|version| kubernetes_minor_token_from_kubernetes_version(version.as_str()))
+        .collect()
+}
+
+fn expected_eksd_release_fragment_for_targets(
+    target_kubernetes_versions: &BTreeSet<EksAnywhereKubernetesVersion>,
+) -> Option<String> {
+    let target_minors = kubernetes_minor_tokens_for_targets(target_kubernetes_versions);
+    if target_minors.len() != 1 {
+        return None;
+    }
+    target_minors.first().map(|minor| format!("kubernetes-{minor}"))
+}
+
+fn expected_eksd_release_tag_for_template(
+    template_path: &str,
+    target_kubernetes_versions: &BTreeSet<EksAnywhereKubernetesVersion>,
+    root_kubernetes_version: Option<&str>,
+    root_expected_eksd_tag: Option<&str>,
+) -> Option<String> {
+    if target_kubernetes_versions.is_empty() {
+        return root_expected_eksd_tag.map(str::to_string);
+    }
+
+    let target_minors = kubernetes_minor_tokens_for_targets(target_kubernetes_versions);
+    if target_minors.len() != 1 {
+        return None;
+    }
+    let target_minor = target_minors.first()?;
+    let root_minor = root_kubernetes_version.and_then(kubernetes_minor_token_from_kubernetes_version);
+    if root_minor.as_ref() == Some(target_minor) {
+        return root_expected_eksd_tag.map(str::to_string);
+    }
+
+    let expected_tag_prefix = format!("kubernetes-{target_minor}-eks-");
+    super::template_name_from_path(template_path)
+        .as_deref()
+        .and_then(eksd_release_tag_from_template_name)
+        .filter(|tag| tag.starts_with(expected_tag_prefix.as_str()))
+}
+
+fn eksd_release_tag_from_template_name(template_name: &str) -> Option<String> {
+    let lowercase_template_name = template_name.to_lowercase();
+    let (_, eksd_suffix) = lowercase_template_name.split_once("-eks-d-")?;
+    let mut parts = eksd_suffix.split('-');
+    let major = parts.next()?;
+    let minor = parts.next()?;
+    let release = parts.next()?;
+    if [major, minor, release]
+        .iter()
+        .any(|part| part.is_empty() || !part.chars().all(|character| character.is_ascii_digit()))
+    {
+        return None;
+    }
+
+    Some(format!("kubernetes-{major}-{minor}-eks-{release}"))
+}
+
 fn parse_kubernetes_minor_token(input: &str) -> Option<String> {
     let mut chars = input.chars().peekable();
     let mut major = String::new();
@@ -983,21 +1280,7 @@ fn parse_kubernetes_minor_token(input: &str) -> Option<String> {
 }
 
 pub(super) fn expected_eksd_release_fragment_from_kubernetes_version(kubernetes_version: &str) -> Option<String> {
-    let version = kubernetes_version.trim().trim_start_matches('v');
-    let mut parts = version.split('.');
-    let major = parts.next()?;
-    let minor_with_suffix = parts.next()?;
-
-    let minor = minor_with_suffix
-        .chars()
-        .take_while(|c| c.is_ascii_digit())
-        .collect::<String>();
-
-    if major.is_empty() || minor.is_empty() {
-        return None;
-    }
-
-    Some(format!("kubernetes-{major}-{minor}"))
+    kubernetes_minor_token_from_kubernetes_version(kubernetes_version).map(|minor| format!("kubernetes-{minor}"))
 }
 
 // ── Path utilities (template-specific) ──────────────────────────────────────
@@ -1011,10 +1294,53 @@ fn template_folder_from_path(template_path: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{TemplatePresence, template_presence_from_vm_info_output};
+    use super::{
+        EksAnywhereKubernetesVersion, OvaArchitecture, TemplateIndexEntry, TemplatePresence,
+        eksd_release_tag_from_template_name, expected_bottlerocket_template_path_for_target,
+        expected_eksd_release_tag_for_template, find_bottlerocket_template_version_mismatch,
+        select_bottlerocket_ova_url_for_target, template_presence_from_vm_info_output,
+        template_targets_different_kubernetes_minor,
+    };
+    use crate::infrastructure::action::eksanywhere::provider::vsphere::VSphereTemplateRef;
+    use std::collections::{BTreeMap, BTreeSet};
 
     fn vm_info_output(json: &str) -> Vec<String> {
         json.lines().map(str::to_string).collect()
+    }
+
+    fn template_ref(
+        machine_config_name: &str,
+        template: &str,
+        os_family: &str,
+        target_kubernetes_versions: &[&str],
+    ) -> VSphereTemplateRef {
+        VSphereTemplateRef {
+            machine_config_name: machine_config_name.to_string(),
+            template: Some(template.to_string()),
+            os_family: Some(os_family.to_string()),
+            target_kubernetes_versions: target_kubernetes_versions
+                .iter()
+                .map(|version| EksAnywhereKubernetesVersion((*version).to_string()))
+                .collect(),
+            datastore: None,
+            resource_pool: None,
+            folder: None,
+        }
+    }
+
+    fn template_index(refs: &[VSphereTemplateRef]) -> BTreeMap<String, TemplateIndexEntry> {
+        let mut index = BTreeMap::new();
+        for template_ref in refs {
+            let template = template_ref
+                .template
+                .as_ref()
+                .expect("test template should be configured");
+            index
+                .entry(template.clone())
+                .or_insert_with(TemplateIndexEntry::default)
+                .add(template_ref);
+        }
+        index
     }
 
     #[test]
@@ -1092,5 +1418,143 @@ mod tests {
         .expect_err("vm.info output should be rejected");
 
         assert!(error.to_string().contains("Cannot determine whether vSphere template"));
+    }
+
+    #[test]
+    fn should_select_bottlerocket_ova_matching_target_minor_and_architecture() {
+        let urls = vec![
+            "https://assets.example/ova/1-34/bottlerocket-v1.34.3-eks-a-116-amd64.ova".to_string(),
+            "https://assets.example/ova/1-35/bottlerocket-v1.35.1-eks-a-120-arm64.ova".to_string(),
+            "https://assets.example/ova/1-35/bottlerocket-v1.35.1-eks-a-120-amd64.ova".to_string(),
+            "https://assets.example/ova/1-35/ubuntu-v1.35.1-eks-a-120-amd64.ova".to_string(),
+        ];
+
+        let selected = select_bottlerocket_ova_url_for_target("1-35", OvaArchitecture::Amd64, &urls);
+
+        assert_eq!(
+            selected.as_deref(),
+            Some("https://assets.example/ova/1-35/bottlerocket-v1.35.1-eks-a-120-amd64.ova")
+        );
+    }
+
+    #[test]
+    fn should_build_expected_template_path_for_target_kubernetes_version() {
+        let urls = vec![
+            "https://anywhere-assets.eks.amazonaws.com/releases/bundles/116/artifacts/ova/1-35/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64.ova".to_string(),
+        ];
+        let expected = expected_bottlerocket_template_path_for_target(
+            "/example-datacenter/vm/Templates/bottlerocket-v1.34.3-eks-d-1-34-14-eks-a-116-amd64",
+            "1-35",
+            &urls,
+        )
+        .expect("expected template should be resolved");
+
+        assert_eq!(
+            expected,
+            "/example-datacenter/vm/Templates/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64"
+        );
+    }
+
+    #[test]
+    fn should_reject_ambiguous_ova_matches() {
+        let urls = vec![
+            "https://assets.example/ova/1-35/bottlerocket-v1.35.1-eks-a-120-amd64.ova".to_string(),
+            "https://assets.example/ova/1-35/bottlerocket-v1.35.2-eks-a-121-amd64.ova".to_string(),
+        ];
+
+        let selected = select_bottlerocket_ova_url_for_target("1-35", OvaArchitecture::Amd64, &urls);
+
+        assert_eq!(selected, None);
+    }
+
+    #[test]
+    fn should_detect_when_configured_template_targets_another_kubernetes_minor() {
+        let configured_template = "/example-datacenter/vm/Templates/bottlerocket-v1.34.3-eks-d-1-34-14-eks-a-116-amd64";
+
+        assert!(template_targets_different_kubernetes_minor(configured_template, "1-35"));
+        assert!(!template_targets_different_kubernetes_minor(configured_template, "1-34"));
+    }
+
+    #[test]
+    fn should_respect_worker_specific_kubernetes_version_when_finding_template_mismatches() {
+        let refs = vec![
+            template_ref(
+                "cp-machine",
+                "/dc/vm/Templates/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64",
+                "bottlerocket",
+                &["1.35"],
+            ),
+            template_ref(
+                "worker-machine",
+                "/dc/vm/Templates/bottlerocket-v1.34.3-eks-d-1-34-14-eks-a-116-amd64",
+                "bottlerocket",
+                &["1.34"],
+            ),
+        ];
+
+        let mismatch = find_bottlerocket_template_version_mismatch(&template_index(&refs));
+
+        assert_eq!(mismatch, None);
+    }
+
+    #[test]
+    fn should_report_only_machine_configs_targeting_the_mismatched_version() {
+        let shared_template = "/dc/vm/Templates/bottlerocket-v1.35.1-eks-d-1-35-4-eks-a-120-amd64";
+        let refs = vec![
+            template_ref("cp-machine", shared_template, "bottlerocket", &["1.35"]),
+            template_ref("worker-machine", shared_template, "bottlerocket", &["1.34"]),
+        ];
+
+        let mismatch = find_bottlerocket_template_version_mismatch(&template_index(&refs))
+            .expect("worker-specific version mismatch should be detected");
+
+        assert_eq!(mismatch.target_kubernetes_version.as_str(), "1.34");
+        assert_eq!(mismatch.target_minor, "1-34");
+        assert_eq!(mismatch.machine_configs, BTreeSet::from(["worker-machine".to_string()]));
+    }
+
+    #[test]
+    fn should_skip_custom_ubuntu_and_rhel_templates_in_bottlerocket_replacement_helper() {
+        let refs = vec![
+            template_ref(
+                "ubuntu-machine",
+                "/dc/vm/Templates/ubuntu-v1.34-custom-amd64",
+                "ubuntu",
+                &["1.35"],
+            ),
+            template_ref("rhel-machine", "/dc/vm/Templates/rhel-v1.34-custom-amd64", "redhat", &["1.35"]),
+        ];
+
+        let mismatch = find_bottlerocket_template_version_mismatch(&template_index(&refs));
+
+        assert_eq!(mismatch, None);
+    }
+
+    #[test]
+    fn should_extract_exact_eksd_release_tag_from_bottlerocket_template_name() {
+        let tag = eksd_release_tag_from_template_name("bottlerocket-v1.34.3-eks-d-1-34-14-eks-a-116-amd64");
+
+        assert_eq!(tag.as_deref(), Some("kubernetes-1-34-eks-14"));
+    }
+
+    #[test]
+    fn should_use_the_effective_worker_version_for_the_expected_eksd_release_tag() {
+        let worker_versions = BTreeSet::from([EksAnywhereKubernetesVersion("1.34".to_string())]);
+        let tag = expected_eksd_release_tag_for_template(
+            "/dc/vm/Templates/bottlerocket-v1.34.3-eks-d-1-34-14-eks-a-116-amd64",
+            &worker_versions,
+            Some("1.35"),
+            Some("kubernetes-1-35-eks-4"),
+        );
+
+        assert_eq!(tag.as_deref(), Some("kubernetes-1-34-eks-14"));
+
+        let inconsistent_tag = expected_eksd_release_tag_for_template(
+            "/dc/vm/Templates/bottlerocket-v1.34.3-eks-d-1-33-14-eks-a-116-amd64",
+            &worker_versions,
+            Some("1.35"),
+            Some("kubernetes-1-35-eks-4"),
+        );
+        assert_eq!(inconsistent_tag, None);
     }
 }

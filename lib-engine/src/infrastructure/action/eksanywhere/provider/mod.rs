@@ -5,6 +5,7 @@ use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use serde::Deserialize;
 use serde_yaml::Value;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
@@ -55,7 +56,28 @@ pub(super) enum EksAnywhereConfigDocument {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct ParsedClusterSpec {
     cluster_name: Option<EksAnywhereClusterName>,
-    pub kubernetes_version: Option<String>,
+    pub kubernetes_version: Option<EksAnywhereKubernetesVersion>,
+    machine_group_targets: Vec<ParsedMachineGroupTarget>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) struct EksAnywhereKubernetesVersion(String);
+
+impl EksAnywhereKubernetesVersion {
+    fn from_config(value: &str) -> Option<Self> {
+        let value = value.trim();
+        (!value.is_empty()).then(|| Self(value.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedMachineGroupTarget {
+    machine_config_name: String,
+    kubernetes_version: EksAnywhereKubernetesVersion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,6 +155,82 @@ impl ParsedEksAnywhereClusterConfig {
             _ => None,
         })
     }
+
+    pub fn effective_kubernetes_versions_for_machine_config(
+        &self,
+        machine_config_name: &str,
+    ) -> BTreeSet<EksAnywhereKubernetesVersion> {
+        self.cluster_spec()
+            .into_iter()
+            .flat_map(|cluster| cluster.machine_group_targets.iter())
+            .filter(|target| target.machine_config_name == machine_config_name)
+            .map(|target| target.kubernetes_version.clone())
+            .collect()
+    }
+}
+
+fn parse_machine_group_ref_name(value: &Value) -> Option<String> {
+    value
+        .get("machineGroupRef")
+        .and_then(|machine_group_ref| machine_group_ref.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+}
+
+fn parse_cluster_spec(value: &Value) -> ParsedClusterSpec {
+    let spec = value.get("spec");
+    let kubernetes_version = spec
+        .and_then(|spec| spec.get("kubernetesVersion"))
+        .and_then(Value::as_str)
+        .and_then(EksAnywhereKubernetesVersion::from_config);
+    let mut machine_group_targets = Vec::new();
+
+    if let (Some(spec), Some(kubernetes_version)) = (spec, kubernetes_version.as_ref()) {
+        for configuration_name in ["controlPlaneConfiguration", "externalEtcdConfiguration"] {
+            if let Some(machine_config_name) = spec.get(configuration_name).and_then(parse_machine_group_ref_name) {
+                machine_group_targets.push(ParsedMachineGroupTarget {
+                    machine_config_name,
+                    kubernetes_version: kubernetes_version.clone(),
+                });
+            }
+        }
+    }
+
+    if let Some(worker_node_groups) = spec
+        .and_then(|spec| spec.get("workerNodeGroupConfigurations"))
+        .and_then(Value::as_sequence)
+    {
+        for worker_node_group in worker_node_groups {
+            let Some(machine_config_name) = parse_machine_group_ref_name(worker_node_group) else {
+                continue;
+            };
+            let worker_kubernetes_version = worker_node_group
+                .get("kubernetesVersion")
+                .and_then(Value::as_str)
+                .and_then(EksAnywhereKubernetesVersion::from_config)
+                .or_else(|| kubernetes_version.clone());
+            let Some(worker_kubernetes_version) = worker_kubernetes_version else {
+                continue;
+            };
+
+            machine_group_targets.push(ParsedMachineGroupTarget {
+                machine_config_name,
+                kubernetes_version: worker_kubernetes_version,
+            });
+        }
+    }
+
+    ParsedClusterSpec {
+        cluster_name: value
+            .get("metadata")
+            .and_then(|metadata| metadata.get("name"))
+            .and_then(Value::as_str)
+            .and_then(EksAnywhereClusterName::from_config),
+        kubernetes_version,
+        machine_group_targets,
+    }
 }
 
 pub(super) fn parse_eks_anywhere_cluster_config(
@@ -164,19 +262,7 @@ fn parse_eks_anywhere_cluster_config_from_yaml(content: &str) -> Result<ParsedEk
         let kind = value.get("kind").and_then(Value::as_str);
         match kind {
             Some("Cluster") => {
-                let spec = ParsedClusterSpec {
-                    cluster_name: value
-                        .get("metadata")
-                        .and_then(|metadata| metadata.get("name"))
-                        .and_then(Value::as_str)
-                        .and_then(EksAnywhereClusterName::from_config),
-                    kubernetes_version: value
-                        .get("spec")
-                        .and_then(|s| s.get("kubernetesVersion"))
-                        .and_then(Value::as_str)
-                        .map(str::to_string),
-                };
-                documents.push(EksAnywhereConfigDocument::Cluster(spec));
+                documents.push(EksAnywhereConfigDocument::Cluster(parse_cluster_spec(&value)));
             }
             Some("VSphereDatacenterConfig") => {
                 let spec = ParsedVSphereDatacenterConfig {
