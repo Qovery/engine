@@ -1,3 +1,9 @@
+[settings]
+# Take the Rust version from rust-toolchain.toml, the same file rustup reads in
+# CI, so mise tasks and CI cannot drift. Do NOT pin rust in [tools]: it would
+# override that file.
+idiomatic_version_file_enable_tools = ["rust"]
+
 [tools]
 python = "3.14"
 uv = "latest"

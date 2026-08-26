@@ -1,6 +1,6 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
-image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2026-05-15T12-37-13
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2026-08-26T07-50-24
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -8,6 +8,9 @@ variables:
   GIT_DEPTH: 10
   # Make Cargo cache paths predictable inside the project workspace
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
+  # The toolchain baked in the image above is the one we run. If rust-toolchain.toml
+  # asks for another one, fail here instead of downloading it in every job.
+  RUSTUP_AUTO_INSTALL: "0"
 
 default:
   interruptible: true
@@ -144,9 +147,8 @@ default:
 # Shared engine code — a change here fans out to every provider.
 .paths-shared:
   paths:
-    - "*.toml"       # root Cargo manifests / workspace config
+    - "*.toml"       # root Cargo manifests / workspace config, rust-toolchain.toml
     - "*.lock"
-    - rust-toolchain
     - helper.sh
     - .gitlab-ci.yml
     - app/**/*

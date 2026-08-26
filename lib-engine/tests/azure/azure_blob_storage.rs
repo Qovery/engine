@@ -127,13 +127,13 @@ fn test_create_bucket_success() {
                 tc.input.bucket_ttl,
                 tc.input.bucket_labels.clone(),
             )
-            .unwrap_or_else(|_| panic!("Cannot create bucket `{}` for test", &tc.input.bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot create bucket `{}` for test", tc.input.bucket_name));
         // stick a guard on the bucket to delete bucket after test
         let _created_bucket_guard = scopeguard::guard(&created_bucket, |bucket| {
             // make sure to delete the bucket after test
             service
                 .delete_bucket(&storage_account, bucket.name.as_str())
-                .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &created_bucket.name));
+                .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", created_bucket.name));
         });
 
         // verify:
@@ -192,7 +192,7 @@ fn test_bucket_exists() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     let non_existing_bucket_name = format!("{}-ne", existing_bucket.name);
@@ -242,7 +242,7 @@ fn test_get_bucket() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     let non_existing_bucket_name = format!("{}-ne", existing_bucket.name);
@@ -356,7 +356,7 @@ fn test_update_bucket() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // execute:
@@ -378,7 +378,7 @@ fn test_update_bucket() {
                 ("updated".to_string(), true.to_string()),
             ])),
         )
-        .unwrap_or_else(|_| panic!("Cannot update bucket `{}` for test", &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot update bucket `{}` for test", existing_bucket.name));
 
     // verify:
     assert!(!service.bucket_exists(&storage_account, existing_bucket.name.as_str(), &bucket_location));
@@ -427,7 +427,7 @@ fn test_list_buckets() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // execute:
@@ -479,7 +479,7 @@ fn test_list_buckets_from_prefix() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // execute:
@@ -532,7 +532,7 @@ fn test_list_buckets_from_metadata() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // execute:
@@ -584,7 +584,7 @@ fn test_list_buckets_from_metadata_and_prefix() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // execute:
@@ -635,7 +635,7 @@ fn test_get_object() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // creating an object
@@ -653,12 +653,12 @@ fn test_get_object() {
             object_content.clone().into_bytes(),
             Some(object_tags.clone()),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
 
     // execute:
     let retrieved_object = service
         .get_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
-        .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", object_key, existing_bucket.name));
 
     // verify:
     assert_eq!(object_key, retrieved_object.key);
@@ -711,7 +711,7 @@ fn test_put_object() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // execute:
@@ -729,12 +729,12 @@ fn test_put_object() {
             object_content.clone().into_bytes(),
             Some(object_tags.clone()),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
 
     // verify:
     let retrieved_object = service
         .get_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
-        .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", object_key, existing_bucket.name));
 
     assert_eq!(object_key, retrieved_object.key);
     assert_eq!(object_content.into_bytes(), retrieved_object.value);
@@ -784,7 +784,7 @@ fn test_list_objects() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     let object_keys = [0; 10].map(|_| format!("uploaded-test-file-{}.txt", Uuid::new_v4()));
@@ -802,7 +802,7 @@ fn test_list_objects() {
                 object_content.clone().into_bytes(),
                 Some(object_tags.clone()),
             )
-            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
     }
 
     // execute:
@@ -856,7 +856,7 @@ fn test_list_objects_from_prefix() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     let object_key_prefix = &Uuid::new_v4().to_string()[..6];
@@ -875,7 +875,7 @@ fn test_list_objects_from_prefix() {
                 object_content.clone().into_bytes(),
                 Some(object_tags.clone()),
             )
-            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
     }
 
     // execute:
@@ -929,7 +929,7 @@ fn test_list_objects_from_metadata() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     let object_keys = [0; 10].map(|_| format!("uploaded-test-file-{}.txt", Uuid::new_v4()));
@@ -948,7 +948,7 @@ fn test_list_objects_from_metadata() {
                 object_content.clone().into_bytes(),
                 Some(object_tags.clone()),
             )
-            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
     }
 
     // execute:
@@ -1002,7 +1002,7 @@ fn test_list_objects_from_prefix_and_metadata() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     let object_key_prefix = &Uuid::new_v4().to_string()[..6];
@@ -1022,7 +1022,7 @@ fn test_list_objects_from_prefix_and_metadata() {
                 object_content.clone().into_bytes(),
                 Some(object_tags.clone()),
             )
-            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
     }
 
     // execute:
@@ -1081,7 +1081,7 @@ fn test_delete_object() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(&storage_account, bucket.name.as_str())
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", existing_bucket.name));
     });
 
     // creating an object
@@ -1099,12 +1099,12 @@ fn test_delete_object() {
             object_content.clone().into_bytes(),
             Some(object_tags.clone()),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
 
     // execute:
     service
         .delete_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
-        .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", object_key, existing_bucket.name));
 
     // verify:
     assert!(
@@ -1163,7 +1163,7 @@ fn test_delete_bucket_having_objects() {
             object_content.clone().into_bytes(),
             Some(object_tags.clone()),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket.name));
 
     // execute:
     let result = service.delete_bucket(&storage_account, existing_bucket.name.as_str());

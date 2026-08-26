@@ -220,7 +220,7 @@ mod tests {
                             } else {
                                 panic!(
                                     "for values.yaml, parsing: No file found (j2 or yaml) for chart {}. Debug info: {:?}",
-                                    chart.name, &chart
+                                    chart.name, chart
                                 )
                             };
                             println!("for values.yaml, parsing: {file}");
@@ -419,12 +419,12 @@ mod tests {
         // create chart directories
         dotenv::dotenv().ok();
         let prefix = std::env::var("WORKSPACE_ROOT_DIR").unwrap();
-        let qovery_chart_path = format!("{}/.qovery-workspace/qovery_chart", &prefix);
+        let qovery_chart_path = format!("{}/.qovery-workspace/qovery_chart", prefix);
         if Path::new(&qovery_chart_path).exists() {
             fs::remove_dir_all(&qovery_chart_path).expect("failed to remove previous generated chart");
         }
         fs::create_dir_all(&qovery_chart_path).unwrap();
-        let qovery_chart_templates_path = format!("{}/templates", &qovery_chart_path);
+        let qovery_chart_templates_path = format!("{}/templates", qovery_chart_path);
         fs::create_dir_all(qovery_chart_templates_path).unwrap();
 
         // define Chart.yaml content without dependencies (added later for each cloud providers)

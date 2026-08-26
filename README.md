@@ -231,12 +231,24 @@ DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deploym
 ## FAQ
 
 - How to activate the debugger: add the `RUST_LOG=qovery_engine=debug` env variable
-- How to update the rust-toolchain:
-  1. Update the `rust-toolchain` file with the new version. Example of content:
+- How to update the rust-toolchain. The CI image is authoritative: the toolchain it bakes is the one
+  everything runs, and `RUSTUP_AUTO_INSTALL=0` makes a job fail rather than download a different one.
+  So the image comes first, the pins follow:
+  1. In the `container-image-mirror` repository, set `RUST_VERSION` in the `build-ci-image` job to the new
+     version and run that manual job. It publishes `qovery-ci:rust-<version>-<date>`.
+  1. Point `ARG RUST_IMAGE` in the `Dockerfile` at that tag, then build the engine CI image with the
+     `build-engine-ci-image` pipeline job and set the resulting `qovery-ci:engine-<date>` tag as `image:`
+     in `.gitlab-ci.yml`.
+  1. Set the same version in `rust-toolchain.toml`:
 
-      ```
-      1.92.0
+      ```toml
+      [toolchain]
+      channel = "1.98.0"
+      components = ["rustfmt", "clippy"]
       ```
 
-  1. Then create a PR and, build the CI image with the new toolchain version with the `build-engine-ci-image` pipeline job.
-     Once the pipeline is done, you can update the `gitlab-ci.yml` with the new image version, them
+     This file is what rustup and `mise` both read (`mise` via `idiomatic_version_file_enable_tools` in
+     `mise.toml`), so `mise run <task>` uses the same toolchain as CI. It must name the version baked in
+     the image, never another one.
+  1. Expect new clippy findings: `-D warnings` promotes every lint the new release adds. `cargo clippy
+     --fix --all --all-features --tests` handles the mechanical ones, then run `mise run lint`.

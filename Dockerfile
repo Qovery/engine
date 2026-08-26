@@ -19,7 +19,7 @@ ARG EKS_ANYWHERE_VERSION=0.25.0
 ARG GOVC_VERSION=0.52.0
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.95.0-2026-05-15T10-46-32"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.98.0-2026-08-25T15-59-29"
 
 
 ###########################################
@@ -74,8 +74,8 @@ COPY scripts/install-pkl.sh /usr/local/bin/install-pkl
 RUN PKL_VERSION=${PKL_VERSION} bash /usr/local/bin/install-pkl
 
 # Hashicorp apt repository does not package terraform for arm64 ...
-RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
-  unzip terraform.zip && \
+RUN curl -fsSLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
+  unzip -o terraform.zip terraform && \
   mv terraform /usr/bin/ && \
   rm -rf terraform.zip 
 
@@ -101,6 +101,8 @@ ENV CI_SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
 ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc --bin engine_post_renderer"
+# Fail if rust-toolchain.toml asks for a toolchain this image does not bake.
+ENV RUSTUP_AUTO_INSTALL=0
 
 
 WORKDIR /build
@@ -114,8 +116,8 @@ RUN <<EOF
   apt-get update
   apt-get -y install make cmake protobuf-compiler libprotobuf-dev binutils unzip apt-transport-https ca-certificates
 
-  curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip
-  unzip terraform.zip
+  curl -fsSLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip
+  unzip -o terraform.zip terraform
   mv terraform /usr/bin/
   rm -rf terraform.zip
 
@@ -277,8 +279,8 @@ RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-archit
 
 RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
-RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
-  unzip terraform.zip && \
+RUN curl -fsSLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
+  unzip -o terraform.zip terraform && \
   mv terraform /usr/bin/ && \
   rm -rf terraform.zip 
 

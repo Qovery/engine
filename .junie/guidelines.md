@@ -16,7 +16,7 @@ This repository is a Rust workspace that powers Qovery's deployment engine. It i
 - `deployment.json` — Deployment configuration used by the engine
 - `docker/`, `Dockerfile`, `goreleaser.yml` — Containerization and release pipeline
 - `.junie/` — Junie configuration and this guidelines file
-- `rust-toolchain`, `rustfmt.toml` — Toolchain pinning and formatting rules
+- `rust-toolchain.toml`, `rustfmt.toml` — Toolchain pinning and formatting rules
 
 ## How Junie should work on issues
 - Prefer minimal, targeted changes that satisfy the issue.

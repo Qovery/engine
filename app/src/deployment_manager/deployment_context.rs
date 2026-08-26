@@ -84,6 +84,9 @@ impl DeploymentContext {
         (self.log_tx.clone(), self.msg_tx.clone(), stream, abort_handle)
     }
 
+    // `tonic::Status` is 176 bytes, over the `result_large_err` threshold; boxing it here would
+    // only push the same error type through every caller.
+    #[allow(clippy::result_large_err)]
     pub async fn execute_deployment(
         &mut self,
         engine_client: &mut GrpcEngineClient,
