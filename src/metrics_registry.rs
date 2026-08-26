@@ -3,7 +3,7 @@ use crate::msg_publisher::{MsgPublisher, StdMsgPublisher};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
@@ -46,6 +46,7 @@ pub enum StepLabel {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum StepStatus {
+    Ongoing,
     Success,
     Error,
     Cancel,
@@ -55,9 +56,11 @@ pub enum StepStatus {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepRecord {
+    pub step_id: Uuid,
     pub step_name: StepName,
     pub label: StepLabel,
     pub id: Uuid,
+    pub started_at: SystemTime,
     start_time: Instant,
     pub duration: Option<Duration>,
     pub status: Option<StepStatus>,
@@ -88,9 +91,11 @@ impl Clone for Box<dyn MetricsRegistry> {
 impl StepRecord {
     pub fn new(step_name: StepName, label: StepLabel, id: Uuid) -> Self {
         StepRecord {
+            step_id: Uuid::new_v4(),
             step_name,
             label,
             id,
+            started_at: SystemTime::now(),
             start_time: Instant::now(),
             duration: None,
             status: None,
@@ -162,7 +167,15 @@ impl MetricsRegistry for StdMetricsRegistry {
             error!("key {:#?} already exist", step_name);
         }
 
-        metrics_per_id.insert(step_name.clone(), StepRecord::new(step_name.clone(), label, id));
+        let deployment_step_record = StepRecord::new(step_name.clone(), label, id);
+        metrics_per_id.insert(step_name.clone(), deployment_step_record.clone());
+
+        let mut ongoing_step_record = deployment_step_record;
+        ongoing_step_record.duration = Some(Duration::ZERO);
+        ongoing_step_record.status = Some(StepStatus::Ongoing);
+        self.message_publisher
+            .send(EngineMsg::new(EngineMsgPayload::Metrics(ongoing_step_record)));
+
         StepRecordHandle::new(id, step_name, self)
     }
 
@@ -243,8 +256,11 @@ impl Drop for MetricsRegistryMap {
 
 #[cfg(test)]
 mod tests {
+    use crate::events::EngineMsgPayload;
     use crate::metrics_registry::{MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
     use crate::msg_publisher::StdMsgPublisher;
+    use std::time::Duration;
+    use tokio::sync::mpsc::unbounded_channel;
     use uuid::Uuid;
 
     #[test]
@@ -298,5 +314,29 @@ mod tests {
         assert_eq!(records.first().unwrap().id, service_id);
         assert!(records.first().unwrap().duration.is_some());
         assert_eq!(records.first().unwrap().status, Some(step_status));
+    }
+
+    #[test]
+    fn test_start_and_stop_publish_the_same_step_lifecycle() {
+        let service_id = Uuid::new_v4();
+        let (publisher, mut messages) = unbounded_channel();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(publisher));
+
+        let record = metrics_registry.start_record(service_id, StepLabel::Service, StepName::Build);
+
+        let started_message = messages.try_recv().unwrap();
+        let EngineMsgPayload::Metrics(started_record) = started_message.payload;
+        assert_eq!(started_record.status, Some(StepStatus::Ongoing));
+        assert_eq!(started_record.duration, Some(Duration::ZERO));
+
+        record.stop(StepStatus::Success);
+
+        let completed_message = messages.try_recv().unwrap();
+        let EngineMsgPayload::Metrics(completed_record) = completed_message.payload;
+        assert_eq!(completed_record.status, Some(StepStatus::Success));
+        assert_eq!(completed_record.step_id, started_record.step_id);
+        assert_eq!(completed_record.started_at, started_record.started_at);
+        assert!(completed_record.duration.is_some());
+        assert!(messages.try_recv().is_err());
     }
 }
