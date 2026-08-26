@@ -288,7 +288,7 @@ fn test_create_bucket_success() {
             // make sure to delete the bucket after test
             service
                 .delete_bucket(bucket.name.as_str(), true, true)
-                .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &created_bucket.name));
+                .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", created_bucket.name));
         });
 
         // verify:
@@ -301,13 +301,13 @@ fn test_create_bucket_success() {
             // make sure bucket has logging activated
             let created_bucket = service
                 .get_bucket(tc.input.bucket_name.as_str())
-                .unwrap_or_else(|_| panic!("Cannot get test bucket `{}`", &tc.input.bucket_name));
+                .unwrap_or_else(|_| panic!("Cannot get test bucket `{}`", tc.input.bucket_name));
             assert!(created_bucket.logging_activated);
 
             let logs_bucket = Bucket::generate_logging_bucket_name_for_bucket(created_bucket.name.as_str());
             let logs_bucket = service
                 .get_bucket(logs_bucket.as_str())
-                .unwrap_or_else(|_| panic!("Cannot get test logging bucket `{}`", &logs_bucket));
+                .unwrap_or_else(|_| panic!("Cannot get test logging bucket `{}`", logs_bucket));
             let mut expected_log_bucket = tc.input;
             // log bucket should be the same as the original bucket but name and logging option
             expected_log_bucket.bucket_name =
@@ -536,7 +536,7 @@ fn test_delete_bucket_with_objects() {
             object_key.as_str(),
             object_content.clone().into_bytes(),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket_name));
 
     // execute:
     let delete_result = service.delete_bucket(existing_bucket_name.as_str(), true, true);
@@ -599,18 +599,18 @@ fn test_empty_bucket_with_objects() {
             object_key.as_str(),
             object_content.clone().into_bytes(),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket_name));
 
     // execute:
     service
         .empty_bucket(existing_bucket_name.as_str())
-        .unwrap_or_else(|_| panic!("Cannot empty to bucket `{}`", &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot empty to bucket `{}`", existing_bucket_name));
 
     // verify:
     assert!(
         service
             .list_objects_keys_only(existing_bucket_name.as_str(), None)
-            .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", &existing_bucket_name))
+            .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", existing_bucket_name))
             .is_empty()
     );
 }
@@ -779,7 +779,7 @@ fn test_put_object() {
             object_key.as_str(),
             object_content.clone().into_bytes(),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket_name));
 
     // verify:
     assert_eq!(object_key, uploaded_object.key);
@@ -839,12 +839,12 @@ fn test_get_object() {
             object_key.as_str(),
             object_content.clone().into_bytes(),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket_name));
 
     // execute:
     let retrieved_object = service
         .get_object(existing_bucket_name.as_str(), object_key.as_str())
-        .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", object_key, existing_bucket_name));
 
     // verify:
     assert_eq!(object_key, retrieved_object.key);
@@ -915,7 +915,7 @@ fn test_list_objects_keys_only() {
             .unwrap_or_else(|_| {
                 panic!(
                     "Cannot put object `{}` to bucket `{}`",
-                    &object_to_be_created.key, &existing_bucket_name
+                    object_to_be_created.key, existing_bucket_name
                 )
             });
     }
@@ -923,7 +923,7 @@ fn test_list_objects_keys_only() {
     // execute:
     let objects_keys = service
         .list_objects_keys_only(existing_bucket_name.as_str(), None)
-        .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", existing_bucket_name));
 
     // verify:
     assert_eq!(object_to_be_created.len(), objects_keys.len());
@@ -1002,7 +1002,7 @@ fn test_list_objects_keys_only_with_prefix() {
             .unwrap_or_else(|_| {
                 panic!(
                     "Cannot put object `{}` to bucket `{}`",
-                    &object_to_be_created.key, &existing_bucket_name
+                    object_to_be_created.key, existing_bucket_name
                 )
             });
     }
@@ -1010,7 +1010,7 @@ fn test_list_objects_keys_only_with_prefix() {
     // execute:
     let objects_keys = service
         .list_objects_keys_only(existing_bucket_name.as_str(), Some(prefix))
-        .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", existing_bucket_name));
 
     // verify:
     assert_eq!(
@@ -1092,7 +1092,7 @@ fn test_list_objects() {
             .unwrap_or_else(|_| {
                 panic!(
                     "Cannot put object `{}` to bucket `{}`",
-                    &object_to_be_created.key, &existing_bucket_name
+                    object_to_be_created.key, existing_bucket_name
                 )
             });
     }
@@ -1100,7 +1100,7 @@ fn test_list_objects() {
     // execute:
     let objects = service
         .list_objects(existing_bucket_name.as_str(), None)
-        .unwrap_or_else(|_| panic!("Cannot list objects from bucket `{}`", &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot list objects from bucket `{}`", existing_bucket_name));
 
     // verify:
     assert_eq!(object_to_be_created.len(), objects.len());
@@ -1179,7 +1179,7 @@ fn test_list_objects_with_prefix() {
             .unwrap_or_else(|_| {
                 panic!(
                     "Cannot put object `{}` to bucket `{}`",
-                    &object_to_be_created.key, &existing_bucket_name
+                    object_to_be_created.key, existing_bucket_name
                 )
             });
     }
@@ -1187,7 +1187,7 @@ fn test_list_objects_with_prefix() {
     // execute:
     let objects = service
         .list_objects(existing_bucket_name.as_str(), Some(prefix))
-        .unwrap_or_else(|_| panic!("Cannot list objects from bucket `{}`", &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot list objects from bucket `{}`", existing_bucket_name));
 
     // verify:
     assert_eq!(
@@ -1258,12 +1258,12 @@ fn test_delete_object() {
             object_key.as_str(),
             object_content.clone().into_bytes(),
         )
-        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", object_key, existing_bucket_name));
 
     // execute:
     service
         .delete_object(existing_bucket_name.as_str(), object_key.as_str())
-        .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", &object_key, &existing_bucket_name));
+        .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", object_key, existing_bucket_name));
 
     // verify:
     assert!(

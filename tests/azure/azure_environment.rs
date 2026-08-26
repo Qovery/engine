@@ -1127,7 +1127,7 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
         // check if secret exists
         let config_maps = kubectl_get_secret(
             infra_ctx.mk_kube_client().expect("kube client is not set").client(),
-            format!("metadata.name={}", &mounted_file.long_id).as_str(),
+            format!("metadata.name={}", mounted_file.long_id).as_str(),
         )
         .expect("unable to find secret for selector");
         assert!(!config_maps.is_empty());

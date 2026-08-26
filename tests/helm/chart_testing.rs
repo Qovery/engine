@@ -17,9 +17,9 @@ use uuid::Uuid;
 use super::router_context;
 
 fn to_kube_kind(file_path: &str) -> DynamicObject {
-    let file = File::open(file_path).unwrap_or_else(|_| panic!("Unable to open file {}", &file_path));
+    let file = File::open(file_path).unwrap_or_else(|_| panic!("Unable to open file {}", file_path));
     let obj: DynamicObject =
-        serde_yaml::from_reader(file).unwrap_or_else(|_| panic!("Unable to parse file {}", &file_path));
+        serde_yaml::from_reader(file).unwrap_or_else(|_| panic!("Unable to parse file {}", file_path));
     obj
 }
 
@@ -53,26 +53,26 @@ fn get_kube_resources(
 
     let template_dir = generate_template(&chart_info, &test_info.temp_dir, &test_info.service_folder_type, chart_id);
 
-    let templates_path = format!("{}/{}/templates", template_dir, &chart_info.name);
+    let templates_path = format!("{}/{}/templates", template_dir, chart_info.name);
     let files =
-        read_dir(&templates_path).unwrap_or_else(|e| panic!("Unable to read files in {} : {:?}", &templates_path, e));
+        read_dir(&templates_path).unwrap_or_else(|e| panic!("Unable to read files in {} : {:?}", templates_path, e));
     let mut kube_resources: HashMap<String, DynamicObject> = HashMap::new();
     for file in files {
         let file_path = file
             .as_ref()
-            .unwrap_or_else(|_| panic!("Unable to get file {:?}", &file))
+            .unwrap_or_else(|_| panic!("Unable to get file {:?}", file))
             .path();
         let file_path_str = file_path
             .to_str()
-            .unwrap_or_else(|| panic!("Unable to get file path for {:?}", &file_path));
+            .unwrap_or_else(|| panic!("Unable to get file path for {:?}", file_path));
         if file_path_str.ends_with(".yaml") {
             let kube_kind = to_kube_kind(file_path_str);
             kube_resources.insert(
                 file.as_ref()
-                    .unwrap_or_else(|_| panic!("Unable to get file {:?}", &file))
+                    .unwrap_or_else(|_| panic!("Unable to get file {:?}", file))
                     .file_name()
                     .to_str()
-                    .unwrap_or_else(|| panic!("Unable to get file name for {:?}", &file))
+                    .unwrap_or_else(|| panic!("Unable to get file name for {:?}", file))
                     .to_string(),
                 kube_kind,
             );

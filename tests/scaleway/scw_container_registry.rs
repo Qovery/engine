@@ -65,7 +65,7 @@ fn test_get_repository() {
 
         // testing it in all regions
         for zone in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), zone);
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -115,7 +115,7 @@ fn test_create_registry_namespace() {
 
         // testing it in all regions
         for zone in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), zone);
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -165,7 +165,7 @@ fn test_recreate_existing_registry_namespace() {
 
         // testing it in all regions
         for zone in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), zone);
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -228,7 +228,7 @@ fn test_create_registry_namespace_invalid_name() {
 
         // testing it in all regions
         for zone in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), zone);
 
             // Very basics tests cases just making sure naming validation is properly plugged
             let naming_test_cases = vec![
@@ -327,7 +327,7 @@ fn test_delete_repository() {
 
         // testing it in all regions
         for zone in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), zone);
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
@@ -373,7 +373,7 @@ fn test_get_or_create_registry_namespace() {
 
         // testing it in all regions
         for zone in zones_to_test().into_iter() {
-            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), zone);
 
             let container_registry = ScalewayCR::new(
                 context.clone(),
