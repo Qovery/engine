@@ -46,6 +46,7 @@ enum StepStatus {
   Error = 2;
   Cancel = 3;
   Skip = 4;
+  Ongoing = 5;
 }
 
 message StepRecord {
@@ -54,6 +55,8 @@ message StepRecord {
   string id = 3;
   google.protobuf.Duration duration = 4;
   StepStatus status = 5;
+  string step_id = 6;
+  google.protobuf.Timestamp started_at = 7;
 }
 
 message Metrics {
