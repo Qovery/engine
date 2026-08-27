@@ -12,7 +12,7 @@ pub(super) const PUBLIC_ECR_PULL_THROUGH_CACHE_REPOSITORY_PREFIX: &str = "qovery
 
 const PUBLIC_ECR_PULL_THROUGH_CACHE_REPOSITORY_TEMPLATE_DESCRIPTION: &str =
     "Qovery public ECR pull through cache repositories";
-const PUBLIC_ECR_PULL_THROUGH_CACHE_RETENTION_DAYS: u16 = 365;
+const PUBLIC_ECR_PULL_THROUGH_CACHE_RETENTION_DAYS: u16 = 90;
 
 const PUBLIC_ECR_PULL_THROUGH_CACHE_RULE: PullThroughCacheRuleSpec = PullThroughCacheRuleSpec {
     ecr_repository_prefix: PUBLIC_ECR_PULL_THROUGH_CACHE_REPOSITORY_PREFIX,
@@ -176,7 +176,7 @@ fn public_ecr_pull_through_cache_lifecycle_policy() -> Value {
         "rules": [
             {
                 "rulePriority": 1,
-                "description": "Expire pull-through cache images after 365 days",
+                "description": "Expire pull-through cache images after 90 days",
                 "selection": {
                     "tagStatus": "any",
                     "countType": "sinceImagePushed",
@@ -365,12 +365,12 @@ mod tests {
         {
           "rules": [{
             "selection": {
-              "countNumber": 365,
+              "countNumber": 90,
               "countUnit": "days",
               "countType": "sinceImagePushed",
               "tagStatus": "any"
             },
-            "description": "Expire pull-through cache images after 365 days",
+            "description": "Expire pull-through cache images after 90 days",
             "action": { "type": "expire" },
             "rulePriority": 1
           }]
@@ -386,7 +386,7 @@ mod tests {
         let template = repository_creation_template(
             public_ecr_pull_through_cache_lifecycle_policy()
                 .to_string()
-                .replace("365", "30"),
+                .replace("90", "30"),
         );
 
         assert!(!repository_creation_template_is_configured(&template));
