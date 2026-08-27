@@ -287,6 +287,9 @@ stages:
 build-and-lint-code:
   stage: build-and-lint
   extends: [.cargo-cache, .resources-heavy, .nvme-node]
+  variables:
+    KUBERNETES_MEMORY_REQUEST: "32Gi"
+    KUBERNETES_MEMORY_LIMIT: "32Gi"
   retry: 0
   script:
     - ./helper.sh cargo_version

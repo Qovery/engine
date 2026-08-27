@@ -109,6 +109,7 @@ aws-sdk-docdb = "1.72.0"
 aws-sdk-ec2 = "1.130.0"
 aws-types = "1.3.7"
 aws-sdk-iam = "1.72.0"
+aws-sdk-ecr = "1.72.0"
 aws-credential-types = "1.2.3"
 
 # Azure deps

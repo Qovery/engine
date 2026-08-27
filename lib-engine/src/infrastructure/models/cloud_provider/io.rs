@@ -587,6 +587,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_flow_logs_retention_days: u32,
     #[serde(alias = "aws.vpc.enable_nat_gateway_secondary_eip")]
     pub aws_vpc_enable_nat_gateway_secondary_eip: bool,
+    #[serde(alias = "aws.ecr.enable_pull_through_cache")]
+    pub aws_ecr_enable_pull_through_cache: bool,
     #[serde(alias = "aws.eks.enable_alb_controller")]
     pub aws_eks_enable_alb_controller: bool,
     #[serde(
@@ -828,6 +830,7 @@ impl Default for ClusterAdvancedSettings {
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
             aws_vpc_enable_nat_gateway_secondary_eip: false,
+            aws_ecr_enable_pull_through_cache: false,
             aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
             database_postgresql_deny_any_access: false,
@@ -1129,6 +1132,16 @@ mod tests {
             let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data.as_str()).unwrap();
             assert_eq!(cluster_advanced_settings.registry_mirroring_mode, tc.expected);
         }
+    }
+
+    #[test]
+    fn test_aws_ecr_pull_through_cache_setting_deserialization() {
+        let default_settings: ClusterAdvancedSettings = serde_json::from_str("{}").unwrap();
+        assert!(!default_settings.aws_ecr_enable_pull_through_cache);
+
+        let enabled_settings: ClusterAdvancedSettings =
+            serde_json::from_str(r#"{"aws.ecr.enable_pull_through_cache": true}"#).unwrap();
+        assert!(enabled_settings.aws_ecr_enable_pull_through_cache);
     }
 
     #[test]

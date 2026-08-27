@@ -15,8 +15,7 @@ use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVers
 use crate::infrastructure::models::object_storage::s3::S3;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
-use crate::io_models::models::CpuArchitecture;
-use crate::io_models::models::NodeGroups;
+use crate::io_models::models::{CpuArchitecture, NodeGroups};
 use crate::logger::Logger;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
@@ -122,6 +121,10 @@ impl EKS {
 
     pub fn get_keda_parameters(&self) -> Option<KedaParameters> {
         self.options.keda_parameters.clone()
+    }
+
+    pub(crate) fn is_ecr_pull_through_cache_enabled(&self) -> bool {
+        self.advanced_settings.aws_ecr_enable_pull_through_cache && self.options.supports_ecr_pull_through_cache()
     }
 }
 
