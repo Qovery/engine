@@ -104,8 +104,9 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 #### Dry-run deployment
 
 - Go to engine pipelines <https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1>, filter by tag and select the version to deploy
-- Trigger the job: `3-dry-run-deploy-prod-clusters`
-- The AI check job `4-ai-check-prod-clusters` runs automatically — review its findings before proceeding
+- Wait for `3-deploy-qovery-infra-engines-public-prod` to complete automatically (it starts on success of `2-deploy-qovery-infra-engines-prod`)
+- Trigger the job: `4-dry-run-deploy-prod-clusters`
+- The AI check job `5-ai-check-prod-clusters` runs automatically — review its findings before proceeding
 - Analyse terraform & helm diff for unexpected change: <https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1&from=now-3h&to=now&var-cluster=&var-tffilter=%28-%20%7C~%20%29>.
 - If everything is fine, proceed to the next step
 
@@ -119,8 +120,10 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 #### Dry-run deployment
 
 - Go to engine pipelines <https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1>, filter by tag and select the version to deploy
-- Trigger the job: `2-dry-run-deploy-dev-clusters`
-- The AI check job `3-ai-check-dev-clusters` runs automatically — review its findings before proceeding
+- Trigger the job: `1-deploy-qovery-infra-engines-staging` (if not already done)
+- Wait for `2-deploy-qovery-infra-engines-public-staging` to complete automatically (it starts on success of `1-deploy-qovery-infra-engines-staging`)
+- Trigger the job: `3-dry-run-deploy-dev-clusters`
+- The AI check job `4-ai-check-dev-clusters` runs automatically — review its findings before proceeding
 - Analyse terraform & helm diff for unexpected change: <https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1&from=now-3h&to=now&var-cluster=&var-tffilter=%28-%20%7C~%20%29>.
 - If everything is fine, proceed to the next step
 
