@@ -7,7 +7,8 @@ use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraRes
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
 use crate::infrastructure::action::eks::ecr_pull_through_cache::{
-    EnsurePullThroughCacheRuleOutcome, ensure_public_ecr_pull_through_cache_rule,
+    EnsurePullThroughCacheRuleOutcome, EnsureRepositoryCreationTemplateOutcome,
+    ensure_public_ecr_pull_through_cache_rule, ensure_public_ecr_repository_creation_template,
 };
 use crate::infrastructure::action::eks::helm_charts::EksHelmsDeployment;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
@@ -204,8 +205,35 @@ pub fn create_eks_cluster(
 
     if kubernetes.is_ecr_pull_through_cache_enabled() {
         if kubernetes.context().is_dry_run_deploy() {
-            logger.info("Skipping ECR pull through cache rule configuration during dry run.");
+            logger.info("Skipping ECR pull through cache configuration during dry run.");
         } else {
+            // Repository creation templates only affect repositories created after the template.
+            // Ensure it before the cache rule can be consumed by infrastructure charts.
+            logger.info("Ensuring the regional ECR pull through cache repository template is configured.");
+            let template_outcome =
+                block_on(ensure_public_ecr_repository_creation_template(&aws_conn)).map_err(|error| {
+                    Box::new(EngineError::new_error_on_container_registry_information(
+                        event_details.clone(),
+                        CommandError::new(
+                            "Cannot configure the regional ECR pull through cache repository template.".to_string(),
+                            Some(error.to_string()),
+                            None,
+                        ),
+                    ))
+                })?;
+
+            match template_outcome {
+                EnsureRepositoryCreationTemplateOutcome::Created => {
+                    logger.info("Created the regional ECR pull through cache repository template.");
+                }
+                EnsureRepositoryCreationTemplateOutcome::Updated => {
+                    logger.info("Updated the regional ECR pull through cache repository template.");
+                }
+                EnsureRepositoryCreationTemplateOutcome::AlreadyConfigured => {
+                    logger.info("The regional ECR pull through cache repository template is already configured.");
+                }
+            }
+
             logger.info("Ensuring the regional ECR pull through cache rule for public.ecr.aws is configured.");
             let outcome = block_on(ensure_public_ecr_pull_through_cache_rule(&aws_conn)).map_err(|error| {
                 Box::new(EngineError::new_error_on_container_registry_information(
