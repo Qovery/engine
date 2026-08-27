@@ -17,6 +17,7 @@ use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{InteractWithRegistry, RegistryTags, to_engine_error};
 use crate::io_models::Action;
+use crate::io_models::agentic_workflow::AgenticWorkflow;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{CloudProviderOptions, EnvironmentEngineRequest};
 use crate::log_file_writer::LogFileWriter;
@@ -454,6 +455,8 @@ impl EnvironmentTask {
         });
         secrets.extend(service_secrets);
 
+        secrets.extend(agentic_workflow_secrets(&request.target_environment.agentic_workflows));
+
         match &request.cloud_provider.options {
             CloudProviderOptions::Aws {
                 secret_access_key,
@@ -515,6 +518,20 @@ impl EnvironmentTask {
         }
         record.stop(step_status);
     }
+}
+
+/// Secret values a workflow's user variables carry, for the deployment-log mask list.
+///
+/// A separate pass from the other services on purpose: those arrive base64-encoded and are decoded
+/// before masking, while agentic workflow variables cross the wire in plaintext. Running them
+/// through that decode would mask garbage and leave the real value visible in the logs.
+fn agentic_workflow_secrets(workflows: &[AgenticWorkflow]) -> Vec<String> {
+    workflows
+        .iter()
+        .flat_map(|workflow| workflow.environment_variables.values())
+        .filter(|variable| variable.is_secret)
+        .map(|variable| variable.value.clone())
+        .collect()
 }
 
 impl Task for EnvironmentTask {
@@ -847,6 +864,8 @@ impl BuilderThreadPool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::io_models::variable_utils::VariableInfo;
+    use std::collections::BTreeMap;
     use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
 
@@ -922,5 +941,51 @@ mod test {
 
         assert!(ret.is_err());
         assert_ne!(active_taks.load(Ordering::Relaxed), 10);
+    }
+
+    /// Regression guard: agentic workflow variables are the only service env vars that reach the
+    /// engine in plaintext. Sending them through the base64 decode the other services use would
+    /// mask an empty string and leave the real secret readable in the deployment logs.
+    #[test]
+    fn a_secret_workflow_variable_is_masked_verbatim_and_a_plain_one_is_not_masked() {
+        let mut workflow = a_minimal_agentic_workflow();
+        workflow.environment_variables = BTreeMap::from([
+            (
+                "API_TOKEN".to_string(),
+                VariableInfo {
+                    value: "sk-live-1234".to_string(),
+                    is_secret: true,
+                },
+            ),
+            (
+                "TARGET_ENV".to_string(),
+                VariableInfo {
+                    value: "production".to_string(),
+                    is_secret: false,
+                },
+            ),
+        ]);
+
+        assert_eq!(agentic_workflow_secrets(&[workflow]), vec!["sk-live-1234".to_string()]);
+    }
+
+    #[test]
+    fn a_workflow_without_variables_contributes_nothing_to_the_mask_list() {
+        assert!(agentic_workflow_secrets(&[a_minimal_agentic_workflow()]).is_empty());
+    }
+
+    fn a_minimal_agentic_workflow() -> AgenticWorkflow {
+        serde_json::from_value(serde_json::json!({
+            "long_id": "eb5163b9-0e4c-4c9a-b304-9b984c85337d",
+            "name": "my-agentic-workflow",
+            "kube_name": "agentic-workflow-zeb5163b9-my-agentic-workflow",
+            "prompt": "",
+            "model": {"type": "CLAUDE", "api_key": "", "settings": ""},
+            "cpu_request_in_milli": 500,
+            "ram_request_in_mib": 512,
+            "ram_limit_in_mib": 1024,
+            "output_variable_validation_pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+        }))
+        .expect("minimal agentic workflow payload should deserialize")
     }
 }
