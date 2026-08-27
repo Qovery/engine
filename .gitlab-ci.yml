@@ -68,7 +68,7 @@ default:
 .buildx:
   extends: [.needs-docker, .on-demand-node, .nvme-node]
   before_script:
-    - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 30 50 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 40 50 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
@@ -78,20 +78,20 @@ default:
 .resources-heavy:
   variables:
     KUBERNETES_CPU_REQUEST: "7"
-    KUBERNETES_MEMORY_REQUEST: "20Gi"
-    KUBERNETES_MEMORY_LIMIT: "20Gi"
+    KUBERNETES_MEMORY_REQUEST: "32Gi"
+    KUBERNETES_MEMORY_LIMIT: "32Gi"
 
 .resources-build:
   variables:
     KUBERNETES_CPU_REQUEST: "7"
-    KUBERNETES_MEMORY_REQUEST: "16Gi"
-    KUBERNETES_MEMORY_LIMIT: "16Gi"
+    KUBERNETES_MEMORY_REQUEST: "32Gi"
+    KUBERNETES_MEMORY_LIMIT: "32Gi"
 
 .resources-test:
   variables:
     KUBERNETES_CPU_REQUEST: "3"
-    KUBERNETES_MEMORY_REQUEST: "12Gi"
-    KUBERNETES_MEMORY_LIMIT: "12Gi"
+    KUBERNETES_MEMORY_REQUEST: "32Gi"
+    KUBERNETES_MEMORY_LIMIT: "32Gi"
     # 50Gi is the runner chart's overwrite cap (ephemeral_storage_limit_overwrite_max_allowed).
     # Pod-level total becomes 50Gi (build) + 5Gi (svc-0) + 2Gi (helper) = 57Gi.
     KUBERNETES_EPHEMERAL_STORAGE_REQUEST: "50Gi"
@@ -287,9 +287,6 @@ stages:
 build-and-lint-code:
   stage: build-and-lint
   extends: [.cargo-cache, .resources-heavy, .nvme-node]
-  variables:
-    KUBERNETES_MEMORY_REQUEST: "32Gi"
-    KUBERNETES_MEMORY_LIMIT: "32Gi"
   retry: 0
   script:
     - ./helper.sh cargo_version
