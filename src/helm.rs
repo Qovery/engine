@@ -425,6 +425,26 @@ pub struct ChartInfoUpgradeRetry {
     pub delay_in_milli_sec: u64,
 }
 
+/// Private ECR registry prefix used to mirror images from `public.ecr.aws`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublicEcrImageMirror {
+    registry_prefix: String,
+}
+
+impl PublicEcrImageMirror {
+    /// Builds the private ECR registry prefix for a pull-through cache rule.
+    pub fn new(aws_account_id: &str, aws_region: &str, repository_prefix: &str) -> Self {
+        Self {
+            registry_prefix: format!("{aws_account_id}.dkr.ecr.{aws_region}.amazonaws.com/{repository_prefix}"),
+        }
+    }
+
+    /// Returns the private ECR registry prefix used by the Helm post-renderer.
+    pub fn registry_prefix(&self) -> &str {
+        &self.registry_prefix
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ChartInfo {
     pub name: String,
@@ -465,6 +485,8 @@ pub struct ChartInfo {
     /// When enabled, Helm commands add:
     /// `--post-renderer <engine_post_renderer-binary>`
     pub enable_engine_post_renderer_labels: bool,
+    /// Rewrites `public.ecr.aws` container images through this private ECR mirror.
+    pub public_ecr_image_mirror: Option<PublicEcrImageMirror>,
 }
 
 impl ChartInfo {
@@ -549,6 +571,7 @@ impl Default for ChartInfo {
             requires_server_side_apply: false,
             helm_list_cache: None,
             enable_engine_post_renderer_labels: false,
+            public_ecr_image_mirror: None,
         }
     }
 }

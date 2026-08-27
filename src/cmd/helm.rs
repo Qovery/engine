@@ -1974,6 +1974,13 @@ fn append_engine_post_renderer_args(args: &mut Vec<String>, chart: &ChartInfo) {
 
     args.push("--post-renderer".to_string());
     args.push(post_renderer_path);
+
+    if let Some(public_ecr_image_mirror) = &chart.public_ecr_image_mirror {
+        args.push(format!(
+            "--post-renderer-args=--public-ecr-image-mirror={}",
+            public_ecr_image_mirror.registry_prefix()
+        ));
+    }
 }
 
 fn append_helm_diff_secret_visibility_arg(args: &mut Vec<String>, secret_visibility: HelmDiffSecretVisibility) {
@@ -2164,9 +2171,12 @@ impl Drop for HelmRegistry<'_> {
 
 #[cfg(test)]
 mod unit_tests {
-    use super::{Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, append_helm_diff_secret_visibility_arg};
+    use super::{
+        Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, append_engine_post_renderer_args,
+        append_helm_diff_secret_visibility_arg,
+    };
     use crate::cmd::command::CommandKiller;
-    use crate::helm::{ChartInfo, ChartValuesGenerated};
+    use crate::helm::{ChartInfo, ChartValuesGenerated, PublicEcrImageMirror};
     use std::{fs::File, path::Path};
 
     #[test]
@@ -2178,6 +2188,40 @@ mod unit_tests {
 
         append_helm_diff_secret_visibility_arg(&mut args, HelmDiffSecretVisibility::Suppress);
         assert_eq!(args, vec!["diff".to_string(), "--suppress-secrets".to_string()]);
+    }
+
+    #[test]
+    fn post_renderer_receives_the_public_ecr_image_mirror() {
+        let chart = ChartInfo {
+            enable_engine_post_renderer_labels: true,
+            public_ecr_image_mirror: Some(PublicEcrImageMirror::new("123456789012", "eu-west-3", "qovery-ecr-public")),
+            ..Default::default()
+        };
+        let mut args = Vec::new();
+
+        append_engine_post_renderer_args(&mut args, &chart);
+
+        assert_eq!(args[0], "--post-renderer");
+        assert!(args[1].ends_with("engine_post_renderer"));
+        assert_eq!(
+            args[2],
+            "--post-renderer-args=--public-ecr-image-mirror=123456789012.dkr.ecr.eu-west-3.amazonaws.com/qovery-ecr-public"
+        );
+    }
+
+    #[test]
+    fn post_renderer_does_not_receive_a_mirror_when_it_is_disabled() {
+        let chart = ChartInfo {
+            enable_engine_post_renderer_labels: true,
+            ..Default::default()
+        };
+        let mut args = Vec::new();
+
+        append_engine_post_renderer_args(&mut args, &chart);
+
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "--post-renderer");
+        assert!(args[1].ends_with("engine_post_renderer"));
     }
 
     #[test]

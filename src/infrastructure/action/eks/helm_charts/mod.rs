@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-use crate::helm::HelmChart;
+use crate::helm::{HelmChart, PublicEcrImageMirror};
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
@@ -17,6 +17,7 @@ use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
+use crate::infrastructure::action::eks::ecr_pull_through_cache::PUBLIC_ECR_PULL_THROUGH_CACHE_REPOSITORY_PREFIX;
 use crate::infrastructure::action::eks::helm_charts::gen_charts::eks_helm_charts;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
@@ -127,6 +128,16 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
 
     fn charts_context(&self) -> &HelmInfraContext {
         &self.context
+    }
+
+    fn public_ecr_image_mirror(&self) -> Option<PublicEcrImageMirror> {
+        self.cluster.is_ecr_pull_through_cache_enabled().then(|| {
+            PublicEcrImageMirror::new(
+                &self.terraform_output.aws_account_id,
+                self.cluster.region(),
+                PUBLIC_ECR_PULL_THROUGH_CACHE_REPOSITORY_PREFIX,
+            )
+        })
     }
 
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {

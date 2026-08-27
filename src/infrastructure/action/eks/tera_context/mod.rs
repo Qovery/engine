@@ -205,6 +205,10 @@ pub fn eks_tera_context(
     };
 
     context.insert("vpc_qovery_network_mode", &options.vpc_qovery_network_mode.to_string());
+    context.insert(
+        "aws_ecr_enable_pull_through_cache",
+        &kubernetes.is_ecr_pull_through_cache_enabled(),
+    );
 
     let rds_zone_a_subnet_blocks = format_ips(&options.rds_zone_a_subnet_blocks);
     let rds_zone_b_subnet_blocks = format_ips(&options.rds_zone_b_subnet_blocks);

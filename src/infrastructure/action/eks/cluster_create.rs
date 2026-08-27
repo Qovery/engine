@@ -6,6 +6,9 @@ use crate::infrastructure::action::cluster_outputs_helper::update_cluster_output
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
+use crate::infrastructure::action::eks::ecr_pull_through_cache::{
+    EnsurePullThroughCacheRuleOutcome, ensure_public_ecr_pull_through_cache_rule,
+};
 use crate::infrastructure::action::eks::helm_charts::EksHelmsDeployment;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
 use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
@@ -198,6 +201,34 @@ pub fn create_eks_cluster(
         &logger,
         infra_ctx.context().is_first_cluster_deployment(),
     )?;
+
+    if kubernetes.is_ecr_pull_through_cache_enabled() {
+        if kubernetes.context().is_dry_run_deploy() {
+            logger.info("Skipping ECR pull through cache rule configuration during dry run.");
+        } else {
+            logger.info("Ensuring the regional ECR pull through cache rule for public.ecr.aws is configured.");
+            let outcome = block_on(ensure_public_ecr_pull_through_cache_rule(&aws_conn)).map_err(|error| {
+                Box::new(EngineError::new_error_on_container_registry_information(
+                    event_details.clone(),
+                    CommandError::new(
+                        "Cannot configure the regional ECR pull through cache rule.".to_string(),
+                        Some(error.to_string()),
+                        None,
+                    ),
+                ))
+            })?;
+
+            match outcome {
+                EnsurePullThroughCacheRuleOutcome::Created => {
+                    logger.info("Created the regional ECR pull through cache rule for public.ecr.aws.");
+                }
+                EnsurePullThroughCacheRuleOutcome::AlreadyConfigured => {
+                    logger.info("The regional ECR pull through cache rule for public.ecr.aws is already configured.");
+                }
+            }
+        }
+    }
+
     // Deploy Karpenter nodegroup and install Karpenter charts if migration is enabled
     logger.info("Checking if Karpenter nodegroup should be deployed...");
     if should_deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger) {

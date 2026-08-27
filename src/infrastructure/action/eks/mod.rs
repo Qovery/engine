@@ -4,6 +4,7 @@ mod cluster_delete;
 mod cluster_pause;
 mod cluster_upgrade;
 mod custom_vpc;
+mod ecr_pull_through_cache;
 pub(crate) mod helm_charts;
 mod karpenter;
 mod karpenter_migration;

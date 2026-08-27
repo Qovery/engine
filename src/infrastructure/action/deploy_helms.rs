@@ -3,7 +3,7 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{Helm, HelmListCache};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EventDetails, InfrastructureDiffType};
-use crate::helm::{HelmAction, HelmChart, HelmChartError};
+use crate::helm::{HelmAction, HelmChart, HelmChartError, PublicEcrImageMirror};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::models::CustomerHelmChartsOverride;
@@ -181,6 +181,10 @@ pub(super) trait HelmInfraResources {
         Ok(())
     }
 
+    fn public_ecr_image_mirror(&self) -> Option<PublicEcrImageMirror> {
+        None
+    }
+
     fn deploy_charts(
         &self,
         infra_ctx: &InfrastructureContext,
@@ -206,11 +210,18 @@ pub(super) trait HelmInfraResources {
         self.charts_context().prepare_helm_files_on_disk()?;
 
         let mut charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
-        let chart_count = enable_engine_post_renderer_for_all_charts(&mut charts_to_deploy);
-        logger.info(format!(
-            "🏷️ Enabling engine post-renderer labels for all Helm charts ({} charts)",
-            chart_count
-        ));
+        let public_ecr_image_mirror = self.public_ecr_image_mirror();
+        let chart_count =
+            enable_engine_post_renderer_for_all_charts(&mut charts_to_deploy, public_ecr_image_mirror.as_ref());
+        if public_ecr_image_mirror.is_some() {
+            logger.info(format!(
+                "🏷️ Enabling engine post-renderer labels and public ECR image mirror for all Helm charts ({chart_count} charts)"
+            ));
+        } else {
+            logger.info(format!(
+                "🏷️ Enabling engine post-renderer labels for all Helm charts ({chart_count} charts)"
+            ));
+        }
 
         logger.info("🛳️ Going to deploy Helm charts in this sequence:");
         charts_to_deploy.iter().enumerate().for_each(|(ix, charts_lvl)| {
@@ -298,12 +309,17 @@ pub(super) trait HelmInfraResources {
     }
 }
 
-fn enable_engine_post_renderer_for_all_charts(charts_to_deploy: &mut [Vec<Box<dyn HelmChart>>]) -> usize {
+fn enable_engine_post_renderer_for_all_charts(
+    charts_to_deploy: &mut [Vec<Box<dyn HelmChart>>],
+    public_ecr_image_mirror: Option<&PublicEcrImageMirror>,
+) -> usize {
     let mut chart_count = 0usize;
 
     for charts_level in charts_to_deploy.iter_mut() {
         for chart in charts_level.iter_mut() {
-            chart.get_chart_info_mut().enable_engine_post_renderer_labels = true;
+            let chart_info = chart.get_chart_info_mut();
+            chart_info.enable_engine_post_renderer_labels = true;
+            chart_info.public_ecr_image_mirror = public_ecr_image_mirror.cloned();
             chart_count += 1;
         }
     }

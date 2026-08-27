@@ -121,6 +121,10 @@ pub struct UserNetworkConfig {
 }
 
 impl Options {
+    pub(crate) fn supports_ecr_pull_through_cache(&self) -> bool {
+        self.user_provided_network.is_none()
+    }
+
     pub fn secrets_manager_accesses(&self) -> Result<Vec<SecretsManagerAccess>, SecretsManagerConversionError> {
         let Some(dtos) = &self.secrets_manager_accesses else {
             return Ok(vec![]);
@@ -265,6 +269,37 @@ mod tests {
             resource_tags: HashMap::new(),
             secrets_manager_accesses: accesses,
         }
+    }
+
+    #[test]
+    fn ecr_pull_through_cache_requires_a_qovery_managed_network() {
+        let mut options = create_minimal_options(None);
+
+        assert!(options.supports_ecr_pull_through_cache());
+
+        options.vpc_qovery_network_mode = VpcQoveryNetworkMode::WithNatGateways;
+        assert!(options.supports_ecr_pull_through_cache());
+
+        options.user_provided_network = Some(UserNetworkConfig {
+            documentdb_subnets_zone_a_ids: vec![],
+            documentdb_subnets_zone_b_ids: vec![],
+            documentdb_subnets_zone_c_ids: vec![],
+            elasticache_subnets_zone_a_ids: vec![],
+            elasticache_subnets_zone_b_ids: vec![],
+            elasticache_subnets_zone_c_ids: vec![],
+            rds_subnets_zone_a_ids: vec![],
+            rds_subnets_zone_b_ids: vec![],
+            rds_subnets_zone_c_ids: vec![],
+            aws_vpc_eks_id: String::new(),
+            eks_subnets_zone_a_ids: vec![],
+            eks_subnets_zone_b_ids: vec![],
+            eks_subnets_zone_c_ids: vec![],
+            eks_private_subnets_zone_a_ids: vec![],
+            eks_private_subnets_zone_b_ids: vec![],
+            eks_private_subnets_zone_c_ids: vec![],
+            eks_create_nodes_in_private_subnet: true,
+        });
+        assert!(!options.supports_ecr_pull_through_cache());
     }
 
     #[test]
