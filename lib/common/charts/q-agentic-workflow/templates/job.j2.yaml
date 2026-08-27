@@ -46,6 +46,11 @@ spec:
         - name: prompt
           configMap:
             name: {{ service.kube_name }}-prompt
+        {%- for mounted_file in mounted_files %}
+        - name: {{ mounted_file.kube_name }}
+          secret:
+            secretName: {{ mounted_file.kube_name }}
+        {%- endfor %}
       initContainers:
         - name: qovery-wait-container-output
           # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
@@ -77,6 +82,13 @@ spec:
               mountPath: /qovery-agentic-workflow/inputs.json
               subPath: inputs.json
               readOnly: true
+            # File variables. The matching env var (via envFrom below) holds this same mount path.
+            {%- for mounted_file in mounted_files %}
+            - name: {{ mounted_file.kube_name }}
+              mountPath: "{{ mounted_file.mount_path }}"
+              subPath: content
+              readOnly: true
+            {%- endfor %}
           envFrom:
             - secretRef:
                 name: {{ service.kube_name }}

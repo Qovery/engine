@@ -13,10 +13,11 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::context::Context;
 use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::services_common::GitCredentials;
-use crate::io_models::{Action, QoveryIdentifier, sanitized_git_url};
+use crate::io_models::variable_utils::VariableInfo;
+use crate::io_models::{Action, MountedFile, QoveryIdentifier, sanitized_git_url};
 use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -180,6 +181,24 @@ pub struct AgenticWorkflow {
     /// deployable against a q-core that does not send it yet.
     #[serde(default)]
     pub payload: Option<AgenticWorkflowRunPayload>,
+
+    /// User-defined variables for the workflow, resolved by q-core across the whole
+    /// organization -> project -> environment -> workflow chain.
+    ///
+    /// Values are plaintext, unlike the base64-encoded `environment_vars_with_infos` every other
+    /// service carries: the encoding buys nothing over JSON, and every other secret-bearing field
+    /// on this struct (`model.api_key`, git credentials, `mcp`) is plaintext too. The engine
+    /// base64-encodes them once, where Kubernetes actually requires it.
+    ///
+    /// `BTreeMap` for the `Hash` derive, which `HashMap` lacks, and for a stable rendering order.
+    #[serde(default)]
+    pub environment_variables: BTreeMap<String, VariableInfo>,
+
+    /// FILE variables. `file_content_b64` is already base64-encoded by q-core, as for every other
+    /// service, and the chart drops it straight into a Secret's `data:` block. The matching entry
+    /// in `environment_variables` holds the path the file is mounted at.
+    #[serde(default)]
+    pub mounted_files: Vec<MountedFile>,
 }
 
 impl AgenticWorkflow {
@@ -393,6 +412,12 @@ impl AgenticWorkflow {
             output_variable_validation_pattern: self.output_variable_validation_pattern,
             max_duration_in_sec: self.max_duration_in_sec,
             run_payload,
+            environment_variables: self.environment_variables,
+            mounted_files: self
+                .mounted_files
+                .iter()
+                .map(|f| f.to_domain())
+                .collect::<BTreeSet<_>>(),
         })
     }
 }
@@ -409,7 +434,7 @@ mod tests {
     /// q-core golden literal drifts from this one, the wire contract between the two repos is broken.
     // Static agentic-workflow fields are plain JSON strings on the q-core/engine wire contract.
     // The run payload is likewise plain JSON and reaches the domain configuration verbatim.
-    const GOLDEN_JSON: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"RUN apt-get install -y jq","prompt":"Investigate the incident and summarize root cause.","model":{"type":"CLAUDE","api_key":"sk-secret","settings":"{\"effort\":\"high\"}"},"mcp":"{\"servers\":[]}","project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"resolved-token","expired_at":"1970-01-01T00:00:00Z"}}],"host_allowlist":["api.github.com"],"outputs":[{"name":"slack","url":"https://hooks.slack.com/services/x","headers":[{"name":"Content-Type","value":"application/json"}],"instructions":"Keep it under 500 characters."}],"cpu_request_in_milli":500,"cpu_limit_in_milli":1000,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600,"payload":{"body":"{\"issue\":{\"key\":\"QOV-1\"}}","headers":[{"name":"x-atlassian-webhook-identifier","value":"abc-123"},{"name":"content-type","value":"application/json"}]}}"#;
+    const GOLDEN_JSON: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"RUN apt-get install -y jq","prompt":"Investigate the incident and summarize root cause.","model":{"type":"CLAUDE","api_key":"sk-secret","settings":"{\"effort\":\"high\"}"},"mcp":"{\"servers\":[]}","project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"resolved-token","expired_at":"1970-01-01T00:00:00Z"}}],"host_allowlist":["api.github.com"],"outputs":[{"name":"slack","url":"https://hooks.slack.com/services/x","headers":[{"name":"Content-Type","value":"application/json"}],"instructions":"Keep it under 500 characters."}],"cpu_request_in_milli":500,"cpu_limit_in_milli":1000,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600,"payload":{"body":"{\"issue\":{\"key\":\"QOV-1\"}}","headers":[{"name":"x-atlassian-webhook-identifier","value":"abc-123"},{"name":"content-type","value":"application/json"}]},"environment_variables":{"JIRA_TOKEN":{"value":"jira-secret","is_secret":true},"TARGET_ENV":{"value":"production","is_secret":false}},"mounted_files":[{"long_id":"6f19a1bd-3a0d-4d51-9a4c-1f2c5e4b7a90","kube_name":"6f19a1bd-3a0d-4d51-9a4c-1f2c5e4b7a90-agentic-workflow-zeb5163b9","mount_path":"/etc/config.json","file_content_b64":"eyJyZXRyaWVzIjozfQ=="}]}"#;
 
     /// Same as GOLDEN_JSON's companion "defaulted fields" q-core test: the optional fields
     /// (docker_fragment/mcp/project_repositories/host_allowlist/outputs/cpu_limit_in_milli) are
@@ -456,6 +481,26 @@ mod tests {
         assert_eq!(workflow.ram_limit_in_mib, 1024);
         assert_eq!(workflow.output_variable_validation_pattern, "^[a-zA-Z_][a-zA-Z0-9_]*$");
         assert_eq!(workflow.max_duration_in_sec, 3600);
+        // Plaintext on the wire, unlike every other service's base64-encoded env vars.
+        assert_eq!(
+            workflow.environment_variables,
+            BTreeMap::from([
+                (
+                    "JIRA_TOKEN".to_string(),
+                    VariableInfo {
+                        value: "jira-secret".to_string(),
+                        is_secret: true
+                    }
+                ),
+                (
+                    "TARGET_ENV".to_string(),
+                    VariableInfo {
+                        value: "production".to_string(),
+                        is_secret: false
+                    }
+                ),
+            ])
+        );
     }
 
     #[test]
@@ -468,6 +513,7 @@ mod tests {
         assert!(workflow.project_repositories.is_empty());
         assert!(workflow.host_allowlist.is_empty());
         assert!(workflow.outputs.is_empty());
+        assert!(workflow.environment_variables.is_empty());
         assert_eq!(workflow.cpu_limit_in_milli, None);
     }
 
@@ -569,6 +615,35 @@ mod tests {
     }
 
     /// The payload must reach the domain untouched, including values that happen to parse as base64.
+    /// Content must reach the domain byte-for-byte: it is already base64 and the chart writes it
+    /// into a Secret's `data:` block, so re-encoding it anywhere here would leave base64 on disk.
+    #[test]
+    fn into_domain_config_carries_mounted_files_verbatim() {
+        let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+        let config = workflow.into_domain_config().expect("domain config should build");
+
+        let files = config.mounted_files.iter().cloned().collect::<Vec<_>>();
+        assert_eq!(
+            files,
+            vec![crate::io_models::models::MountedFile {
+                long_id: Uuid::parse_str("6f19a1bd-3a0d-4d51-9a4c-1f2c5e4b7a90").unwrap(),
+                kube_name: "6f19a1bd-3a0d-4d51-9a4c-1f2c5e4b7a90-agentic-workflow-zeb5163b9".to_string(),
+                mount_path: "/etc/config.json".to_string(),
+                file_content_b64: "eyJyZXRyaWVzIjozfQ==".to_string(),
+            }]
+        );
+    }
+
+    /// `#[serde(default)]` on `mounted_files`, so the engine stays deployable against a q-core that
+    /// does not send the field yet.
+    #[test]
+    fn mounted_files_defaults_to_empty_when_q_core_omits_it() {
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(GOLDEN_JSON_DEFAULTS).expect("defaults golden should deserialize");
+
+        assert!(workflow.mounted_files.is_empty());
+    }
+
     #[test]
     fn into_domain_config_carries_the_run_payload_verbatim() {
         let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");

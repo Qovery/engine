@@ -9,15 +9,39 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service, Se
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::io_models::agentic_workflow::AgenticWorkflowModelType;
 use crate::io_models::context::Context;
-use crate::io_models::models::{EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile,
+};
+use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use base64::Engine;
 use base64::engine::general_purpose;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use tera::Context as TeraContext;
+use tracing::warn;
 use uuid::Uuid;
+
+/// Names a user variable may not take. The first group is the engine/runner contract rendered into
+/// `stringData` (see `get_environment_variables`); the second is set directly in the Job's `env:`
+/// block by the chart. Kept here rather than in q-core: it is engine and ai-runner knowledge, and a
+/// second copy in Kotlin would drift.
+// TODO: Reserve the entire `INPUT_` prefix, not just `INPUTS_FILE`; ai-runner turns every matching
+// process variable into prompt input, which can expose a secret user variable to the LLM.
+const RESERVED_ENVIRONMENT_VARIABLE_NAMES: &[&str] = &[
+    "CLAUDE_MODEL",
+    "MODEL_SETTINGS",
+    "ANTHROPIC_API_KEY",
+    "MCP_SERVERS",
+    "HOST_ALLOWLIST",
+    "GIT_REPOS",
+    "GIT_TOKENS",
+    "OUTPUTS",
+    "RUN_MODE",
+    "PROMPT_FILE",
+    "INPUTS_FILE",
+];
 
 #[derive(thiserror::Error, Debug)]
 pub enum AgenticWorkflowError {
@@ -116,6 +140,15 @@ pub struct AgenticWorkflowConfig {
     pub max_duration_in_sec: u64,
     /// Absent for a deploy with no triggering event.
     pub run_payload: Option<AgenticWorkflowRunPayload>,
+    /// User-defined variables, plaintext as they arrive from q-core. Encoded on the way into the
+    /// Secret's `data:` block, see [`to_user_environment_variables`].
+    pub environment_variables: BTreeMap<String, VariableInfo>,
+    /// FILE variables, each rendered as its own Secret and mounted into the Job at
+    /// `mount_path`. Content arrives already base64-encoded, so nothing here re-encodes it.
+    ///
+    /// `BTreeSet` for the same reason the maps above are ordered: a stable rendering order keeps an
+    /// unchanged workflow from churning its Helm release.
+    pub mounted_files: BTreeSet<MountedFile>,
 }
 
 impl AgenticWorkflowConfig {
@@ -266,12 +299,78 @@ impl AgenticWorkflow {
                 max_duration_in_sec: self.config.max_duration_in_sec,
             },
             environment_variables: self.get_environment_variables(),
+            user_environment_variables: to_user_environment_variables(
+                &self.config.environment_variables,
+                &self.long_id,
+            ),
+            mounted_files: self.config.mounted_files.iter().cloned().collect::<Vec<_>>(),
             registry: self
                 .build
                 .as_ref()
                 .and_then(|build| registry_tera_context(build, target, self.kube_name.as_str())),
         }
     }
+}
+
+/// User-defined variables, base64-encoded for the Secret's `data:` block so Kubernetes hands the
+/// container plaintext. Encoding here (rather than in q-core, as every other service does) also
+/// keeps arbitrary values — newlines, leading spaces — out of the `stringData` block scalar, where
+/// they would break the rendered YAML.
+///
+/// Names that would collide with something the runner needs are dropped. Kubernetes already makes
+/// such a collision harmless — `stringData` wins over `data`, and a pod's `env:` wins over
+/// `envFrom` — so the filter exists to tell the user their variable is being ignored, not to make
+/// the Secret safe.
+///
+/// Names that are not plain identifiers are dropped as well. A value is base64 by the time it is
+/// rendered, but a key is not, so a newline or a `": "` in one turns the Secret template into a
+/// YAML scanner error — which takes the registry pull secret rendered after it down too, and
+/// reports a template failure that names no key. This is stricter than the `[-._a-zA-Z0-9]+`
+/// Kubernetes accepts for a Secret key, on purpose: a name holding `-` or `.` is not a shell
+/// identifier, so `envFrom` drops it anyway and says so only in an event on the pod.
+///
+/// A free function rather than a method so it can be unit-tested without a `DeploymentTarget`.
+// TODO: Both filters only `warn!`, which reaches the engine's own logs and not the deployment logs
+// the user reads — those need `Logger::log(EngineEvent::…)` and an `EventDetails`, which nothing in
+// this layer holds. A reserved name is documented, so an engine-side line is enough; a name like
+// `MY-KEY` is not, and the user currently just gets a variable that does not exist.
+fn to_user_environment_variables(
+    variables: &BTreeMap<String, VariableInfo>,
+    workflow_long_id: &Uuid,
+) -> Vec<EnvironmentVariable> {
+    variables
+        .iter()
+        .filter(|(key, _)| {
+            if RESERVED_ENVIRONMENT_VARIABLE_NAMES.contains(&key.as_str()) {
+                warn!(
+                    "agentic workflow {workflow_long_id}: ignoring environment variable {key}, the name is reserved by the runner"
+                );
+                return false;
+            }
+            if !is_environment_variable_name(key) {
+                // Quoted: the key may itself hold a newline.
+                warn!(
+                    "agentic workflow {workflow_long_id}: ignoring environment variable {key:?}, the name is not a valid identifier"
+                );
+                return false;
+            }
+            true
+        })
+        .map(|(key, variable)| EnvironmentVariable {
+            key: key.clone(),
+            value: general_purpose::STANDARD.encode(variable.value.as_bytes()),
+            is_secret: variable.is_secret,
+        })
+        .collect()
+}
+
+/// `[A-Za-z_][A-Za-z0-9_]*`, spelled out rather than compiled: one charset this small does not
+/// warrant a regex on a path walked once per variable per deployment.
+fn is_environment_variable_name(key: &str) -> bool {
+    let mut chars = key.chars();
+
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 impl Service for AgenticWorkflow {
@@ -479,17 +578,28 @@ pub(crate) struct AgenticWorkflowTeraContext {
     pub(crate) deployment_id: String,
     pub(crate) service: ServiceTeraContext,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    /// User-defined variables, rendered into the Secret's `data:` block rather than `stringData`.
+    pub(crate) user_environment_variables: Vec<EnvironmentVariable>,
+    /// One Secret and one volume mount per entry. `Vec` because Tera iterates it; the ordering
+    /// comes from the `BTreeSet` it is built from.
+    pub(crate) mounted_files: Vec<MountedFile>,
     /// `None` when the Job runs the public base image and needs no pull secret.
     pub(crate) registry: Option<RegistryTeraContext>,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AgenticWorkflowRunPayload, AgenticWorkflowTeraContext, ServiceTeraContext, run_inputs_json};
+    use super::{
+        AgenticWorkflowRunPayload, AgenticWorkflowTeraContext, ServiceTeraContext, run_inputs_json,
+        to_user_environment_variables,
+    };
     use crate::environment::models::container::RegistryTeraContext;
-    use crate::io_models::models::EnvironmentVariable;
+    use crate::io_models::models::{EnvironmentVariable, MountedFile};
+    use crate::io_models::variable_utils::VariableInfo;
     use base64::Engine;
     use base64::engine::general_purpose;
+    use serde::Deserialize;
+    use std::collections::BTreeMap;
     use tera::{Context, Tera};
     use uuid::Uuid;
 
@@ -530,6 +640,8 @@ mod tests {
                     is_secret: false,
                 },
             ],
+            user_environment_variables: vec![],
+            mounted_files: vec![],
             registry: None,
         }
     }
@@ -548,6 +660,71 @@ mod tests {
 
     fn job_template() -> &'static str {
         include_str!("../../../lib/common/charts/q-agentic-workflow/templates/job.j2.yaml")
+    }
+
+    fn mounted_files_secret_template() -> &'static str {
+        include_str!("../../../lib/common/charts/q-agentic-workflow/templates/mounted_files_secret.j2.yaml")
+    }
+
+    /// `base64("{\"retries\":3}")`, as q-core sends it.
+    const MOUNTED_FILE_CONTENT_B64: &str = "eyJyZXRyaWVzIjozfQ==";
+
+    fn build_context_with_mounted_file() -> AgenticWorkflowTeraContext {
+        let mut context = build_agentic_workflow_tera_context();
+        context.mounted_files = vec![MountedFile {
+            long_id: Uuid::new_v4(),
+            kube_name: "config-file-secret".to_string(),
+            mount_path: "/etc/config.json".to_string(),
+            file_content_b64: MOUNTED_FILE_CONTENT_B64.to_string(),
+        }];
+        context
+    }
+
+    /// The counterpart to `secret_uses_string_data_so_container_decode_recovers_canonical_value`:
+    /// a mounted file gets exactly ONE layer of encoding, applied by q-core, and Kubernetes strips
+    /// it. Nothing in the container decodes a file, so `data` is required here where the contract
+    /// variables need `stringData`. Rendering under `stringData` would leave base64 on disk.
+    #[test]
+    fn mounted_file_secret_uses_data_so_kubernetes_decode_yields_plaintext_on_disk() {
+        let rendered = render_template(mounted_files_secret_template(), build_context_with_mounted_file());
+
+        assert!(rendered.contains("kind: Secret"));
+        assert!(rendered.contains("name: config-file-secret"));
+        assert!(rendered.contains("data:"));
+        assert!(!rendered.contains("stringData:"));
+        assert!(rendered.contains(MOUNTED_FILE_CONTENT_B64));
+
+        // What Kubernetes writes to disk is this decoded once, i.e. the original content.
+        let decoded = general_purpose::STANDARD
+            .decode(MOUNTED_FILE_CONTENT_B64)
+            .expect("q-core sends valid base64");
+        assert_eq!(String::from_utf8(decoded).unwrap(), r#"{"retries":3}"#);
+    }
+
+    #[test]
+    fn renders_no_mounted_file_secret_when_the_workflow_has_no_file_variable() {
+        let rendered = render_template(mounted_files_secret_template(), build_agentic_workflow_tera_context());
+
+        assert!(!rendered.contains("kind: Secret"));
+    }
+
+    /// A file variable is only usable if the volume, the mount and the env var agree on the path.
+    /// The env var comes from q-core via `envFrom`; this pins the other two.
+    #[test]
+    fn job_mounts_each_file_variable_at_its_mount_path() {
+        let rendered = render_template(job_template(), build_context_with_mounted_file());
+
+        assert!(rendered.contains("secretName: config-file-secret"));
+        assert!(rendered.contains(r#"mountPath: "/etc/config.json""#));
+        // subPath, so the file lands AT the path rather than as a directory containing it.
+        assert!(rendered.contains("subPath: content"));
+    }
+
+    #[test]
+    fn job_mounts_nothing_extra_when_the_workflow_has_no_file_variable() {
+        let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
+
+        assert!(!rendered.contains("subPath: content"));
     }
 
     #[test]
@@ -655,9 +832,11 @@ mod tests {
 
         // Transport must be `stringData` (verbatim), never `data` (which k8s would decode).
         assert!(rendered.contains("stringData:"), "secret must use stringData, got:\n{rendered}");
+        // The fixture has no user variables, so the only other block a `data:` key could come
+        // from is the contract vars — which must never land there.
         assert!(
             !rendered.contains("\ndata:"),
-            "secret must not use a `data:` field:\n{rendered}"
+            "contract vars must not be rendered under `data:`:\n{rendered}"
         );
 
         // The fixture's CLAUDE_MODEL value is the engine's emitted `base64("CLAUDE")`. With
@@ -805,5 +984,180 @@ mod tests {
 
         assert!(job.contains("value: \"/qovery-agentic-workflow/inputs.json\""));
         assert!(!secret.contains("INPUTS_FILE"));
+    }
+
+    fn plain(value: &str) -> VariableInfo {
+        VariableInfo {
+            value: value.to_string(),
+            is_secret: false,
+        }
+    }
+
+    #[test]
+    fn user_variables_round_trip_through_the_secrets_data_block() {
+        let mut context = build_agentic_workflow_tera_context();
+        // A leading space and a newline are exactly what a `stringData` block scalar would mangle;
+        // under `data:` the value is base64 and survives.
+        context.user_environment_variables = to_user_environment_variables(
+            &BTreeMap::from([("MULTILINE".to_string(), plain(" first\nsecond"))]),
+            &Uuid::new_v4(),
+        );
+
+        let rendered = render_template(secret_template(), context);
+
+        let encoded = rendered
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("MULTILINE: "))
+            .expect("MULTILINE should be rendered");
+        let decoded = String::from_utf8(
+            general_purpose::STANDARD
+                .decode(encoded)
+                .expect("kubernetes' single decode must succeed"),
+        )
+        .expect("decoded value must be valid UTF-8");
+        assert_eq!(decoded, " first\nsecond");
+    }
+
+    #[test]
+    fn user_variables_render_in_a_stable_order() {
+        let mut context = build_agentic_workflow_tera_context();
+        context.user_environment_variables = to_user_environment_variables(
+            &BTreeMap::from([
+                ("ZEBRA".to_string(), plain("z")),
+                ("ALPHA".to_string(), plain("a")),
+                ("MIKE".to_string(), plain("m")),
+            ]),
+            &Uuid::new_v4(),
+        );
+
+        let rendered = render_template(secret_template(), context);
+
+        let keys = rendered
+            .lines()
+            .filter_map(|line| line.trim().split_once(':'))
+            .map(|(key, _)| key.to_string())
+            .filter(|key| ["ALPHA", "MIKE", "ZEBRA"].contains(&key.as_str()))
+            .collect::<Vec<_>>();
+        // Sorted, so a redeploy with unchanged variables does not churn the Helm release.
+        assert_eq!(keys, vec!["ALPHA", "MIKE", "ZEBRA"]);
+    }
+
+    #[test]
+    fn a_user_variable_may_not_take_a_reserved_name() {
+        let variables = to_user_environment_variables(
+            &BTreeMap::from([
+                ("ANTHROPIC_API_KEY".to_string(), plain("stolen")),
+                ("INPUTS_FILE".to_string(), plain("/tmp/evil.json")),
+                ("MY_VAR".to_string(), plain("kept")),
+            ]),
+            &Uuid::new_v4(),
+        );
+
+        assert_eq!(
+            variables,
+            vec![EnvironmentVariable {
+                key: "MY_VAR".to_string(),
+                value: general_purpose::STANDARD.encode("kept"),
+                is_secret: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn no_user_variables_renders_no_data_block() {
+        let mut context = build_agentic_workflow_tera_context();
+        context.user_environment_variables = vec![];
+
+        let rendered = render_template(secret_template(), context);
+
+        // An empty `data:` key would serialize as null, which Kubernetes rejects.
+        assert!(
+            !rendered.contains("\ndata:"),
+            "no user variables must render no data block:\n{rendered}"
+        );
+    }
+
+    /// Stricter than what Kubernetes accepts for a Secret key: `-` and `.` are legal there but
+    /// cannot be a shell identifier, so `envFrom` would drop them with nothing in the engine's
+    /// logs to say why.
+    #[test]
+    fn a_user_variable_name_must_be_an_identifier() {
+        let variables = to_user_environment_variables(
+            &BTreeMap::from([
+                ("MY:KEY".to_string(), plain("colon")),
+                ("MY: KEY".to_string(), plain("colon and space")),
+                ("MY\nKEY".to_string(), plain("newline")),
+                ("".to_string(), plain("empty")),
+                ("MY-KEY".to_string(), plain("dash")),
+                ("MY.KEY".to_string(), plain("dot")),
+                ("1FOO".to_string(), plain("leading digit")),
+                ("_MY_VAR2".to_string(), plain("kept")),
+            ]),
+            &Uuid::new_v4(),
+        );
+
+        assert_eq!(
+            variables,
+            vec![EnvironmentVariable {
+                key: "_MY_VAR2".to_string(),
+                value: general_purpose::STANDARD.encode("kept"),
+                is_secret: false,
+            }]
+        );
+    }
+
+    /// The reason the guard above is in the engine and not left to the API server. A key holding a
+    /// newline or a `": "` does not just break its own entry: it breaks the document, and the
+    /// registry pull secret rendered after `---` in the same template goes with it.
+    #[test]
+    fn a_malformed_user_variable_name_cannot_break_the_rendered_secret() {
+        let mut context = build_agentic_workflow_tera_context_with_built_image();
+        context.user_environment_variables = to_user_environment_variables(
+            &BTreeMap::from([
+                ("MY\nKEY".to_string(), plain("newline")),
+                ("MY: KEY".to_string(), plain("colon and space")),
+                ("GOOD_KEY".to_string(), plain("kept")),
+            ]),
+            &Uuid::new_v4(),
+        );
+
+        let rendered = render_template(secret_template(), context);
+
+        let documents = serde_yaml::Deserializer::from_str(&rendered)
+            .map(|document| {
+                serde_yaml::Value::deserialize(document).expect("every rendered document must be valid YAML")
+            })
+            .collect::<Vec<_>>();
+
+        let data = documents[0]["data"]
+            .as_mapping()
+            .expect("the user variables must render a data block");
+        assert_eq!(data.len(), 1);
+        assert_eq!(data["GOOD_KEY"], general_purpose::STANDARD.encode("kept"));
+        // The pull secret still made it out of the same file. Found by type rather than position,
+        // so a third document appearing in the template does not turn this into a puzzle.
+        assert!(
+            documents
+                .iter()
+                .any(|document| document["type"] == "kubernetes.io/dockerconfigjson"),
+            "the registry pull secret must survive a malformed user variable name:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn a_secret_user_variable_keeps_its_flag_so_it_can_be_masked_in_logs() {
+        let variables = to_user_environment_variables(
+            &BTreeMap::from([(
+                "TOKEN".to_string(),
+                VariableInfo {
+                    value: "shhh".to_string(),
+                    is_secret: true,
+                },
+            )]),
+            &Uuid::new_v4(),
+        );
+
+        assert_eq!(variables.len(), 1);
+        assert!(variables[0].is_secret);
     }
 }
