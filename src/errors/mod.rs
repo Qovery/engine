@@ -950,6 +950,8 @@ pub enum Tag {
     CannotPauseClusterTasksAreRunning,
     /// TerraformUnknownError: terraform unknown error
     TerraformUnknownError,
+    /// TerraformCommandTimeout: terraform command was stopped after exhausting its time budget.
+    TerraformCommandTimeout,
     /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
     TerraformInvalidCredentials,
     /// TerraformAccountBlockedByProvider: terraform cannot perform action because account has been blocked by cloud provider.
@@ -2980,6 +2982,17 @@ impl EngineError {
                     )), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
+            ),
+            TerraformError::CommandTimeout { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformCommandTimeout,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
+                None,
+                Some(
+                    "This operation ran out of time — it was stopped, nothing was changed. Retry it, and if it keeps timing out, reduce the scope of the change or contact the Qovery team."
+                        .to_string(),
+                ),
             ),
             TerraformError::MultipleInterruptsReceived { .. } => EngineError::new(
                 event_details,

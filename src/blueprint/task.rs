@@ -444,6 +444,7 @@ impl Task for BlueprintTask {
                         &target_env,
                         &cloud_envs,
                         &kubeconfig_path,
+                        tf_spec.timeout_sec,
                         &event_details,
                         self.logger.as_ref(),
                     )?;

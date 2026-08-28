@@ -15,7 +15,9 @@
 //! is a pinned reference, so a catalog tag bump's changes are fully expressed by the wrapper.
 
 use crate::blueprint::models::error::BlueprintError;
-use crate::cmd::terraform::{TerraformOutput, terraform_init_validate_lock_free, terraform_plan_internal};
+use crate::cmd::terraform::{
+    TerraformOutput, TerraformTimeBounds, terraform_init_validate_lock_free_bounded, terraform_plan_internal_bounded,
+};
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
@@ -24,8 +26,29 @@ use crate::io_models::terraform::TerraformBackendType;
 use crate::logger::Logger;
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 pub const DIFF_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
+
+/// Must fail before q-core stops listening, which it does after 10 min of engine silence — only
+/// the engine can name the step that hung.
+const DIFF_MAX_BUDGET: Duration = Duration::from_secs(8 * 60);
+
+/// A blueprint's `timeout` is user-supplied and unvalidated; 0 would kill terraform on spawn.
+const DIFF_MIN_BUDGET: Duration = Duration::from_secs(30);
+
+/// SIGINT→SIGKILL wait. The 5 min default would return a timed-out preview ~13 min in.
+const DIFF_KILL_GRACE: Duration = Duration::from_secs(20);
+
+fn diff_budget(timeout_sec: u64) -> Duration {
+    Duration::from_secs(timeout_sec).clamp(DIFF_MIN_BUDGET, DIFF_MAX_BUDGET)
+}
+
+/// One deadline for every terraform step, so a slow `init` eats into `plan`'s share of the budget
+/// instead of adding to it.
+pub(crate) fn diff_time_bounds(timeout_sec: u64) -> TerraformTimeBounds {
+    TerraformTimeBounds::from_budget(diff_budget(timeout_sec), DIFF_KILL_GRACE)
+}
 
 /// Underlying-infra diff for a Terraform blueprint: pull the catalog's `*.tf` module, render
 /// variables, wire the state backend, run `terraform init + plan`, return the human-readable plan.
@@ -40,6 +63,7 @@ pub fn diff_underlying_terraform(
     request: &BlueprintRequest,
     cloud_envs: &[(&str, &str)],
     kubeconfig_path: &Path,
+    timeout_sec: u64,
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<String, Box<EngineError>> {
@@ -131,11 +155,13 @@ pub fn diff_underlying_terraform(
 
     let dir = workspace.path().to_string_lossy();
 
+    let bounds = diff_time_bounds(timeout_sec);
+
     logger.log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new("Running terraform init + validate on underlying module".to_string(), None),
     ));
-    terraform_init_validate_lock_free(&dir, &envs, &TerraformValidators::Default)
+    terraform_init_validate_lock_free_bounded(&dir, &envs, &TerraformValidators::Default, Some(bounds))
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     logger.log(EngineEvent::Info(
@@ -143,8 +169,9 @@ pub fn diff_underlying_terraform(
         EventMessage::new("Running terraform plan on underlying module".to_string(), None),
     ));
     // Preview is read-only — disable state locking so it never blocks a real deploy
-    let plan_output = terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false, false)
-        .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
+    let plan_output =
+        terraform_plan_internal_bounded(&dir, &envs, &TerraformValidators::Default, false, false, Some(bounds))
+            .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(truncate_diff_payload(&plan_output))
 }
@@ -294,6 +321,35 @@ fn copy_dir_contents(src: &Path, dst: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// q-core stops listening after this long without an engine message.
+    const CONSUMER_DEADLINE: Duration = Duration::from_secs(10 * 60);
+
+    #[test]
+    fn diff_budget_caps_apply_sized_blueprint_timeouts() {
+        // DEFAULT_TF_TIMEOUT_SEC is 1800, and blueprints may override it higher still.
+        assert_eq!(diff_budget(1800), DIFF_MAX_BUDGET);
+        assert_eq!(diff_budget(7200), DIFF_MAX_BUDGET);
+    }
+
+    #[test]
+    fn diff_budget_keeps_usable_blueprint_timeouts() {
+        assert_eq!(diff_budget(120), Duration::from_secs(120));
+    }
+
+    #[test]
+    fn diff_budget_floors_unusably_short_blueprint_timeouts() {
+        // `resolve_timeout` returns the spec override verbatim, so 0 is reachable.
+        assert_eq!(diff_budget(0), DIFF_MIN_BUDGET);
+        assert_eq!(diff_budget(5), DIFF_MIN_BUDGET);
+    }
+
+    #[test]
+    fn diff_budget_and_kill_grace_leave_the_consumer_deadline_room() {
+        // One kill, not one per retry: a `CommandTimeout` short-circuits the init/validate retry
+        // loops rather than sleeping between attempts that would be killed on spawn.
+        assert!(diff_budget(u64::MAX) + DIFF_KILL_GRACE < CONSUMER_DEADLINE);
+    }
 
     #[test]
     fn truncate_diff_payload_passes_through_small_output() {
