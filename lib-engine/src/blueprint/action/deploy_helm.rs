@@ -115,6 +115,7 @@ pub fn execute_diff(
         &ctx,
         &request.qovery_api_token,
         "qovery_helm",
+        spec.timeout_sec,
         event_details,
         logger,
     )

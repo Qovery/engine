@@ -4,7 +4,8 @@ pub mod diff;
 
 use crate::blueprint::models::error::BlueprintError;
 use crate::cmd::terraform::{
-    TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate, terraform_plan_internal,
+    TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate, terraform_init_validate_bounded,
+    terraform_plan_internal, terraform_plan_internal_bounded,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
@@ -114,6 +115,7 @@ pub(crate) fn render_and_diff(
     tera_context: &tera::Context,
     qovery_api_token: &str,
     service_type: &str,
+    timeout_sec: u64,
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<String, Box<EngineError>> {
@@ -140,19 +142,22 @@ pub(crate) fn render_and_diff(
     let envs: Vec<(&str, &str)> = vec![("QOVERY_API_TOKEN", qovery_api_token)];
     let dir = working_dir.to_string_lossy();
 
+    let bounds = diff::diff_time_bounds(timeout_sec);
+
     logger.log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new("Running terraform init + validate".to_string(), None),
     ));
-    terraform_init_validate(&dir, &envs, &TerraformValidators::Default)
+    terraform_init_validate_bounded(&dir, &envs, &TerraformValidators::Default, Some(bounds))
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     logger.log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new("Running terraform plan".to_string(), None),
     ));
-    let plan_output = terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false, false)
-        .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
+    let plan_output =
+        terraform_plan_internal_bounded(&dir, &envs, &TerraformValidators::Default, false, false, Some(bounds))
+            .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(diff::truncate_diff_payload(&plan_output))
 }

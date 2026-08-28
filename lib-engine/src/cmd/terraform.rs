@@ -3,7 +3,7 @@ use dirs::home_dir;
 use retry::OperationResult;
 use retry::delay::Fixed;
 
-use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
+use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::terraform_validators::{TerraformValidationError, TerraformValidators};
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
@@ -32,6 +32,29 @@ impl Default for TerraformApplyOptions {
             max_retries: 1,
             command_timeout: None,
         }
+    }
+}
+
+/// Wall-clock bounds for a terraform run. Unlike a per-command timeout, `deadline` bounds the whole
+/// call including its retry loops: each attempt only gets the time left.
+#[derive(Debug, Clone, Copy)]
+pub struct TerraformTimeBounds {
+    pub deadline: time::Instant,
+    /// SIGINT→SIGKILL wait once the deadline is hit. `QoveryCommand` defaults to 5 min.
+    pub kill_grace_period: time::Duration,
+}
+
+impl TerraformTimeBounds {
+    pub fn from_budget(budget: time::Duration, kill_grace_period: time::Duration) -> Self {
+        TerraformTimeBounds {
+            deadline: time::Instant::now() + budget,
+            kill_grace_period,
+        }
+    }
+
+    /// `ZERO` once the deadline has passed, so a spent budget kills the command on spawn.
+    fn remaining(&self) -> time::Duration {
+        self.deadline.saturating_duration_since(time::Instant::now())
     }
 }
 
@@ -225,6 +248,13 @@ pub enum TerraformError {
     },
     OutputCannotBeDeserialized {
         /// raw_message: raw serde error.
+        raw_message: String,
+    },
+    CommandTimeout {
+        terraform_args: Vec<String>,
+        /// timeout: wall-clock budget the command was killed at.
+        timeout: time::Duration,
+        /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
 }
@@ -873,6 +903,15 @@ impl TerraformError {
             TerraformError::OutputCannotBeDeserialized { .. } => {
                 "Error, cannot deserialize Terraform output. Check the logs for more details.".to_string()
             }
+            TerraformError::CommandTimeout {
+                terraform_args,
+                timeout,
+                ..
+            } => format!(
+                "Terraform command (`terraform {}`) ran out of time and was stopped after {}s.",
+                terraform_args.join(" "),
+                timeout.as_secs(),
+            ),
         }
     }
 }
@@ -956,6 +995,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::OutputCannotBeDeserialized { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::CommandTimeout { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1068,6 +1110,17 @@ fn terraform_init(
     validators: &TerraformValidators,
     lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_init_bounded(root_dir, envs, validators, lock, None)
+}
+
+/// `bounds` caps the whole init — provider lock, init, retries included — not each attempt.
+fn terraform_init_bounded(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    lock: bool,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
     // issue with provider lock since 0.14 and CI, need to manage terraform lock
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", root_dir);
 
@@ -1082,8 +1135,11 @@ fn terraform_init(
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec(root_dir, terraform_providers_lock_args.clone(), envs, validators) {
+        match terraform_exec_bounded(root_dir, terraform_providers_lock_args.clone(), envs, validators, bounds) {
             Ok(output) => OperationResult::Ok(output),
+            // Attempts share one deadline, so a retry past it is killed on spawn — all it adds is
+            // the backoff sleep before the same error surfaces.
+            Err(err @ TerraformError::CommandTimeout { .. }) => OperationResult::Err(err),
             Err(err) => OperationResult::Retry(err),
         }
     });
@@ -1099,8 +1155,9 @@ fn terraform_init(
     }
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
+        match terraform_exec_bounded(root_dir, terraform_args.clone(), envs, validators, bounds) {
             Ok(output) => OperationResult::Ok(output),
+            Err(err @ TerraformError::CommandTimeout { .. }) => OperationResult::Err(err),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, lock);
                 // Error while trying to run terraform init, retrying...
@@ -1120,14 +1177,24 @@ fn terraform_validate(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_validate_bounded(root_dir, envs, validators, None)
+}
+
+fn terraform_validate_bounded(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
     let terraform_args = vec!["validate", "-no-color"];
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", root_dir);
 
     // Retry is not needed, fixing it to 1 only for the time being
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // validate config
-        match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
+        match terraform_exec_bounded(root_dir, terraform_args.clone(), envs, validators, bounds) {
             Ok(output) => OperationResult::Ok(output),
+            Err(err @ TerraformError::CommandTimeout { .. }) => OperationResult::Err(err),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, true);
                 // error while trying to Terraform validate on the rendered templates
@@ -1189,6 +1256,17 @@ pub fn terraform_plan_internal(
     is_destroy: bool,
     lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_plan_internal_bounded(root_dir, envs, validators, is_destroy, lock, None)
+}
+
+pub fn terraform_plan_internal_bounded(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    is_destroy: bool,
+    lock: bool,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
     // plan
     let lock_arg = format!("-lock={lock}");
     let terraform_args = if is_destroy {
@@ -1196,7 +1274,7 @@ pub fn terraform_plan_internal(
     } else {
         vec!["plan", lock_arg.as_str(), "-no-color", "-out", "tf_plan"]
     };
-    terraform_exec(root_dir, terraform_args, envs, validators)
+    terraform_exec_bounded(root_dir, terraform_args, envs, validators, bounds)
 }
 
 fn terraform_apply_internal(
@@ -1575,8 +1653,39 @@ pub fn terraform_init_validate_lock_free(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
-    let mut output = terraform_init(root_dir, envs, validators, false)?;
-    output.extend(terraform_validate(root_dir, envs, validators)?);
+    terraform_init_validate_lock_free_bounded(root_dir, envs, validators, None)
+}
+
+/// Same as [terraform_init_validate_lock_free], with `bounds` capping init + validate as a whole.
+/// `init` downloads providers and reads remote state, so it hangs as easily as `plan`.
+pub fn terraform_init_validate_lock_free_bounded(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
+    terraform_init_validate_inner(root_dir, envs, validators, false, bounds)
+}
+
+/// Same as [terraform_init_validate], with `bounds` capping init + validate as a whole.
+pub fn terraform_init_validate_bounded(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
+    terraform_init_validate_inner(root_dir, envs, validators, true, bounds)
+}
+
+fn terraform_init_validate_inner(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    lock: bool,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
+    let mut output = terraform_init_bounded(root_dir, envs, validators, lock, bounds)?;
+    output.extend(terraform_validate_bounded(root_dir, envs, validators, bounds)?);
     Ok(output)
 }
 
@@ -1647,9 +1756,21 @@ fn terraform_exec_from_command_with_timeout(
 
     validators.validate(&terraform_output).map_err(TerraformError::from)?;
 
-    match result {
-        Ok(_) => Ok(terraform_output),
-        Err(_) => Err(TerraformError::new(
+    match (result, command_timeout) {
+        (Ok(_), _) => Ok(terraform_output),
+        // A killed command has no terraform diagnostic to classify, so `TerraformError::new` would
+        // land on `Unknown` and drop the only fact that matters: it ran out of time, it isn't broken.
+        (Err(CommandError::TimeoutError(reason)), Some(timeout)) => Err(TerraformError::CommandTimeout {
+            terraform_args: cmd.get_args(),
+            timeout,
+            raw_message: format!(
+                "{}\n{}\n{}",
+                reason,
+                terraform_output.raw_std_output.join("\n"),
+                terraform_output.raw_error_output.join("\n")
+            ),
+        }),
+        (Err(_), _) => Err(TerraformError::new(
             cmd.get_args(),
             terraform_output.raw_std_output.join("\n"),
             terraform_output.raw_error_output.join("\n"),
@@ -1674,6 +1795,37 @@ fn terraform_exec_with_timeout(
     validators: &TerraformValidators,
     command_timeout: Option<time::Duration>,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_exec_inner(root_dir, args, env, validators, command_timeout, None)
+}
+
+fn terraform_exec_bounded(
+    root_dir: &str,
+    args: Vec<&str>,
+    env: &[(&str, &str)],
+    validators: &TerraformValidators,
+    bounds: Option<TerraformTimeBounds>,
+) -> Result<TerraformOutput, TerraformError> {
+    match bounds {
+        None => terraform_exec(root_dir, args, env, validators),
+        Some(bounds) => terraform_exec_inner(
+            root_dir,
+            args,
+            env,
+            validators,
+            Some(bounds.remaining()),
+            Some(bounds.kill_grace_period),
+        ),
+    }
+}
+
+fn terraform_exec_inner(
+    root_dir: &str,
+    args: Vec<&str>,
+    env: &[(&str, &str)],
+    validators: &TerraformValidators,
+    command_timeout: Option<time::Duration>,
+    kill_grace_period: Option<time::Duration>,
+) -> Result<TerraformOutput, TerraformError> {
     // override if environment variable is set
     let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
         Some(val) => format!("{val:?}")
@@ -1690,6 +1842,9 @@ fn terraform_exec_with_timeout(
     envs.extend(env);
     let mut cmd = QoveryCommand::new("terraform", &args, &envs);
     cmd.set_current_dir(root_dir);
+    if let Some(grace_period) = kill_grace_period {
+        cmd.set_kill_grace_period(grace_period);
+    }
 
     match command_timeout {
         Some(timeout) => terraform_exec_from_command_with_timeout(&mut cmd, validators, Some(timeout)),
@@ -1702,10 +1857,11 @@ mod tests {
     use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand};
     use crate::cmd::terraform::{
         DatabaseError, QuotaExceededError, TerraformError, TerraformOutput, manage_common_issues,
-        terraform_exec_from_command, terraform_init, terraform_init_validate,
+        terraform_exec_from_command, terraform_exec_from_command_with_timeout, terraform_init, terraform_init_validate,
     };
     use std::fs;
     use std::process::Child;
+    use std::time::Duration;
 
     use crate::cmd::terraform_validators::{TerraformValidationError, TerraformValidator, TerraformValidators};
     use tracing::{Level, span};
@@ -1762,6 +1918,75 @@ mod tests {
         {
             todo!()
         }
+    }
+
+    struct TimingOutCommandMock;
+
+    impl ExecutableCommand for TimingOutCommandMock {
+        fn get_args(&self) -> Vec<String> {
+            vec!["plan".to_string(), "-no-color".to_string()]
+        }
+
+        fn kill(&self, _cmd_handle: &mut Child) {
+            todo!()
+        }
+
+        fn exec(&mut self) -> Result<(), CommandError> {
+            todo!()
+        }
+
+        fn exec_with_output<STDOUT, STDERR>(
+            &mut self,
+            _stdout_output: &mut STDOUT,
+            _stderr_output: &mut STDERR,
+        ) -> Result<(), CommandError>
+        where
+            STDOUT: FnMut(String),
+            STDERR: FnMut(String),
+        {
+            todo!()
+        }
+
+        fn exec_with_abort<STDOUT, STDERR>(
+            &mut self,
+            stdout_output: &mut STDOUT,
+            _stderr_output: &mut STDERR,
+            _abort_notifier: &CommandKiller,
+        ) -> Result<(), CommandError>
+        where
+            STDOUT: FnMut(String),
+            STDERR: FnMut(String),
+        {
+            stdout_output("aws_db_instance.db: Refreshing state...".to_string());
+            Err(CommandError::TimeoutError("Killing process due to Timeout(480s)".to_string()))
+        }
+    }
+
+    #[test]
+    fn timed_out_command_is_reported_as_a_timeout_not_an_unknown_error() {
+        let result = terraform_exec_from_command_with_timeout(
+            &mut TimingOutCommandMock,
+            &TerraformValidators::None,
+            Some(Duration::from_secs(480)),
+        );
+
+        let Err(error @ TerraformError::CommandTimeout { .. }) = result else {
+            panic!("expected a CommandTimeout, got {result:?}");
+        };
+        assert_eq!(
+            TerraformError::CommandTimeout {
+                terraform_args: vec!["plan".to_string(), "-no-color".to_string()],
+                timeout: Duration::from_secs(480),
+                raw_message: "Killing process due to Timeout(480s)\naws_db_instance.db: Refreshing state...\n"
+                    .to_string(),
+            },
+            error
+        );
+        // what q-core forwards to the console as `user_log_message`
+        assert_eq!(
+            "Terraform command (`terraform plan -no-color`) ran out of time and was stopped after 480s.",
+            error.to_safe_message()
+        );
     }
 
     #[test]
