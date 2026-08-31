@@ -11,6 +11,13 @@ variables:
   # The toolchain baked in the image above is the one we run. If rust-toolchain.toml
   # asks for another one, fail here instead of downloading it in every job.
   RUSTUP_AUTO_INSTALL: "0"
+  # Cargo sizes -j from the node's core count, not from KUBERNETES_CPU_REQUEST
+  # (there is no CPU limit, so no cgroup quota to read). On a large node that
+  # spawns far more rustc processes than the 32Gi memory limit can hold.
+  CARGO_BUILD_JOBS: "7"
+  # Debug info is the bulk of a Rust debug target/ dir. line-tables-only keeps
+  # file/line in backtraces at a fraction of the disk.
+  CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
 
 default:
   interruptible: true
@@ -75,17 +82,25 @@ default:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
 
 # Resource allocation templates for k8s-runner
+# Cargo jobs must request ephemeral storage: kubelet ranks eviction victims by
+# usage above request, so a pod requesting none while writing tens of GB of
+# target/ is the first one killed when the node fills. See .resources-test for
+# how the 50Gi figure is derived.
 .resources-heavy:
   variables:
     KUBERNETES_CPU_REQUEST: "7"
     KUBERNETES_MEMORY_REQUEST: "32Gi"
     KUBERNETES_MEMORY_LIMIT: "32Gi"
+    KUBERNETES_EPHEMERAL_STORAGE_REQUEST: "50Gi"
+    KUBERNETES_EPHEMERAL_STORAGE_LIMIT: "50Gi"
 
 .resources-build:
   variables:
     KUBERNETES_CPU_REQUEST: "7"
     KUBERNETES_MEMORY_REQUEST: "32Gi"
     KUBERNETES_MEMORY_LIMIT: "32Gi"
+    KUBERNETES_EPHEMERAL_STORAGE_REQUEST: "50Gi"
+    KUBERNETES_EPHEMERAL_STORAGE_LIMIT: "50Gi"
 
 .resources-test:
   variables:
@@ -287,7 +302,12 @@ stages:
 build-and-lint-code:
   stage: build-and-lint
   extends: [.cargo-cache, .resources-heavy, .nvme-node]
-  retry: 0
+  # Never re-run on a compile or lint error, but do re-run when the pod is
+  # killed under us — this job's disk/memory peak makes it the usual victim.
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
   script:
     - ./helper.sh cargo_version
     - ./helper.sh lint
