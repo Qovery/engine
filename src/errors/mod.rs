@@ -44,7 +44,7 @@ use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
 
-const DEFAULT_HINT_MESSAGE: &str = "Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/";
+const DEFAULT_HINT_MESSAGE: &str = "Need Help ? Ask the Qovery AI Copilot for a diagnostic of your deployment https://www.qovery.com/docs/copilot/overview";
 
 /// Pre-compiled regex for detecting transient network error patterns.
 ///
