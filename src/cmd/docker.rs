@@ -1,5 +1,6 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::io_models::models::CpuArchitecture;
+use crate::utilities::{is_valid_k8s_label_value, is_valid_k8s_qualified_name};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use retry::{Error, OperationResult};
@@ -156,6 +157,200 @@ impl ContainerImage {
     }
 }
 
+// The arch node selector is appended per build (one buildx node per requested architecture),
+// so it cannot be overridden by BUILDER_NODE_SELECTOR
+const ARCH_NODE_SELECTOR_KEY: &str = "kubernetes.io/arch";
+// Builder pods must survive a node going not-ready long enough to not lose in-flight builds
+const NOT_READY_TOLERATION: &str =
+    "key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800";
+
+/// Extra placement constraints for kube builder pods, parsed once at process startup from
+/// BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS and merged into the buildx kubernetes driver-opts
+/// at each builder spawn. Empty placement keeps the generated driver-opts byte-identical to
+/// what the engine has always produced.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BuilderPlacement {
+    node_selectors: Vec<(String, String)>,
+    tolerations: Vec<String>,
+}
+
+impl BuilderPlacement {
+    /// * `node_selector`: comma-separated `key=value` pairs
+    ///   (e.g. `qovery.com/dedicated=builder,eks.amazonaws.com/nodegroup=builders`)
+    /// * `tolerations`: semicolon-separated buildx toleration specs, each spec being comma-separated
+    ///   `key`/`operator`/`value`/`effect`/`tolerationSeconds` fields
+    ///   (e.g. `key=dedicated,operator=Equal,value=builder,effect=NoSchedule;key=other,operator=Exists`)
+    ///
+    /// Validated against what buildx and the Kubernetes API actually accept (label/taint key and
+    /// value grammars, operator/effect enums, integer tolerationSeconds), so a bad value fails at
+    /// engine startup instead of surfacing per build or at pod admission.
+    pub fn new(node_selector: &str, tolerations: &str) -> Result<Self, DockerError> {
+        let mut node_selectors: Vec<(String, String)> = Vec::new();
+        for pair in node_selector.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+            let invalid = |reason: String| DockerError::InvalidConfig {
+                raw_error_message: format!("Invalid builder node selector `{pair}`: {reason}"),
+            };
+
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            let (key, value) = (key.trim(), value.trim());
+            if !is_valid_k8s_qualified_name(key) {
+                return Err(invalid(format!("`{key}` is not a valid Kubernetes label key")));
+            }
+            if value.is_empty() || !is_valid_k8s_label_value(value) {
+                return Err(invalid(format!("`{value}` is not a valid non-empty Kubernetes label value")));
+            }
+            if key == ARCH_NODE_SELECTOR_KEY {
+                return Err(invalid(format!("`{ARCH_NODE_SELECTOR_KEY}` is reserved, it is set per build")));
+            }
+            if node_selectors.iter().any(|(k, _)| k == key) {
+                return Err(invalid(format!("duplicate key `{key}`")));
+            }
+            node_selectors.push((key.to_string(), value.to_string()));
+        }
+
+        let mut parsed_tolerations: Vec<String> = Vec::new();
+        for spec in tolerations.split(';').map(str::trim).filter(|s| !s.is_empty()) {
+            parsed_tolerations.push(Self::parse_toleration(spec)?);
+        }
+
+        Ok(BuilderPlacement {
+            node_selectors,
+            tolerations: parsed_tolerations,
+        })
+    }
+
+    /// Validates one buildx toleration spec field by field, mirroring buildx parsing
+    /// (integer tolerationSeconds, no blind enum casts) and Kubernetes toleration rules.
+    /// Returns the normalized (whitespace-trimmed) spec.
+    fn parse_toleration(spec: &str) -> Result<String, DockerError> {
+        let invalid = |reason: String| DockerError::InvalidConfig {
+            raw_error_message: format!("Invalid builder toleration `{spec}`: {reason}"),
+        };
+
+        let mut seen: Vec<&str> = Vec::new();
+        let mut key: Option<&str> = None;
+        let mut operator: Option<&str> = None;
+        let mut value: Option<&str> = None;
+        let mut effect: Option<&str> = None;
+        let mut has_toleration_seconds = false;
+        let mut fields: Vec<String> = Vec::new();
+
+        for field in spec.split(',') {
+            // buildx silently ignores fields without `=`, so reject them explicitly
+            let Some((name, field_value)) = field.split_once('=') else {
+                return Err(invalid(format!("field `{}` must be name=value", field.trim())));
+            };
+            let (name, field_value) = (name.trim(), field_value.trim());
+            if seen.contains(&name) {
+                return Err(invalid(format!("duplicate field `{name}`")));
+            }
+
+            match name {
+                "key" if is_valid_k8s_qualified_name(field_value) => key = Some(field_value),
+                "key" => return Err(invalid(format!("`{field_value}` is not a valid Kubernetes taint key"))),
+                "operator" if matches!(field_value, "Equal" | "Exists") => operator = Some(field_value),
+                "operator" => return Err(invalid("`operator` must be Equal or Exists".to_string())),
+                // an empty value is legal (valueless taint)
+                "value" if is_valid_k8s_label_value(field_value) => value = Some(field_value),
+                "value" => {
+                    return Err(invalid(format!("`{field_value}` is not a valid Kubernetes taint value")));
+                }
+                "effect" if matches!(field_value, "NoSchedule" | "PreferNoSchedule" | "NoExecute") => {
+                    effect = Some(field_value)
+                }
+                "effect" => {
+                    return Err(invalid(
+                        "`effect` must be NoSchedule, PreferNoSchedule or NoExecute".to_string(),
+                    ));
+                }
+                // buildx parses it with strconv.Atoi, anything else fails at build time
+                "tolerationSeconds" if field_value.parse::<i64>().is_ok() => has_toleration_seconds = true,
+                "tolerationSeconds" => return Err(invalid("`tolerationSeconds` must be an integer".to_string())),
+                _ => {
+                    return Err(invalid(format!(
+                        "unknown field `{name}`, expected key/operator/value/effect/tolerationSeconds"
+                    )));
+                }
+            }
+
+            seen.push(name);
+            fields.push(format!("{name}={field_value}"));
+        }
+
+        // A key-less toleration with operator=Exists would tolerate every taint in the cluster
+        if key.is_none() {
+            return Err(invalid("`key` is required".to_string()));
+        }
+        if operator == Some("Exists") && value.is_some_and(|v| !v.is_empty()) {
+            return Err(invalid("`value` must be empty when `operator` is Exists".to_string()));
+        }
+        if has_toleration_seconds && effect != Some("NoExecute") {
+            return Err(invalid(
+                "`effect` must be NoExecute when `tolerationSeconds` is set".to_string(),
+            ));
+        }
+
+        Ok(fields.join(","))
+    }
+}
+
+/// Renders the --driver-opt argument of `docker buildx create --driver=kubernetes`.
+/// Pure function: with an empty placement, the output is byte-identical to the historical
+/// hardcoded driver-opts, so already deployed fleets see no behavior change.
+#[allow(clippy::too_many_arguments)]
+fn kube_builder_driver_opt(
+    namespace: &str,
+    nb_builder: NonZeroUsize,
+    arch: Architecture,
+    placement: &BuilderPlacement,
+    (cpu_request_milli, cpu_limit_milli): (u32, u32),
+    (memory_request_gib, memory_limit_gib): (u32, u32),
+    ephemeral_storage_gib: Option<u32>,
+    enable_rootless: bool,
+) -> String {
+    let mut node_selector = format!("{ARCH_NODE_SELECTOR_KEY}={arch}");
+    for (key, value) in &placement.node_selectors {
+        node_selector.push_str(&format!(",{key}={value}"));
+    }
+
+    let mut tolerations = NOT_READY_TOLERATION.to_string();
+    for toleration in &placement.tolerations {
+        tolerations.push_str(&format!(";{toleration}"));
+    }
+
+    let mut driver_opt = format!(
+        concat!(
+            "--driver-opt=",
+            "\"namespace={}\",",
+            "\"replicas={}\",",
+            "\"loadbalance=random\",",
+            "\"nodeselector={}\",",
+            "\"tolerations={}\",",
+            "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+            "\"requests.cpu={}m\",",
+            "\"limits.cpu={}m\",",
+            "\"requests.memory={}Gi\",",
+            "\"limits.memory={}Gi\""
+        ),
+        namespace,
+        nb_builder,
+        node_selector,
+        tolerations,
+        cpu_request_milli,
+        cpu_limit_milli,
+        memory_request_gib,
+        memory_limit_gib
+    );
+    if enable_rootless {
+        driver_opt.push_str(",\"rootless=true\"");
+    }
+    if let Some(ephemeral_storage) = ephemeral_storage_gib {
+        driver_opt.push_str(&format!(",\"requests.ephemeral-storage={ephemeral_storage}Gi\""));
+    }
+
+    driver_opt
+}
+
 #[derive(Debug, Clone)]
 enum BuilderLocation {
     Local,
@@ -164,6 +359,7 @@ enum BuilderLocation {
         builder_prefix: String,
         supported_architectures: Vec<Architecture>,
         enable_rootless: bool,
+        placement: BuilderPlacement,
     },
 }
 
@@ -317,6 +513,7 @@ impl Docker {
         builder_prefix: String,
         args: Vec<(String, String)>,
         enable_rootless: bool,
+        placement: BuilderPlacement,
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
 
@@ -325,6 +522,7 @@ impl Docker {
             builder_prefix,
             supported_architectures: supported_architectures.iter().dedup().cloned().collect_vec(),
             enable_rootless,
+            placement,
         };
         docker.common_envs.extend(args);
 
@@ -369,6 +567,7 @@ impl Docker {
                 builder_prefix,
                 supported_architectures,
                 enable_rootless,
+                placement,
             } => {
                 let available_architectures = requested_architectures
                     .iter()
@@ -413,34 +612,16 @@ impl Docker {
                     node_name.truncate(60);
                     let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
                     let platform = format!("linux/{arch}");
-                    let mut driver_opt = format!(
-                        concat!(
-                            "--driver-opt=",
-                            "\"namespace={}\",",
-                            "\"replicas={}\",",
-                            "\"loadbalance=random\",",
-                            "\"nodeselector=kubernetes.io/arch={}\",",
-                            "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
-                            "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
-                            "\"requests.cpu={}m\",",
-                            "\"limits.cpu={}m\",",
-                            "\"requests.memory={}Gi\",",
-                            "\"limits.memory={}Gi\""
-                        ),
+                    let driver_opt = kube_builder_driver_opt(
                         namespace,
                         nb_builder,
-                        arch,
-                        cpu_request_milli,
-                        cpu_limit_milli,
-                        memory_request_gib,
-                        memory_limit_gib
+                        *arch,
+                        placement,
+                        (cpu_request_milli, cpu_limit_milli),
+                        (memory_request_gib, memory_limit_gib),
+                        ephemeral_storage_gib,
+                        *enable_rootless,
                     );
-                    if *enable_rootless {
-                        driver_opt.push_str(",\"rootless=true\"");
-                    }
-                    if let Some(ephemeral_storage) = ephemeral_storage_gib {
-                        driver_opt.push_str(&format!(",\"requests.ephemeral-storage={ephemeral_storage}Gi\""));
-                    }
 
                     let mut args = vec![
                         "--config",
@@ -1034,6 +1215,204 @@ where
     }
 }
 
+#[cfg(test)]
+mod builder_placement_tests {
+    use crate::cmd::docker::{Architecture, BuilderPlacement, DockerError, kube_builder_driver_opt};
+    use std::num::NonZeroUsize;
+
+    fn driver_opt_with_placement(placement: &BuilderPlacement) -> String {
+        kube_builder_driver_opt(
+            "qovery",
+            NonZeroUsize::new(2).unwrap(),
+            Architecture::AMD64,
+            placement,
+            (500, 1000),
+            (4, 8),
+            None,
+            false,
+        )
+    }
+
+    #[test]
+    fn test_kube_builder_driver_opt_without_placement_is_byte_identical() {
+        // Byte-identical to the historical hardcoded driver-opts: deployed fleets that don't set
+        // BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS must see no behavior change
+        assert_eq!(
+            driver_opt_with_placement(&BuilderPlacement::default()),
+            concat!(
+                "--driver-opt=",
+                "\"namespace=qovery\",",
+                "\"replicas=2\",",
+                "\"loadbalance=random\",",
+                "\"nodeselector=kubernetes.io/arch=amd64\",",
+                "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+                "\"requests.cpu=500m\",",
+                "\"limits.cpu=1000m\",",
+                "\"requests.memory=4Gi\",",
+                "\"limits.memory=8Gi\""
+            )
+        );
+
+        assert_eq!(
+            kube_builder_driver_opt(
+                "qovery",
+                NonZeroUsize::new(1).unwrap(),
+                Architecture::ARM64,
+                &BuilderPlacement::default(),
+                (500, 1000),
+                (4, 8),
+                Some(20),
+                true,
+            ),
+            concat!(
+                "--driver-opt=",
+                "\"namespace=qovery\",",
+                "\"replicas=1\",",
+                "\"loadbalance=random\",",
+                "\"nodeselector=kubernetes.io/arch=arm64\",",
+                "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+                "\"requests.cpu=500m\",",
+                "\"limits.cpu=1000m\",",
+                "\"requests.memory=4Gi\",",
+                "\"limits.memory=8Gi\",",
+                "\"rootless=true\",",
+                "\"requests.ephemeral-storage=20Gi\""
+            )
+        );
+    }
+
+    #[test]
+    fn test_kube_builder_driver_opt_with_node_selectors_only() {
+        let placement = BuilderPlacement::new("qovery.com/dedicated=builder, pool = env-fleet", "").unwrap();
+        let driver_opt = driver_opt_with_placement(&placement);
+        assert!(
+            driver_opt
+                .contains("\"nodeselector=kubernetes.io/arch=amd64,qovery.com/dedicated=builder,pool=env-fleet\",")
+        );
+        // Tolerations stay untouched
+        assert!(driver_opt.contains(
+            "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\","
+        ));
+    }
+
+    #[test]
+    fn test_kube_builder_driver_opt_with_tolerations_only() {
+        let placement = BuilderPlacement::new(
+            "",
+            "key=dedicated,operator=Equal,value=builder,effect=NoSchedule; key=other, operator=Exists",
+        )
+        .unwrap();
+        let driver_opt = driver_opt_with_placement(&placement);
+        // Node selector stays untouched
+        assert!(driver_opt.contains("\"nodeselector=kubernetes.io/arch=amd64\","));
+        // The hardcoded not-ready toleration is preserved, extra specs are appended
+        assert!(driver_opt.contains(concat!(
+            "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800",
+            ";key=dedicated,operator=Equal,value=builder,effect=NoSchedule",
+            ";key=other,operator=Exists\","
+        )));
+    }
+
+    #[test]
+    fn test_kube_builder_driver_opt_with_node_selectors_and_tolerations() {
+        let placement = BuilderPlacement::new(
+            "qovery.com/dedicated=builder",
+            "key=dedicated,operator=Equal,value=builder,effect=NoSchedule",
+        )
+        .unwrap();
+        assert_eq!(
+            driver_opt_with_placement(&placement),
+            concat!(
+                "--driver-opt=",
+                "\"namespace=qovery\",",
+                "\"replicas=2\",",
+                "\"loadbalance=random\",",
+                "\"nodeselector=kubernetes.io/arch=amd64,qovery.com/dedicated=builder\",",
+                "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800",
+                ";key=dedicated,operator=Equal,value=builder,effect=NoSchedule\",",
+                "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+                "\"requests.cpu=500m\",",
+                "\"limits.cpu=1000m\",",
+                "\"requests.memory=4Gi\",",
+                "\"limits.memory=8Gi\""
+            )
+        );
+    }
+
+    #[test]
+    fn test_builder_placement_parsing() {
+        // Empty / blank inputs => no extra placement
+        assert_eq!(BuilderPlacement::new("", "").unwrap(), BuilderPlacement::default());
+        assert_eq!(BuilderPlacement::new(" ", " ; ").unwrap(), BuilderPlacement::default());
+
+        // Valid inputs are trimmed and normalized
+        let placement = BuilderPlacement::new(
+            " qovery.com/dedicated = builder ",
+            "key=dedicated, operator=Equal, value= , effect=NoSchedule ; key=node-role.kubernetes.io/spot,operator=Exists,effect=NoExecute,tolerationSeconds=300",
+        )
+        .unwrap();
+        assert_eq!(
+            placement.node_selectors,
+            vec![("qovery.com/dedicated".to_string(), "builder".to_string())]
+        );
+        assert_eq!(
+            placement.tolerations,
+            vec![
+                // an explicitly empty value= is legal (valueless taint)
+                "key=dedicated,operator=Equal,value=,effect=NoSchedule".to_string(),
+                "key=node-role.kubernetes.io/spot,operator=Exists,effect=NoExecute,tolerationSeconds=300".to_string(),
+            ]
+        );
+        // operator omitted => Kubernetes defaults to Equal
+        assert!(BuilderPlacement::new("", "key=dedicated,value=builder").is_ok());
+
+        // Invalid node selectors
+        let long_value = format!("pool={}", "x".repeat(64));
+        for node_selector in [
+            "no-value",
+            "=builder",
+            "key=",
+            "key=va lue",
+            "key=\"builder\"",
+            "pool=a/b",                              // `/` is only legal in label keys, not values
+            "-bad=x",                                // label key must start alphanumeric
+            "Qovery.com/dedicated=builder",          // key prefix must be a lowercase DNS subdomain
+            long_value.as_str(),                     // label value over 63 chars
+            "kubernetes.io/arch=amd64",              // reserved, set per build
+            "pool=builder,pool=other",               // duplicate key
+            "pool=builder,kubernetes.io/arch=arm64", // reserved, set per build
+        ] {
+            assert!(
+                matches!(BuilderPlacement::new(node_selector, ""), Err(DockerError::InvalidConfig { .. })),
+                "node selector `{node_selector}` should be rejected"
+            );
+        }
+
+        // Invalid tolerations
+        for tolerations in [
+            "dedicated",                           // not a name=value field (buildx would silently drop it)
+            "key=",                                // empty taint key
+            "unknown=builder",                     // unknown toleration field
+            "operator=Exists",                     // missing key => would tolerate every taint
+            "key=dedicated,operator=Eq ual",       // not a valid operator
+            "key=dedicated,operator=Equals",       // typo: Kubernetes only knows Equal | Exists
+            "key=dedicated,effect=NoScheduling",   // typo: NoSchedule | PreferNoSchedule | NoExecute
+            "key=dedicated,tolerationSeconds=3h",  // buildx parses it with Atoi => integer only
+            "key=dedicated,tolerationSeconds=300", // tolerationSeconds requires effect=NoExecute
+            "key=dedicated,effect=NoSchedule,tolerationSeconds=300", // same with a non-NoExecute effect
+            "key=dedicated,operator=Exists,value=web", // value must be empty with Exists
+            "key=dedicated,key=other",             // duplicate field
+        ] {
+            assert!(
+                matches!(BuilderPlacement::new("", tolerations), Err(DockerError::InvalidConfig { .. })),
+                "tolerations `{tolerations}` should be rejected"
+            );
+        }
+    }
+}
+
 // start a local registry to run this test
 // docker run --rm -ti -p 5000:5000 --name registry registry:2
 #[cfg(feature = "test-local-docker")]
@@ -1274,6 +1653,7 @@ mod tests {
             "builder-".to_string(),
             args,
             true,
+            super::BuilderPlacement::default(),
         )
         .unwrap();
         let builder = docker
