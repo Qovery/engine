@@ -932,6 +932,19 @@ mod tests {
         assert!(rendered.contains("karpenter.sh/do-not-disrupt"));
     }
 
+    #[test]
+    fn terraform_job_does_not_restart_failed_container() {
+        let rendered = Tera::one_off(
+            include_str!("../../../lib/common/charts/q-terraform-service/templates/job.j2.yaml"),
+            &Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"),
+            false,
+        )
+        .expect("template should render");
+
+        assert!(rendered.contains("restartPolicy: Never"));
+        assert!(!rendered.contains("restartPolicy: OnFailure"));
+    }
+
     fn minimal_pdb_context(is_karpenter_enabled: bool) -> TerraformServiceTeraContext {
         TerraformServiceTeraContext {
             organization_long_id: Uuid::new_v4(),

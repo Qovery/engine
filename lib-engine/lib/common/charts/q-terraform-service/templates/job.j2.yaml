@@ -80,7 +80,7 @@ spec:
                   - "{{ value }}"
         {%- endfor %}
         {%- endif %}
-      restartPolicy: OnFailure
+      restartPolicy: Never
       {%- if service.advanced_settings.security_service_account_name != "" %}
       automountServiceAccountToken: true
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
