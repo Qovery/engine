@@ -1353,7 +1353,27 @@ publish-platform-catalog:
     - if: $CI_COMMIT_TAG
       when: manual
 
-8-deploy-qovery-blueprint-engines:
+8-deploy-qovery-env-engines-public:
+  stage: deploy-prod
+  extends: [.needs-docker, .resources-minimal]
+  retry: 0
+  environment:
+    name: env-public-production
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/9dd40e56-9a49-4b08-9db4-c66c38e4ea1b/settings/general
+    deployment_tier: production
+  needs:
+    - job: 7-deploy-qovery-env-engines
+  script:
+    - ./helper.sh deploy_engines_environment_public
+  tags:
+    - k8s-runner
+  # Chained to the private env deploy (see needs: above), so a release can never
+  # leave the public env fleet on a stale engine version
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: on_success
+
+9-deploy-qovery-blueprint-engines:
   stage: deploy-prod
   extends: [.needs-docker, .resources-minimal]
   retry: 0
@@ -1371,7 +1391,7 @@ publish-platform-catalog:
     - if: $CI_COMMIT_TAG
       when: manual
 
-9-deploy-qovery-cluster-analysis-engines-prod:
+10-deploy-qovery-cluster-analysis-engines-prod:
   stage: deploy-prod
   extends: .deploy-qovery-cluster-analysis-engines
   variables:

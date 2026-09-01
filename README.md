@@ -115,6 +115,11 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 - Execute the following command: `qovery admin cluster deploy  --parallel-run 50 --filters IsProduction=true --execution-mode on-the-fly --disable-dry-run`
 - Monitor deployments on grafana: <https://qortal.qovery.com/grafana/d/e9365ed8-1bca-4aea-a010-44a05fe64a68/deployments?orgId=1&refresh=30s>
 
+#### Environment engines
+
+- Trigger the job: `7-deploy-qovery-env-engines`
+- Wait for `8-deploy-qovery-env-engines-public` to complete automatically (it starts on success of `7-deploy-qovery-env-engines`, keeping the public env fleet version-locked to the private one)
+
 ### Non-production clusters
 
 #### Dry-run deployment

@@ -309,6 +309,60 @@ engineResources.requests.memory="3Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 }
 
+function deploy_engines_environment_public() { ## Release env engines consuming the public-pool queue (QOV-2201), engine and builder pods pinned to qovery-default-public nodes
+  tag=$(generate_image_tag)
+  # autoscaler.minReplicas=1: the chart renders no PDB (engine nor builder) below 2 replicas,
+  # a node consolidation can evict a builder mid-build — accepted for the pilot fleet
+  AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_SECRET_KEY" \
+  AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
+  helm upgrade --kubeconfig="$AWS_PROD_ENVIRONMENT_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env-public qovery-engine \
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set \
+tolerations[0].key="node.kubernetes.io/not-ready",\
+tolerations[0].operator="Exists",\
+tolerations[0].effect="NoExecute",\
+tolerations[0].tolerationSeconds=21600,\
+tolerations[1].key="nodepool/qovery-default-public",\
+tolerations[1].operator="Exists",\
+tolerations[1].effect="NoSchedule",\
+overprovisionning.enabled=false \
+  --set-string \
+image.tag="$tag",\
+fullnameOverride="qovery-engine-env-public",\
+nodeSelector."karpenter\.sh/nodepool"="qovery-default-public",\
+nodeSelector."kubernetes\.io/arch"="amd64",\
+buildContainer.enabled="true",\
+buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
+buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
+buildContainer.environmentVariables.BUILDER_ROOTLESS_ENABLED="false",\
+buildContainer.environmentVariables.BUILDER_NODE_SELECTOR="karpenter.sh/nodepool=qovery-default-public",\
+buildContainer.environmentVariables.BUILDER_TOLERATIONS="key=nodepool/qovery-default-public\,operator=Exists\,effect=NoSchedule",\
+environmentVariables.ENGINE_TAG_VERSION="$tag",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.DEPLOYMENT_TYPE="ENVIRONMENT",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
+environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
+environmentVariables.CLUSTER_ID="9dd40e56-9a49-4b08-9db4-c66c38e4ea1b",\
+environmentVariables.CLUSTER_JWT_TOKEN="$ENVIRONMENT_CLUSTER_PUBLIC_IP_JWT_TOKEN",\
+environmentVariables.QOVERY_AWS_APN_ID="$QOVERY_AWS_APN_ID",\
+networkPolicies.enabled="true",\
+metrics.enabled="true",\
+rbac.clusterPermission="deployer",\
+autoscaler.enabled="true",\
+autoscaler.minReplicas="1",\
+autoscaler.maxReplicas="50",\
+autoscaler.averageValue="0.9",\
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="3Gi",\
+engineResources.limits.ephemeral-storage="20Gi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="3Gi",\
+engineResources.requests.ephemeral-storage="20Gi"
+}
+
 function deploy_engines_blueprint_static_ip() {
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
@@ -688,6 +742,10 @@ deploy_engines_infra_public)
 # Deploy on the engines dedicated for customer's environments deployments on cluster with static ip
 deploy_engines_environment_static_ip)
   deploy_engines_environment_static_ip
+  ;;
+# Deploy the env engines consuming the public-pool queue (QOV-2201)
+deploy_engines_environment_public)
+  deploy_engines_environment_public
   ;;
 # Deploy on the engines dedicated for customer's blueprint deployments on cluster static-IP cluster
 deploy_engines_blueprint_static_ip)
