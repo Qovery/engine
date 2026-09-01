@@ -1159,6 +1159,7 @@ publish-platform-catalog:
   retry: 0
   script:
     - ./helper.sh deploy_engines_infra_public $CHANNEL
+    - ./helper.sh set_engine_worker_version ENGINE_INFRA $CHANNEL
   tags:
     - k8s-runner
   # Chained to the private infra deploy of the same channel (see needs: below),
@@ -1347,6 +1348,7 @@ publish-platform-catalog:
     - gitlab-release
   script:
     - ./helper.sh deploy_engines_environment_static_ip
+    - ./helper.sh set_engine_worker_version ENGINE_ENVIRONMENT
   tags:
     - k8s-runner
   rules:

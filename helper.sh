@@ -142,6 +142,57 @@ function set_release_ga() { ## Release a new engine version and mark it as globa
   curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_DEV_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
 }
 
+function set_engine_worker_version() { ## Publish the deployed engine version for one worker type
+  local service_type="$1"
+  local requested_channel="${2:-}"
+  local channel_parameter=()
+  local tag
+
+  case "$service_type" in
+    "ENGINE_INFRA")
+      case "$requested_channel" in
+        "prod")
+          channel_parameter=(--data-urlencode "channel=PROD")
+          ;;
+        "staging")
+          channel_parameter=(--data-urlencode "channel=STAGING")
+          ;;
+        *)
+          echo "ENGINE_INFRA requires the prod or staging channel" >&2
+          return 1
+          ;;
+      esac
+      ;;
+    "ENGINE_ENVIRONMENT")
+      if [ -n "$requested_channel" ]; then
+        echo "ENGINE_ENVIRONMENT does not support a channel" >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "Unsupported engine worker service type: $service_type" >&2
+      return 1
+      ;;
+  esac
+
+  if [ -z "${CI_ENGINE_VERSION_CONTROLLER_TOKEN:-}" ]; then
+    echo "CI_ENGINE_VERSION_CONTROLLER_TOKEN is required to publish an engine worker version" >&2
+    return 1
+  fi
+
+  tag=$(generate_image_tag) || return 1
+  for api_host in "$QOVERY_ADMIN_DEV_API" "$QOVERY_ADMIN_API"; do
+    echo "Publishing $tag for $service_type to $api_host"
+    curl --fail-with-body --silent --show-error --request PUT \
+      --header 'Content-Type: application/json' \
+      --header "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" \
+      --get "https://${api_host}/engine/serviceVersion" \
+      --data-urlencode "serviceType=${service_type}" \
+      --data-urlencode "version=${tag}" \
+      "${channel_parameter[@]}" || return 1
+  done
+}
+
 function deploy_engines_infra_static_ip() { ## Release GA to prod
   tag=$(generate_image_tag)
   case $1 in
@@ -730,6 +781,9 @@ build)
   ;;
 set_release_ga)
   set_release_ga
+  ;;
+set_engine_worker_version)
+  set_engine_worker_version "$2" "${3:-}"
   ;;
 # Deploy the engines dedicated for infra deployments on cluster with static ip
 deploy_engines_infra_static_ip)
