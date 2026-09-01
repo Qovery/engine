@@ -54,7 +54,7 @@ pub fn execute(
     let rendered_values = render_values_yaml(working_dir, &request.variables).map_err(|e| {
         Box::new(EngineError::new_blueprint_error(
             event_details.clone(),
-            BlueprintError::TerraformGenerationError(format!("Failed to render values.yaml: {}", e)),
+            BlueprintError::TerraformGenerationError(e),
         ))
     })?;
 
@@ -96,7 +96,7 @@ pub fn execute_diff(
     let rendered_values = render_values_yaml(working_dir, &request.variables).map_err(|e| {
         Box::new(EngineError::new_blueprint_error(
             event_details.clone(),
-            BlueprintError::TerraformGenerationError(format!("Failed to render values.yaml: {}", e)),
+            BlueprintError::TerraformGenerationError(e),
         ))
     })?;
 
@@ -141,8 +141,22 @@ fn render_values_yaml(blueprint_dir: &Path, variables: &[BlueprintVariable]) -> 
     }
 
     tera.render("values.yaml", &ctx)
-        .map_err(|e| format!("Failed to render values.yaml: {}", e))
+        .map_err(|e| format!("Failed to render values.yaml: {}", format_error_chain(&e)))
         .map(Some)
+}
+
+/// Flatten an error and its `source()` chain into one line.
+///
+/// Tera's top-level `Display` is only `Failed to render 'values.yaml'`; the part that names the
+/// culprit (`Variable 'datadog_site' not found in context`) lives one level down and is otherwise lost.
+fn format_error_chain(error: &dyn std::error::Error) -> String {
+    let mut message = error.to_string();
+    let mut source = error.source();
+    while let Some(cause) = source {
+        message.push_str(&format!(": {}", cause));
+        source = cause.source();
+    }
+    message
 }
 
 impl BlueprintHelmTeraContext {
@@ -376,5 +390,15 @@ mod tests {
     fn render_values_yaml_no_file_returns_none() {
         let dir = TempDir::new().unwrap();
         assert!(render_values_yaml(dir.path(), &[]).unwrap().is_none());
+    }
+
+    #[test]
+    fn render_values_yaml_error_names_the_missing_variable() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("values.yaml"), "site: \"{{ datadog_site }}\"").unwrap();
+
+        let error = render_values_yaml(dir.path(), &[]).unwrap_err();
+
+        assert!(error.contains("datadog_site"), "cause was swallowed: {error}");
     }
 }
