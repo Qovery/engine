@@ -139,6 +139,53 @@ pub fn sanitize_k8s_label_value(value: &str) -> String {
     }
 }
 
+/// Validates a Kubernetes label value: empty, or at most 63 chars of [a-zA-Z0-9._-]
+/// starting and ending with an alphanumeric. Strict counterpart of the grammar
+/// `sanitize_k8s_label_value` coerces values into, for user-provided configuration
+/// that must be rejected rather than silently rewritten.
+pub fn is_valid_k8s_label_value(value: &str) -> bool {
+    value.is_empty()
+        || (value.len() <= 63
+            && value.starts_with(|c: char| c.is_ascii_alphanumeric())
+            && value.ends_with(|c: char| c.is_ascii_alphanumeric())
+            && value
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.'))
+}
+
+/// Validates a Kubernetes qualified name (label or taint key): an optional DNS-subdomain
+/// prefix followed by `/`, then a name of at most 63 chars of [a-zA-Z0-9._-] starting and
+/// ending with an alphanumeric (e.g. `qovery.com/dedicated`).
+pub fn is_valid_k8s_qualified_name(key: &str) -> bool {
+    let (prefix, name) = match key.split_once('/') {
+        Some((prefix, name)) => (Some(prefix), name),
+        None => (None, key),
+    };
+
+    if let Some(prefix) = prefix {
+        let is_valid_dns_label = |label: &str| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label.starts_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                && label.ends_with(|c: char| c.is_ascii_lowercase() || c.is_ascii_digit())
+                && label
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        };
+        if prefix.is_empty() || prefix.len() > 253 || !prefix.split('.').all(is_valid_dns_label) {
+            return false;
+        }
+    }
+
+    !name.is_empty()
+        && name.len() <= 63
+        && name.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && name.ends_with(|c: char| c.is_ascii_alphanumeric())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+}
+
 pub fn to_short_id(id: &Uuid) -> String {
     format!("z{}", id.to_string().split_at(8).0)
 }
@@ -169,12 +216,45 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 mod tests_utilities {
     use crate::infrastructure::models::build_platform::{DockerfileFragment, GitRepositoryExtraFile};
     use crate::utilities::{
-        base64_replace_comma_to_new_line, compute_cache_tag, compute_image_tag, sanitize_k8s_label_value,
+        base64_replace_comma_to_new_line, compute_cache_tag, compute_image_tag, is_valid_k8s_label_value,
+        is_valid_k8s_qualified_name, sanitize_k8s_label_value,
     };
     use base64::Engine;
     use base64::engine::general_purpose;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_is_valid_k8s_label_value() {
+        assert!(is_valid_k8s_label_value("")); // empty label values are legal
+        assert!(is_valid_k8s_label_value("builder"));
+        assert!(is_valid_k8s_label_value("a1-b_2.c"));
+        assert!(is_valid_k8s_label_value(&"x".repeat(63)));
+
+        assert!(!is_valid_k8s_label_value("a/b"));
+        assert!(!is_valid_k8s_label_value("-builder"));
+        assert!(!is_valid_k8s_label_value("builder-"));
+        assert!(!is_valid_k8s_label_value("va lue"));
+        assert!(!is_valid_k8s_label_value(&"x".repeat(64)));
+    }
+
+    #[test]
+    fn test_is_valid_k8s_qualified_name() {
+        assert!(is_valid_k8s_qualified_name("dedicated"));
+        assert!(is_valid_k8s_qualified_name("Dedicated_1.a")); // name part allows uppercase
+        assert!(is_valid_k8s_qualified_name("qovery.com/dedicated"));
+        assert!(is_valid_k8s_qualified_name("node-role.kubernetes.io/spot"));
+
+        assert!(!is_valid_k8s_qualified_name(""));
+        assert!(!is_valid_k8s_qualified_name("/name")); // empty prefix
+        assert!(!is_valid_k8s_qualified_name("qovery.com/")); // empty name
+        assert!(!is_valid_k8s_qualified_name("Qovery.com/dedicated")); // prefix must be lowercase
+        assert!(!is_valid_k8s_qualified_name("a..b/name")); // empty DNS label in prefix
+        assert!(!is_valid_k8s_qualified_name("a/b/c")); // a single `/` at most
+        assert!(!is_valid_k8s_qualified_name("-bad"));
+        assert!(!is_valid_k8s_qualified_name(&format!("{}/name", "p".repeat(254))));
+        assert!(!is_valid_k8s_qualified_name(&"x".repeat(64)));
+    }
 
     #[test]
     fn test_get_image_tag() {

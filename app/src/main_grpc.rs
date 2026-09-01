@@ -42,7 +42,7 @@ use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, load_deployed_engine_version};
 use qovery_engine::cluster_analysis::task::ClusterAnalysisTask;
-use qovery_engine::cmd::docker::Docker;
+use qovery_engine::cmd::docker::{BuilderPlacement, Docker};
 use qovery_engine::engine_task::Task;
 use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
@@ -216,6 +216,16 @@ struct Cli {
     /// If kube builder enabled, in which namespace to create the builder
     #[arg(long, default_value = "qovery", env = "BUILDER_NAMESPACE")]
     builder_namespace: String,
+
+    /// Extra node selectors for kube builder pods, comma-separated key=value pairs
+    /// (i.e: qovery.com/dedicated=builder). Only if kube builder is enabled
+    #[arg(long, default_value = "", env = "BUILDER_NODE_SELECTOR")]
+    builder_node_selector: String,
+
+    /// Extra tolerations for kube builder pods, semicolon-separated toleration specs
+    /// (i.e: key=dedicated,operator=Equal,value=builder,effect=NoSchedule). Only if kube builder is enabled
+    #[arg(long, default_value = "", env = "BUILDER_TOLERATIONS")]
+    builder_tolerations: String,
 
     /// Listening address:port of the http server (used for healthcheck, metrics)
     #[arg(long, default_value = "[::]:8080", env = "HTTP_LISTEN_ON")]
@@ -394,6 +404,12 @@ pub fn main() -> io::Result<()> {
         None => info!("docker host is not set"),
     };
 
+    // Parsed and validated even when the kube builder is disabled, so a bad
+    // BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS fails when its deploy rolls out,
+    // not later when builder_kube_enabled gets flipped
+    let builder_placement = BuilderPlacement::new(&cli.builder_node_selector, &cli.builder_tolerations)
+        .expect("Invalid BUILDER_NODE_SELECTOR or BUILDER_TOLERATIONS");
+
     let docker = if cli.builder_kube_enabled {
         let builder_prefix = "build-".to_string();
         tokio_utils::launch_task(dead_builder_reaper(cli.builder_namespace.clone(), builder_prefix.clone()));
@@ -404,6 +420,7 @@ pub fn main() -> io::Result<()> {
             builder_prefix,
             vec![],
             cli.builder_rootless_enabled,
+            builder_placement,
         )
         .expect("Can't init docker builder")
     } else {
