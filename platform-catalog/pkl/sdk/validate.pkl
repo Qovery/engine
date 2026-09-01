@@ -115,7 +115,7 @@ function inputPattern(clusterInputs: Mapping, input: contract.LogicalInput): con
       violation(
         inputPatternMismatchCode,
         "clusterInputs.\(input.key)",
-        "Input \(input.key) does not match the expected \(input.type) format",
+        "Input \(input.key) does not match the expected format",
       )
     else
       null

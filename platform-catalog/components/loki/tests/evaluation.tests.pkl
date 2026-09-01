@@ -106,6 +106,8 @@ facts {
     )
       result.requiredInputs.map((input) -> input.key).toList()
         == List("infra.s3BucketName", "infra.lokiRoleArn")
+        && result.requiredInputs.map((input) -> input.type).toList()
+          == List(contract.stringFieldType, contract.stringFieldType)
         && result.requiredInputs.map((input) -> input.scope).toSet()
           == Set(contract.clusterScope)
         && result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues

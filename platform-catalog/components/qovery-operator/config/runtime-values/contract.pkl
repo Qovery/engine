@@ -48,7 +48,7 @@ class Field {
 // Example: choosing S3 activates the bucket name and IAM role requirements.
 class LogicalInput {
   key: String
-  type: String
+  type: FieldType
   scope: InputScope
   label: String
   description: String?

@@ -23,6 +23,11 @@ local function renderCompiledValues(profileConfig: Mapping, clusterInputs: Mappi
 facts {
   ["storage backend registry"] {
     storageBackends.backends.keys.toSet() == storageHelm.adapters.keys.toSet()
+    storageBackends.backends.keys.every((key) ->
+      storageBackends.backends[key].customerInputs.every((input) ->
+        input.type == contract.stringFieldType
+      )
+    )
     storageBackends.s3.customerInputs.map((input) -> input.key)
       == List("infra.s3BucketName", "infra.lokiRoleArn")
     storageBackends.s3.compileOnlyInputs.keys.toList() == List("region")

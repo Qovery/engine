@@ -16,7 +16,7 @@ awsRegion: types.CompileInput = new {
 
 s3Bucket: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.s3BucketName"
-  type = "s3BucketName"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "S3 bucket name"
   description = "Bucket used by Loki for chunks, ruler and admin data."
@@ -25,7 +25,7 @@ s3Bucket: contract.LogicalInput = new contract.LogicalInput {
 
 s3Role: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.lokiRoleArn"
-  type = "awsIamRoleArn"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "Loki IAM role ARN"
   description = "IAM role assumed by Loki through IRSA."
@@ -34,7 +34,7 @@ s3Role: contract.LogicalInput = new contract.LogicalInput {
 
 gcsBucket: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.gcsBucketName"
-  type = "gcsBucketName"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "GCS bucket name"
   description = "Google Cloud Storage bucket used by Loki for chunks, ruler and admin data."
@@ -46,7 +46,7 @@ gcsBucket: contract.LogicalInput = new contract.LogicalInput {
 
 gcpServiceAccount: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.gcpServiceAccountEmail"
-  type = "gcpServiceAccountEmail"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "GCP service account email"
   description =
@@ -56,7 +56,7 @@ gcpServiceAccount: contract.LogicalInput = new contract.LogicalInput {
 
 azureStorageAccount: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.azureStorageAccountName"
-  type = "azureStorageAccountName"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "Azure storage account"
   description = "Storage account containing the Loki Blob Storage container."
@@ -65,7 +65,7 @@ azureStorageAccount: contract.LogicalInput = new contract.LogicalInput {
 
 azureContainer: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.azureContainerName"
-  type = "azureBlobContainerName"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "Azure Blob container"
   description = "Blob Storage container used by Loki for chunks, ruler and admin data."
@@ -74,7 +74,7 @@ azureContainer: contract.LogicalInput = new contract.LogicalInput {
 
 azureManagedIdentity: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.azureManagedIdentityClientId"
-  type = "uuid"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "Azure managed identity client ID"
   description = "Managed identity used by Loki through Azure Workload Identity."
@@ -85,7 +85,7 @@ azureManagedIdentity: contract.LogicalInput = new contract.LogicalInput {
 
 s3CompatibleBucket: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.s3CompatibleBucketName"
-  type = "s3BucketName"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "S3-compatible bucket name"
   description = "S3-compatible bucket used by Loki for chunks, ruler and admin data."
@@ -94,7 +94,7 @@ s3CompatibleBucket: contract.LogicalInput = new contract.LogicalInput {
 
 s3CompatibleEndpoint: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.s3CompatibleEndpoint"
-  type = "httpsUrl"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "S3-compatible endpoint"
   description = "HTTPS endpoint of the S3-compatible object store, without credentials."
@@ -105,7 +105,7 @@ s3CompatibleEndpoint: contract.LogicalInput = new contract.LogicalInput {
 
 s3CompatibleRegion: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.s3CompatibleRegion"
-  type = "cloudRegion"
+  type = contract.stringFieldType
   scope = contract.clusterScope
   label = "S3-compatible region"
   description = "Region expected by the S3-compatible object store."
@@ -114,8 +114,8 @@ s3CompatibleRegion: contract.LogicalInput = new contract.LogicalInput {
 
 s3CompatibleCredentialsSecret: contract.LogicalInput = new contract.LogicalInput {
   key = "infra.s3CompatibleCredentialsSecretName"
-  type = "kubernetesSecretName"
-  scope = "CLUSTER"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
   label = "S3-compatible credentials Secret"
   description =
     "Name of a Secret in the Loki namespace containing S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY. The credentials never enter q-core."
