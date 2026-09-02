@@ -3,9 +3,7 @@ platformTemplateRelease:
   version: 0.1.0
   runtimeSourceValues:
     clusterAgent.imageRepository: public.ecr.aws/r3m4q3r9/cluster-agent
-    clusterAgent.imageTag: 23234aee9339cb61d2a3619a4c1c76e95f1ec222
     shellAgent.imageRepository: public.ecr.aws/r3m4q3r9/shell-agent
-    shellAgent.imageTag: 2a2fb514aa6029fd80147180d68017c29c6ea4d2
     operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
     operator.imageTag: f9aff159d23551c56813d3d3a9aa832be38317f4
     engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine

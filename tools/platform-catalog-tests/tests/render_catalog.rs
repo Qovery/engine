@@ -135,6 +135,47 @@ fn contains_component(template: &Value, component_key: &str) -> bool {
         })
 }
 
+fn component<'a>(template: &'a Value, component_key: &str) -> &'a Value {
+    yaml_path(template, &["platformTemplateRelease", "layers"])
+        .and_then(Value::as_sequence)
+        .expect("template must declare layers")
+        .iter()
+        .filter_map(|layer| yaml_path(layer, &["components"]).and_then(Value::as_sequence))
+        .flat_map(|components| components.iter())
+        .find(|component| yaml_string(component, &["key"]) == Some(component_key))
+        .unwrap_or_else(|| panic!("template must declare component {component_key}"))
+}
+
+#[test]
+fn agent_image_tags_are_required_qcore_values_without_template_fallbacks() {
+    for template_path in [
+        "platform-catalog/templates/qovery-cluster-v0/template.yaml",
+        "platform-catalog/templates/qovery-demo-v0/template.yaml",
+    ] {
+        let template = parse_yaml_file(repository_path(template_path));
+        for (component_key, source_key) in [
+            ("cluster-agent", "clusterAgent.imageTag"),
+            ("shell-agent", "shellAgent.imageTag"),
+        ] {
+            assert!(
+                yaml_path(&template, &["platformTemplateRelease", "runtimeSourceValues", source_key]).is_none(),
+                "{template_path} must not provide the environment-owned {source_key} value"
+            );
+
+            let image_tag_input = yaml_path(component(&template, component_key), &["runtimeInputs"])
+                .and_then(Value::as_sequence)
+                .expect("agent component must declare runtime inputs")
+                .iter()
+                .find(|input| yaml_string(input, &["name"]) == Some("image.tag"))
+                .unwrap_or_else(|| panic!("{component_key} must declare image.tag"));
+
+            assert_eq!(yaml_string(image_tag_input, &["source", "kind"]), Some("qcoreValue"));
+            assert_eq!(yaml_string(image_tag_input, &["source", "key"]), Some(source_key));
+            assert_eq!(yaml_path(image_tag_input, &["required"]).and_then(Value::as_bool), Some(true));
+        }
+    }
+}
+
 #[test]
 fn complete_template_publication_renders_a_digest_pinned_catalog() {
     let temporary_directory = TempDir::new().expect("temporary directory must be created");
