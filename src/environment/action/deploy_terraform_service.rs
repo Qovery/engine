@@ -11,7 +11,7 @@ use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
 use crate::environment::report::{DeploymentTaskMut, execute_long_deployment};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
@@ -69,16 +69,9 @@ where
         execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Create, rx), task)
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-
-        let command_error = CommandError::new_from_safe_message("Cannot pause a Terraform service".to_string());
-        Err(Box::new(EngineError::new_cannot_restart_service(
-            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Pause)),
-            target.environment.namespace(),
-            "",
-            command_error,
-        )))
+    // Terraform services are run-to-completion jobs; pause and restart have no effect.
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        Ok(())
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
@@ -144,16 +137,9 @@ where
         )
     }
 
-    fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Restart));
-
-        let command_error = CommandError::new_from_safe_message("Cannot restart a Terraform service".to_string());
-        Err(Box::new(EngineError::new_cannot_restart_service(
-            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Restart)),
-            target.environment.namespace(),
-            "",
-            command_error,
-        )))
+    // Terraform services are run-to-completion jobs; pause and restart have no effect.
+    fn on_restart(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        Ok(())
     }
 }
 
