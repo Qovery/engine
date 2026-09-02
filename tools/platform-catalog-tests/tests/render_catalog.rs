@@ -147,27 +147,40 @@ fn component<'a>(template: &'a Value, component_key: &str) -> &'a Value {
 }
 
 #[test]
-fn agent_image_tags_are_required_qcore_values_without_template_fallbacks() {
+fn platform_image_tags_are_required_qcore_values_without_template_fallbacks() {
     for template_path in [
         "platform-catalog/templates/qovery-cluster-v0/template.yaml",
         "platform-catalog/templates/qovery-demo-v0/template.yaml",
     ] {
         let template = parse_yaml_file(repository_path(template_path));
-        for (component_key, source_key) in [
-            ("cluster-agent", "clusterAgent.imageTag"),
-            ("shell-agent", "shellAgent.imageTag"),
+        let bootstrap_component = yaml_path(&template, &["platformTemplateRelease", "bootstrap", "component"])
+            .expect("template must declare its bootstrap component");
+        for (component_key, component, input_name, source_key) in [
+            (
+                "cluster-agent",
+                component(&template, "cluster-agent"),
+                "image.tag",
+                "clusterAgent.imageTag",
+            ),
+            (
+                "shell-agent",
+                component(&template, "shell-agent"),
+                "image.tag",
+                "shellAgent.imageTag",
+            ),
+            ("qovery-operator", bootstrap_component, "operator.imageTag", "operator.imageTag"),
         ] {
             assert!(
                 yaml_path(&template, &["platformTemplateRelease", "runtimeSourceValues", source_key]).is_none(),
                 "{template_path} must not provide the environment-owned {source_key} value"
             );
 
-            let image_tag_input = yaml_path(component(&template, component_key), &["runtimeInputs"])
+            let image_tag_input = yaml_path(component, &["runtimeInputs"])
                 .and_then(Value::as_sequence)
-                .expect("agent component must declare runtime inputs")
+                .expect("component must declare runtime inputs")
                 .iter()
-                .find(|input| yaml_string(input, &["name"]) == Some("image.tag"))
-                .unwrap_or_else(|| panic!("{component_key} must declare image.tag"));
+                .find(|input| yaml_string(input, &["name"]) == Some(input_name))
+                .unwrap_or_else(|| panic!("{component_key} must declare {input_name}"));
 
             assert_eq!(yaml_string(image_tag_input, &["source", "kind"]), Some("qcoreValue"));
             assert_eq!(yaml_string(image_tag_input, &["source", "key"]), Some(source_key));

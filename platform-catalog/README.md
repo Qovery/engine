@@ -97,6 +97,7 @@ model makes the affected catalog operation fail closed.
 qovery-operator uses the same declarative runtime-input mapping as the execution-layer components,
 but remains a bootstrap descriptor outside the Operator's own execution DAG. Its cluster JWT and
 identity values are resolved by q-core in memory; the public bundle contains placeholders only.
+Its exact promoted image tag is also supplied by q-core and has no template-level fallback.
 
 cluster-agent and shell-agent keep an intentionally empty (comments-only)
 `static-values/base.yaml` until their static Engine-v1 parity values land. Their per-cluster wiring

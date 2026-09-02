@@ -5,7 +5,6 @@ platformTemplateRelease:
     clusterAgent.imageRepository: public.ecr.aws/r3m4q3r9/cluster-agent
     shellAgent.imageRepository: public.ecr.aws/r3m4q3r9/shell-agent
     operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
-    operator.imageTag: f9aff159d23551c56813d3d3a9aa832be38317f4
     engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine
   bootstrap:
     component:
