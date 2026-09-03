@@ -1,8 +1,8 @@
-{{- if .Values.overprovisionning.enabled }}
+{{- if and .Values.overprovisionning.enabled .Values.overprovisionning.priorityClass.create }}
 apiVersion: scheduling.k8s.io/v1
 kind: PriorityClass
 metadata:
-  name: qovery-engine-overprovisioning
+  name: {{ .Values.overprovisionning.priorityClass.name }}
 value: -1
 globalDefault: false
 {{- end }}
