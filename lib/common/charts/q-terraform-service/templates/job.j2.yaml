@@ -17,14 +17,12 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
     app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     qovery.com/service-version: {{ service.version }}
     {%- for key, value in annotations_group.job %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   backoffLimit: 0
@@ -46,23 +44,21 @@ spec:
         app.kubernetes.io/managed-by: "qovery"
         app.kubernetes.io/version: "{{ service.image_tag_label }}"
         {%- for key, value in labels_group.common %}
-        {{ key }}: |-
-           {{ value }}
+        {{ key | yaml_encode }}: {{ value | yaml_encode }}
         {%- endfor %}
       annotations:
         qovery.com/service-version: {{ service.version }}
         karpenter.sh/do-not-disrupt: "true"
         {%- for key, value in annotations_group.pods %}
-        {{ key }}: |-
-           {{ value }}
+        {{ key | yaml_encode }}: {{ value | yaml_encode }}
         {%- endfor %}
     spec:
       {%- if service.tolerations %}
       tolerations:
         {%- for key, value in service.tolerations %}
-        - key: "{{ key }}"
+        - key: {{ key | yaml_encode }}
           operator: "Exists"
-          effect: "{{ value }}"
+          effect: {{ value | yaml_encode }}
         {%- endfor %}
       {%- endif %}
       securityContext:
@@ -74,16 +70,16 @@ spec:
             nodeSelectorTerms:
             - matchExpressions:
         {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
-                - key: "{{ key }}"
+                - key: {{ key | yaml_encode }}
                   operator: In
                   values:
-                  - "{{ value }}"
+                  - {{ value | yaml_encode }}
         {%- endfor %}
         {%- endif %}
       restartPolicy: Never
       {%- if service.advanced_settings.security_service_account_name != "" %}
       automountServiceAccountToken: true
-      serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+      serviceAccountName: {{ service.advanced_settings.security_service_account_name | yaml_encode }}
       {%- else %}
       automountServiceAccountToken: true
       serviceAccountName: {{ service.name }}
@@ -110,8 +106,8 @@ spec:
             secretName: {{ external_secret.secret_name }}
             defaultMode: 420
             items:
-            - key: "{{ entry.env_var_key }}"
-              path: "{{ entry.mount_path_relative }}"
+            - key: {{ entry.env_var_key | yaml_encode }}
+              path: {{ entry.mount_path_relative | yaml_encode }}
             {%- endif %}
           {%- endfor %}
         {%- endfor %}
@@ -133,8 +129,7 @@ spec:
           image: "{{ service.image_full }}"
           args:
             {%- for arg in service.command_args %}
-            - |-
-              {{ arg | indent(prefix="              ", first=false) }}
+            - {{ arg | yaml_encode }}
             {%- endfor %}
           volumeMounts:
             - name: output
@@ -149,8 +144,8 @@ spec:
               {%- for entry in external_secret.entries %}
                 {%- if entry.mount_path %}
             - name: {{ entry.volume_name }}
-              mountPath: "{{ entry.mount_path }}"
-              subPath: "{{ entry.mount_path_relative }}"
+              mountPath: {{ entry.mount_path | yaml_encode }}
+              subPath: {{ entry.mount_path_relative | yaml_encode }}
               readOnly: true
                 {%- endif %}
               {%- endfor %}
@@ -162,14 +157,14 @@ spec:
           env:
             {%- for external_secret in external_secrets %}
               {%- for entry in external_secret.entries %}
-            - name: {{ entry.env_var_key }}
+            - name: {{ entry.env_var_key | yaml_encode }}
                 {%- if not entry.mount_path %}
               valueFrom:
                 secretKeyRef:
                   name: {{ external_secret.secret_name }}
-                  key: {{ entry.env_var_key }}
+                  key: {{ entry.env_var_key | yaml_encode }}
                 {%- else %}
-              value: "{{ entry.mount_path }}"
+              value: {{ entry.mount_path | yaml_encode }}
                 {%- endif %}
               {%- endfor %}
             {%- endfor %}

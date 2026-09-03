@@ -775,14 +775,37 @@ mod tests {
     use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
     use crate::environment::models::container::ClusterTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
+    use crate::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
     use crate::io_models::container::ContainerAdvancedSettings;
+    use crate::io_models::labels_group::{Label, LabelsGroup};
+    use crate::io_models::models::EnvironmentVariable;
+    use crate::tera_utils::render_one_off;
+    use regex::Regex;
+    use serde::Deserialize;
     use std::collections::BTreeMap;
-    use tera::{Context, Tera};
+    use tera::Context;
     use uuid::Uuid;
 
     fn render_template(template: &str, context: ContainerTeraContext) -> String {
         let tera_context = Context::from_serialize(context).expect("container tera context should serialize");
-        Tera::one_off(template, &tera_context, false).expect("template should render")
+        render_one_off(template, &tera_context).expect("template should render")
+    }
+
+    /// Helm renders the manifest as a Go template before applying it, so the assertions
+    /// below run on what Kubernetes would actually receive. Charts keep a couple of sprig
+    /// calls in `{% raw %}` blocks on purpose; user input must never add more.
+    fn parse_as_kubernetes_would(rendered: &str) -> Vec<serde_yaml::Value> {
+        let helm_action = Regex::new(r"\{\{.*?\}\}").expect("valid regex");
+        let helm_rendered = helm_action.replace_all(rendered, "helm-rendered");
+
+        serde_yaml::Deserializer::from_str(&helm_rendered)
+            .map(|doc| serde_yaml::Value::deserialize(doc).expect("rendered manifest must parse as YAML"))
+            .filter(|doc| !doc.is_null())
+            .collect()
+    }
+
+    fn count_helm_actions(rendered: &str) -> usize {
+        rendered.matches("{{").count()
     }
 
     fn build_container_tera_context(ephemeral_storage_in_gib: Option<String>) -> ContainerTeraContext {
@@ -935,6 +958,249 @@ mod tests {
             rendered.matches("cpu:").count(),
             1,
             "only the cpu request should be rendered when the cpu limit is unset"
+        );
+    }
+
+    /// Closes the YAML node it is interpolated into and appends sibling fields, as reported
+    /// on the QOV-2099 node-affinity block. `hostPID` is not exposed as an advanced setting.
+    const INJECTION_PAYLOAD: &str = "x\"\n      hostPID: true\n      dummy: \"y";
+    /// Same idea from a mapping key, which needs no quote to break out.
+    const KEY_INJECTION_PAYLOAD: &str = "evil\n      hostPID: true\n      dummy";
+
+    fn assert_no_injected_pod_fields(rendered: &str) {
+        let docs = parse_as_kubernetes_would(rendered);
+        let deployment = docs.first().expect("a deployment must be rendered");
+        let pod_spec = &deployment["spec"]["template"]["spec"];
+
+        assert!(pod_spec["hostPID"].is_null(), "injected hostPID in:\n{rendered}");
+        assert!(pod_spec["dummy"].is_null(), "injected dummy field in:\n{rendered}");
+        assert!(
+            !pod_spec["containers"].is_null(),
+            "the pod spec should still be intact in:\n{rendered}"
+        );
+    }
+
+    /// Ordinary values for every field the escaping pass touches in this chart. Anything left
+    /// empty here is a transformation the equivalence tests below cannot see.
+    fn build_populated_container_tera_context() -> ContainerTeraContext {
+        let mut ctx = build_container_tera_context(Some("5Gi".to_string()));
+        ctx.labels_group = LabelsGroupTeraContext::new(vec![LabelsGroup {
+            labels: vec![Label {
+                key: "team".to_string(),
+                value: "platform".to_string(),
+                propagate_to_cloud_provider: true,
+            }],
+        }]);
+        ctx.annotations_group = AnnotationsGroupTeraContext::new(vec![AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "example.com/owner".to_string(),
+                value: "sre".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::StatefulSets,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }]);
+        ctx.environment_variables = vec![EnvironmentVariable {
+            key: "DATABASE_URL".to_string(),
+            value: "cG9zdGdyZXM6Ly9sb2NhbGhvc3Q=".to_string(),
+            is_secret: false,
+        }];
+        ctx.service.tolerations = BTreeMap::from([("nodepool/app".to_string(), "NoSchedule".to_string())]);
+        ctx.service.advanced_settings.deployment_affinity_node_required =
+            BTreeMap::from([("karpenter.sh/nodepool".to_string(), "app".to_string())]);
+        ctx.service.command_args = vec!["sh".to_string(), "-c".to_string(), "echo ready".to_string()];
+        ctx
+    }
+
+    /// Escaping must not change what Kubernetes receives for ordinary input. Renders the
+    /// pre-escaping template kept under `tests/fixtures/pre_escaping/` and the current one from
+    /// the same context, then compares the parsed manifests — quoting differs by design, the
+    /// resulting objects must not. The context is cloned rather than rebuilt: the builder mints
+    /// fresh uuids, which would differ between the two renders.
+    fn assert_escaping_preserved_the_manifest(
+        name: &str,
+        before_template: &str,
+        after_template: &str,
+        context: ContainerTeraContext,
+    ) {
+        let before = parse_as_kubernetes_would(&render_template(before_template, context.clone()));
+        let after = parse_as_kubernetes_would(&render_template(after_template, context));
+
+        assert!(
+            !before.is_empty(),
+            "{name}: the fixture rendered no document, so this proves nothing"
+        );
+        assert_eq!(before, after, "{name}: escaping changed the rendered manifest");
+    }
+
+    #[test]
+    fn escaping_preserves_the_deployment_manifest() {
+        assert_escaping_preserved_the_manifest(
+            "deployment",
+            include_str!("../../../tests/fixtures/pre_escaping/q-container/deployment.j2.yaml"),
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            build_populated_container_tera_context(),
+        );
+    }
+
+    #[test]
+    fn escaping_preserves_the_statefulset_manifest() {
+        use crate::io_models::models::StorageDataTemplate;
+
+        // statefulset.j2.yaml renders only with storage, deployment.j2.yaml only without
+        let mut context = build_populated_container_tera_context();
+        context.service.storages = vec![StorageDataTemplate {
+            id: "stor1".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "data".to_string(),
+            storage_type: "gp2".to_string(),
+            size_in_gib: 10,
+            mount_point: "/data".to_string(),
+            snapshot_retention_in_days: 0,
+        }];
+
+        assert_escaping_preserved_the_manifest(
+            "statefulset",
+            include_str!("../../../tests/fixtures/pre_escaping/q-container/statefulset.j2.yaml"),
+            include_str!("../../../lib/common/charts/q-container/templates/statefulset.j2.yaml"),
+            context,
+        );
+    }
+
+    #[test]
+    fn escaping_preserves_the_secret_manifest() {
+        assert_escaping_preserved_the_manifest(
+            "secret",
+            include_str!("../../../tests/fixtures/pre_escaping/q-container/secret.j2.yaml"),
+            include_str!("../../../lib/common/charts/q-container/templates/secret.j2.yaml"),
+            build_populated_container_tera_context(),
+        );
+    }
+
+    #[test]
+    fn deployment_template_rejects_injection_from_labels_and_annotations() {
+        let mut ctx = build_container_tera_context(None);
+        ctx.labels_group = LabelsGroupTeraContext::new(vec![LabelsGroup {
+            labels: vec![Label {
+                key: KEY_INJECTION_PAYLOAD.to_string(),
+                value: INJECTION_PAYLOAD.to_string(),
+                propagate_to_cloud_provider: false,
+            }],
+        }]);
+        ctx.annotations_group = AnnotationsGroupTeraContext::new(vec![AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: KEY_INJECTION_PAYLOAD.to_string(),
+                value: INJECTION_PAYLOAD.to_string(),
+            }],
+            scopes: vec![AnnotationsGroupScope::Deployments, AnnotationsGroupScope::Pods],
+        }]);
+
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            ctx,
+        );
+
+        assert_no_injected_pod_fields(&rendered);
+
+        let docs = parse_as_kubernetes_would(&rendered);
+        assert_eq!(
+            docs[0]["metadata"]["labels"][KEY_INJECTION_PAYLOAD].as_str(),
+            Some(INJECTION_PAYLOAD),
+            "the payload must land intact inside the label it was meant for"
+        );
+    }
+
+    #[test]
+    fn deployment_template_rejects_injection_from_tolerations_and_node_affinity() {
+        let mut ctx = build_container_tera_context(None);
+        ctx.service.tolerations = BTreeMap::from([(KEY_INJECTION_PAYLOAD.to_string(), INJECTION_PAYLOAD.to_string())]);
+        ctx.service.advanced_settings.deployment_affinity_node_required =
+            BTreeMap::from([(KEY_INJECTION_PAYLOAD.to_string(), INJECTION_PAYLOAD.to_string())]);
+
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            ctx,
+        );
+
+        assert_no_injected_pod_fields(&rendered);
+
+        let docs = parse_as_kubernetes_would(&rendered);
+        let pod_spec = &docs[0]["spec"]["template"]["spec"];
+        assert_eq!(
+            pod_spec["tolerations"][0]["effect"].as_str(),
+            Some(INJECTION_PAYLOAD),
+            "the toleration value must land intact"
+        );
+        assert_eq!(
+            pod_spec["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"]
+                [0]["matchExpressions"][0]["values"][0]
+                .as_str(),
+            Some(INJECTION_PAYLOAD),
+            "the node affinity value must land intact"
+        );
+    }
+
+    #[test]
+    fn deployment_template_neutralizes_helm_actions_from_user_input() {
+        let helm_payload = r#"{{ lookup "v1" "Secret" "kube-system" "admin" }}"#;
+
+        let baseline = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            build_container_tera_context(None),
+        );
+
+        let mut ctx = build_container_tera_context(None);
+        ctx.labels_group = LabelsGroupTeraContext::new(vec![LabelsGroup {
+            labels: vec![Label {
+                key: "app".to_string(),
+                value: helm_payload.to_string(),
+                propagate_to_cloud_provider: false,
+            }],
+        }]);
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            ctx,
+        );
+
+        assert_eq!(
+            count_helm_actions(&rendered),
+            count_helm_actions(&baseline),
+            "user input must not add a Go template action for Helm to evaluate in:\n{rendered}"
+        );
+        assert_eq!(
+            parse_as_kubernetes_would(&rendered)[0]["metadata"]["labels"]["app"].as_str(),
+            Some(helm_payload),
+            "the value must still reach Kubernetes unchanged"
+        );
+    }
+
+    #[test]
+    fn secret_template_rejects_injection_from_environment_variable_keys() {
+        let mut ctx = build_container_tera_context(None);
+        ctx.environment_variables = vec![EnvironmentVariable {
+            key: "evil\ninjected: true\nother".to_string(),
+            // engine receives environment variable values already base64 encoded
+            value: "dmFsdWU=".to_string(),
+            is_secret: false,
+        }];
+
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/secret.j2.yaml"),
+            ctx,
+        );
+
+        let docs = parse_as_kubernetes_would(&rendered);
+        let secret = docs.first().expect("a secret must be rendered");
+
+        assert!(secret["injected"].is_null(), "injected root field in:\n{rendered}");
+        assert_eq!(
+            secret["data"].as_mapping().expect("data mapping").len(),
+            1,
+            "one environment variable must produce exactly one key in:\n{rendered}"
         );
     }
 }

@@ -19,14 +19,12 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
     app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
     {%- for key, value in annotations_group.stateful_set %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {% endfor %}
 spec:
   replicas: {{ service.min_instances }}
@@ -61,8 +59,7 @@ spec:
         app.kubernetes.io/managed-by: "qovery"
         app.kubernetes.io/version: "{{ service.image_tag_label }}"
         {%- for key, value in labels_group.common %}
-        {{ key }}: |-
-           {{ value }}
+        {{ key | yaml_encode }}: {{ value | yaml_encode }}
         {%- endfor %}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
@@ -72,16 +69,15 @@ spec:
         {%- endif %}
         qovery.com/service-version: {{ service.version }}
         {%- for key, value in annotations_group.pods %}
-        {{ key }}: |-
-           {{ value }}
+        {{ key | yaml_encode }}: {{ value | yaml_encode }}
         {%- endfor %}
     spec:
       {%- if service.tolerations %}
       tolerations:
       {%- for key, value in service.tolerations %}
-        - key: "{{ key }}"
+        - key: {{ key | yaml_encode }}
           operator: "Exists"
-          effect: "{{ value }}"
+          effect: {{ value | yaml_encode }}
       {%- endfor %}
       {%- endif %}
       affinity:
@@ -91,10 +87,10 @@ spec:
             nodeSelectorTerms:
             - matchExpressions:
         {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
-              - key: "{{ key }}"
+              - key: {{ key | yaml_encode }}
                 operator: In
                 values:
-                - "{{ value }}"
+                - {{ value | yaml_encode }}
         {%- endfor %}
         {%- endif %}
         podAntiAffinity:
@@ -130,7 +126,7 @@ spec:
       {%- endif %}
       automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
       {%- if service.advanced_settings.security_service_account_name != "" %}
-      serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+      serviceAccountName: {{ service.advanced_settings.security_service_account_name | yaml_encode }}
       {%- endif %}
       terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
       securityContext:
@@ -145,13 +141,11 @@ spec:
           image: "{{ service.image_full }}"
           {%- if service.entrypoint %}
           command:
-            - |-
-              {{ service.entrypoint }}
+            - {{ service.entrypoint | yaml_encode }}
           {%- endif %}
           args:
             {%- for arg in service.command_args %}
-            - |-
-              {{ arg }}
+            - {{ arg | yaml_encode }}
             {%- endfor %}
           envFrom:
             - secretRef:
@@ -161,14 +155,14 @@ spec:
             {%- for external_secret in external_secrets %}
               {%- for entry in external_secret.entries %}
               {%- if not entry.mount_path %}
-            - name: {{ entry.env_var_key }}
+            - name: {{ entry.env_var_key | yaml_encode }}
               valueFrom:
                 secretKeyRef:
                   name: {{ external_secret.external_secret_kube_name }}
-                  key: {{ entry.env_var_key }}
+                  key: {{ entry.env_var_key | yaml_encode }}
               {%- else %}
-            - name: {{ entry.env_var_key }}
-              value: "{{ entry.mount_path }}"
+            - name: {{ entry.env_var_key | yaml_encode }}
+              value: {{ entry.mount_path | yaml_encode }}
               {%- endif %}
               {%- endfor %}
             {%- endfor %}
@@ -184,26 +178,25 @@ spec:
             {%- if service.readiness_probe.type.tcp %}
             tcpSocket:
               port: {{ service.readiness_probe.port }}
-              host: {{ service.readiness_probe.type.tcp.host }}
+              host: {{ service.readiness_probe.type.tcp.host | yaml_encode }}
             {%- endif %}
             {%- if service.readiness_probe.type.http %}
             httpGet:
               port: {{ service.readiness_probe.port }}
-              path: {{ service.readiness_probe.type.http.path }}
+              path: {{ service.readiness_probe.type.http.path | yaml_encode }}
               scheme: {{ service.readiness_probe.type.http.scheme }}
             {%- endif %}
             {%- if service.readiness_probe.type.exec %}
             exec:
               command:
               {%- for cmd in service.readiness_probe.type.exec.commands %}
-              - |-
-                {{ cmd }}
+              - {{ cmd | yaml_encode }}
               {%- endfor %}
             {%- endif %}
             {%- if service.readiness_probe.type.grpc %}
             grpc:
               port: {{ service.readiness_probe.port }}
-              service: {{ service.readiness_probe.type.grpc.service }}
+              service: {{ service.readiness_probe.type.grpc.service | yaml_encode }}
             {%- endif %}
             initialDelaySeconds: {{ service.readiness_probe.initial_delay_seconds }}
             periodSeconds: {{ service.readiness_probe.period_seconds }}
@@ -216,26 +209,25 @@ spec:
             {%- if service.liveness_probe.type.tcp %}
             tcpSocket:
               port: {{ service.liveness_probe.port }}
-              host: {{ service.liveness_probe.type.tcp.host }}
+              host: {{ service.liveness_probe.type.tcp.host | yaml_encode }}
             {%- endif %}
             {%- if service.liveness_probe.type.http %}
             httpGet:
               port: {{ service.liveness_probe.port }}
-              path: {{ service.liveness_probe.type.http.path }}
+              path: {{ service.liveness_probe.type.http.path | yaml_encode }}
               scheme: {{ service.liveness_probe.type.http.scheme }}
             {%- endif %}
             {%- if service.liveness_probe.type.exec %}
             exec:
               command:
               {%- for cmd in service.liveness_probe.type.exec.commands %}
-              - |-
-                {{ cmd }}
+              - {{ cmd | yaml_encode }}
               {%- endfor %}
             {%- endif %}
             {%- if service.liveness_probe.type.grpc %}
             grpc:
               port: {{ service.liveness_probe.port }}
-              service: {{ service.liveness_probe.type.grpc.service }}
+              service: {{ service.liveness_probe.type.grpc.service | yaml_encode }}
             {%- endif %}
             initialDelaySeconds: {{ service.liveness_probe.initial_delay_seconds }}
             periodSeconds: {{ service.liveness_probe.period_seconds }}
@@ -270,12 +262,12 @@ spec:
             {% if service.advanced_settings.deployment_lifecycle_post_start_exec_command | length > 0 %}
             postStart:
               exec:
-                command: {{ service.advanced_settings.deployment_lifecycle_post_start_exec_command }}
+                command: {{ service.advanced_settings.deployment_lifecycle_post_start_exec_command | yaml_encode }}
             {%- endif %}
             {% if service.advanced_settings.deployment_lifecycle_pre_stop_exec_command | length > 0 %}
             preStop:
               exec:
-                command: {{ service.advanced_settings.deployment_lifecycle_pre_stop_exec_command }}
+                command: {{ service.advanced_settings.deployment_lifecycle_pre_stop_exec_command | yaml_encode }}
             {%- endif %}
           volumeMounts:
 {%- for s in service.storages %}
@@ -284,10 +276,10 @@ spec:
             {%- else %}
             - name: {{ s.long_id }}
             {%- endif %}
-              mountPath: {{ s.mount_point }}
+              mountPath: {{ s.mount_point | yaml_encode }}
 {%- endfor %}
 {%- for mounted_file in mounted_files %}
-            - mountPath: "{{ mounted_file.mount_path }}"
+            - mountPath: {{ mounted_file.mount_path | yaml_encode }}
               subPath: content
               name: {{ mounted_file.kube_name }}
               readOnly: true
@@ -295,8 +287,8 @@ spec:
             {%- for external_secret in external_secrets %}
               {%- for entry in external_secret.entries %}
               {%- if entry.mount_path %}
-            - mountPath: "{{ entry.mount_path }}"
-              subPath: "{{ entry.mount_path_relative }}"
+            - mountPath: {{ entry.mount_path | yaml_encode }}
+              subPath: {{ entry.mount_path_relative | yaml_encode }}
               name: {{ entry.volume_name }}
               readOnly: true
               {%- endif %}
@@ -316,8 +308,8 @@ spec:
             secretName: {{ external_secret.external_secret_kube_name }}
             defaultMode: 420
             items:
-              - key: "{{ entry.env_var_key }}"
-                path: "{{ entry.mount_path_relative }}"
+              - key: {{ entry.env_var_key | yaml_encode }}
+                path: {{ entry.mount_path_relative | yaml_encode }}
           {%- endif %}
           {%- endfor %}
         {%- endfor %}
@@ -331,7 +323,7 @@ spec:
         envId: "{{ environment_short_id }}"
         appId: "{{ service.short_id }}"
         diskId: "{{ s.id }}"
-        diskType: "{{ s.storage_type }}"
+        diskType: {{ s.storage_type | yaml_encode }}
       {%- else %}
       name: {{ s.long_id }}
       labels:
@@ -341,12 +333,12 @@ spec:
         qovery.com/environment-id: "{{ environment_long_id }}"
         qovery.com/project-id: "{{ project_long_id }}"
         qovery.com/disk-id: "{{ s.long_id }}"
-        qovery.com/disk-type: "{{ s.storage_type }}"
+        qovery.com/disk-type: {{ s.storage_type | yaml_encode }}
       {%- endif %}
     spec:
       accessModes:
         - ReadWriteOnce
-      storageClassName: {{ s.storage_type }}
+      storageClassName: {{ s.storage_type | yaml_encode }}
       resources:
         requests:
           storage: {{ s.size_in_gib }}Gi

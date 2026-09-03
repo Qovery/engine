@@ -17,8 +17,7 @@ metadata:
     qovery.com/project-id: {{ project_long_id }}
     qovery.com/gateway-api-deployed: "true" # TODO(QOV-1400): to be removed once migration is done, just to flag which ingress have the gateway deployed
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     {%- if k8s_use_api_gateway == true and certificate_alternative_names|length > 0 %}
@@ -36,7 +35,7 @@ metadata:
     nginx.ingress.kubernetes.io/use-regex: "{{ http_hosts_has_regex_path }}"
     {%- endif %}
     {%- if path_rewrite != "" %}
-    nginx.ingress.kubernetes.io/rewrite-target: '{{ path_rewrite }}'
+    nginx.ingress.kubernetes.io/rewrite-target: {{ path_rewrite | yaml_encode }}
     {%- endif %}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
@@ -45,9 +44,9 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-busy-buffers-size: "{{ advanced_settings.network_ingress_proxy_buffer_size_kb * 2 }}k" # required by nginx to be equal or greater than proxy-buffer-size
     {%- if advanced_settings.network_ingress_cors_enable == true %}
     nginx.ingress.kubernetes.io/enable-cors: "{{ advanced_settings.network_ingress_cors_enable }}"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "{{ advanced_settings.network_ingress_cors_allow_origin }}"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "{{ advanced_settings.network_ingress_cors_allow_methods }}"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "{{ advanced_settings.network_ingress_cors_allow_headers }}"
+    nginx.ingress.kubernetes.io/cors-allow-origin: {{ advanced_settings.network_ingress_cors_allow_origin | yaml_encode }}
+    nginx.ingress.kubernetes.io/cors-allow-methods: {{ advanced_settings.network_ingress_cors_allow_methods | yaml_encode }}
+    nginx.ingress.kubernetes.io/cors-allow-headers: {{ advanced_settings.network_ingress_cors_allow_headers | yaml_encode }}
     {%- endif %}
     {%- if advanced_settings.network_ingress_sticky_session_enable == true %}
     # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
@@ -62,13 +61,13 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "{{ advanced_settings.network_ingress_proxy_connect_timeout_seconds }}"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "{{ advanced_settings.network_ingress_proxy_send_timeout_seconds }}"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "{{ advanced_settings.network_ingress_proxy_read_timeout_seconds }}"
-    nginx.ingress.kubernetes.io/proxy-request-buffering: "{{ advanced_settings.network_ingress_proxy_request_buffering }}"
-    nginx.ingress.kubernetes.io/proxy-buffering: "{{ advanced_settings.network_ingress_proxy_buffering }}"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: {{ advanced_settings.network_ingress_proxy_request_buffering | yaml_encode }}
+    nginx.ingress.kubernetes.io/proxy-buffering: {{ advanced_settings.network_ingress_proxy_buffering | yaml_encode }}
     {%- if advanced_settings.network_ingress_whitelist_source_range %}
-    nginx.ingress.kubernetes.io/whitelist-source-range: "{{ advanced_settings.network_ingress_whitelist_source_range }}"
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ advanced_settings.network_ingress_whitelist_source_range | yaml_encode }}
     {%- endif %}
     {%- if advanced_settings.network_ingress_denylist_source_range %}
-    nginx.ingress.kubernetes.io/denylist-source-range: "{{ advanced_settings.network_ingress_denylist_source_range }}"
+    nginx.ingress.kubernetes.io/denylist-source-range: {{ advanced_settings.network_ingress_denylist_source_range | yaml_encode }}
     {%- endif %}
     {%- if advanced_settings.network_ingress_basic_auth_env_var %}
     nginx.ingress.kubernetes.io/auth-type: basic
@@ -89,7 +88,7 @@ metadata:
     nginx.ingress.kubernetes.io/limit-connections: "{{ advanced_settings.network_ingress_nginx_limit_connections }}"
     {%- endif %}
     {%- if advanced_settings.network_ingress_nginx_custom_http_errors %}
-    nginx.ingress.kubernetes.io/custom-http-errors: "{{ advanced_settings.network_ingress_nginx_custom_http_errors }}"
+    nginx.ingress.kubernetes.io/custom-http-errors: {{ advanced_settings.network_ingress_nginx_custom_http_errors | yaml_encode }}
     {%- endif %}
     {%- if nginx_ingress_controller_server_snippet %}
     server-snippet: |
@@ -108,18 +107,23 @@ metadata:
 
       {%- if advanced_settings.network_ingress_add_headers %}
       {%- for key, value in advanced_settings.network_ingress_add_headers %}
-      add_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- set safe_header_name = key | nginx_header_name_escape %}
+      {%- if safe_header_name %}
+      add_header {{ safe_header_name }} "{{ value | nginx_header_value_escape }}";
+      {%- endif %}
       {%- endfor %}
       {%- endif %}
 
       {%- if advanced_settings.network_ingress_proxy_set_headers %}
       {%- for key, value in advanced_settings.network_ingress_proxy_set_headers %}
-      proxy_set_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- set safe_header_name = key | nginx_header_name_escape %}
+      {%- if safe_header_name %}
+      proxy_set_header {{ safe_header_name }} "{{ value | nginx_header_value_escape }}";
+      {%- endif %}
       {%- endfor %}
       {%- endif %}
     {%- for key, value in annotations_group.ingress %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 
 spec:
@@ -128,7 +132,7 @@ spec:
     - secretName: "router-tls-{{ id }}"
       hosts:
         {%- for domain in certificate_alternative_names %}
-        - "{{ domain.domain }}"
+        - {{ domain.domain | yaml_encode }}
         {%- endfor %}
     {%- endif %}
   # We dont use secret name as we want to rely on default tls certificate from ingress controller
@@ -136,10 +140,10 @@ spec:
   ingressClassName: "nginx-qovery"
   rules:
     {%- for host in http_hosts %}
-    - host: "{{ host.domain_name }}"
+    - host: {{ host.domain_name | yaml_encode }}
       http:
         paths:
-        - path: "{{ host.path }}"
+        - path: {{ host.path | yaml_encode }}
           pathType: ImplementationSpecific
           backend:
             service:

@@ -85,7 +85,7 @@ spec:
             # File variables. The matching env var (via envFrom below) holds this same mount path.
             {%- for mounted_file in mounted_files %}
             - name: {{ mounted_file.kube_name }}
-              mountPath: "{{ mounted_file.mount_path }}"
+              mountPath: {{ mounted_file.mount_path | yaml_encode }}
               subPath: content
               readOnly: true
             {%- endfor %}

@@ -10,5 +10,5 @@ metadata:
     qovery.com/environment-id: "{{ environment_long_id }}"
     qovery.com/project-id: "{{ project_long_id }}"
 binaryData:
-  prompt.txt: {{ service.prompt_b64 }}
-  inputs.json: {{ service.inputs_json_b64 }}
+  prompt.txt: {{ service.prompt_b64 | yaml_encode }}
+  inputs.json: {{ service.inputs_json_b64 | yaml_encode }}

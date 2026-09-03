@@ -9,13 +9,11 @@ metadata:
     qovery.com/environment-id: "{{ environment_long_id }}"
     qovery.com/project-id: "{{ project_long_id }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.deployment %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -29,13 +27,11 @@ metadata:
     qovery.com/environment-id: "{{ environment_long_id }}"
     qovery.com/project-id: "{{ project_long_id }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.deployment %}
-      {{ key }}: |-
-         {{ value }}
+      {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 rules:
   - apiGroups: [""]
@@ -56,13 +52,11 @@ metadata:
     qovery.com/environment-id: "{{ environment_long_id }}"
     qovery.com/project-id: "{{ project_long_id }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.deployment %}
-      {{ key }}: |-
-         {{ value }}
+      {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 subjects:
   - kind: ServiceAccount

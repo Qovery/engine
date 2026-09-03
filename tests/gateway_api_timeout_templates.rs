@@ -1,3 +1,4 @@
+use qovery_engine::tera_utils::register_filters;
 use serde_json::json;
 use tera::{Context, Tera};
 
@@ -127,6 +128,7 @@ fn render_http_policy_with_retry(
     cluster_retry: RetrySettings,
 ) -> String {
     let mut tera = Tera::default();
+    register_filters(&mut tera);
     tera.add_raw_template("template", HTTP_TEMPLATE)
         .expect("HTTP template should parse");
 
@@ -218,6 +220,7 @@ fn render_grpc_policy_with_retry(
     cluster_retry: RetrySettings,
 ) -> String {
     let mut tera = Tera::default();
+    register_filters(&mut tera);
     tera.add_raw_template("template", GRPC_TEMPLATE)
         .expect("gRPC template should parse");
 
@@ -282,6 +285,7 @@ fn render_grpc_policy_with_retry(
 
 fn render_http_route() -> String {
     let mut tera = Tera::default();
+    register_filters(&mut tera);
     tera.add_raw_template("template", HTTP_ROUTE_TEMPLATE)
         .expect("HTTP route template should parse");
 
@@ -335,6 +339,7 @@ fn render_http_route() -> String {
 
 fn render_grpc_route() -> String {
     let mut tera = Tera::default();
+    register_filters(&mut tera);
     tera.add_raw_template("template", GRPC_ROUTE_TEMPLATE)
         .expect("gRPC route template should parse");
 
@@ -622,17 +627,13 @@ fn http_and_grpc_templates_render_retry_consistently() {
 #[test]
 fn http_route_includes_group_annotations_and_labels() {
     let rendered = render_http_route();
-    assert!(rendered.contains("annotations-group-key: |-"));
-    assert!(rendered.contains("annotations-group-value"));
-    assert!(rendered.contains("labels-group-key: |-"));
-    assert!(rendered.contains("labels-group-value"));
+    assert!(rendered.contains(r#""annotations-group-key": "annotations-group-value""#));
+    assert!(rendered.contains(r#""labels-group-key": "labels-group-value""#));
 }
 
 #[test]
 fn grpc_route_includes_group_annotations_and_labels() {
     let rendered = render_grpc_route();
-    assert!(rendered.contains("annotations-group-key: |-"));
-    assert!(rendered.contains("annotations-group-value"));
-    assert!(rendered.contains("labels-group-key: |-"));
-    assert!(rendered.contains("labels-group-value"));
+    assert!(rendered.contains(r#""annotations-group-key": "annotations-group-value""#));
+    assert!(rendered.contains(r#""labels-group-key": "labels-group-value""#));
 }

@@ -28,8 +28,7 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     kubernetes.io/tls-acme: "true"
@@ -40,8 +39,7 @@ metadata:
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
     {%- for key, value in annotations_group.gateway_api_routes %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   parentRefs:
@@ -72,7 +70,7 @@ spec:
     {%- endif %}
   hostnames:
     {%- for hostname in route.hostnames %}
-    - "{{ hostname }}"
+    - {{ hostname | yaml_encode }}
     {%- endfor %}
   rules:
     {%- for rule in route.rules %}
@@ -85,7 +83,7 @@ spec:
       matches:
         - path:
             type: {{ rule.path_type }}
-            value: "{{ rule.path }}"
+            value: {{ rule.path | yaml_encode }}
       filters:
        {%- if rule.path_rewrite %}
         - type: ExtensionRef
@@ -100,8 +98,8 @@ spec:
           responseHeaderModifier:
             add:
               {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
-              - name: "{{ header_name }}"
-                value: "{{ header_value }}"
+              - name: {{ header_name | yaml_encode }}
+                value: {{ header_value | yaml_encode }}
               {%- endfor %}
         {%- endif %}
         - type: RequestHeaderModifier
@@ -110,8 +108,8 @@ spec:
             # Add custom request headers (proxy_set_header equivalent)
             add:
             {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
-            - name: "{{ header_name }}"
-              value: "{{ header_value }}"
+            - name: {{ header_name | yaml_encode }}
+              value: {{ header_value | yaml_encode }}
             {%- endfor %}
             {%- endif %}
             # Add Qovery specific headers for logging and tracing
@@ -144,8 +142,7 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     kubernetes.io/tls-acme: "true"
@@ -156,8 +153,7 @@ metadata:
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
     {%- for key, value in annotations_group.gateway_api_routes %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   parentRefs:
@@ -166,7 +162,7 @@ spec:
       sectionName: http
   hostnames:
     {%- for hostname in route.hostnames %}
-    - "{{ hostname }}"
+    - {{ hostname | yaml_encode }}
     {%- endfor %}
   rules:
   # Rule 1: Do not redirect ACME HTTP-01 challenge requests.

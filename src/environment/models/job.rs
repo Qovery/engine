@@ -622,8 +622,9 @@ mod tests {
     use crate::environment::models::container::ClusterTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
     use crate::io_models::job::JobAdvancedSettings;
+    use crate::tera_utils::render_one_off;
     use std::collections::BTreeMap;
-    use tera::{Context, Tera};
+    use tera::Context;
     use uuid::Uuid;
 
     #[test]
@@ -714,7 +715,7 @@ mod tests {
 
     fn render_template(template: &str, context: JobTeraContext) -> String {
         let tera_context = Context::from_serialize(context).expect("job tera context should serialize");
-        Tera::one_off(template, &tera_context, false).expect("template should render")
+        render_one_off(template, &tera_context).expect("template should render")
     }
 
     fn build_job_tera_context(is_cron_template: bool) -> JobTeraContext {

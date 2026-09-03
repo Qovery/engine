@@ -1,0 +1,205 @@
+{%- if k8s_deploy_api_gateway == true %}
+{% for namespace_key, gateway_http_routes in gateway_http_routes_per_namespace %}
+{%- if gateway_http_routes|length >= 1 %}
+{#
+  Split routes to comply with Kubernetes Gateway API limits:
+  - Maximum 16 hostnames per HTTPRoute
+  - Maximum 16 rules per HTTPRoute
+
+  Each compacted route part contains:
+  - A deduplicated hostname set
+  - A deduplicated rule set shared by those hostnames
+#}
+{%- set num_routes = gateway_http_routes|length %}
+{%- for route in gateway_http_routes %}
+{%- set route_index = loop.index0 %}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ sanitized_name }}{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {%- if has_wildcard_domain == true %}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- else %}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {%- for key, value in annotations_group.gateway_api_routes %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  parentRefs:
+    {%- if certificate_alternative_names|length > 0 %}
+    {%- if k8s_deploy_listenerset == true %}
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ sanitized_name }}-listeners
+      namespace: {{ namespace_key }}
+    {%- endif %}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {%- if not advanced_settings.network_gateway_api_force_ssl_redirect or advanced_settings.network_gateway_api_force_ssl_redirect == "false" %}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {%- endif %}
+    {%- else %}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {%- if not advanced_settings.network_gateway_api_force_ssl_redirect or advanced_settings.network_gateway_api_force_ssl_redirect == "false" %}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {%- endif %}
+    {%- endif %}
+  hostnames:
+    {%- for hostname in route.hostnames %}
+    - "{{ hostname }}"
+    {%- endfor %}
+  rules:
+    {%- for rule in route.rules %}
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: "{{ rule.service_name }}"
+          port: {{ rule.service_port }}
+          weight: {{ rule.weight }}
+      matches:
+        - path:
+            type: {{ rule.path_type }}
+            value: "{{ rule.path }}"
+      filters:
+       {%- if rule.path_rewrite %}
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ sanitized_name }}-rewrite-{{ route_index }}-{{ loop.index0 }}
+       {%- endif %}
+       {%- if advanced_settings.network_gateway_api_add_headers %}
+        # Add custom response headers
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+              {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
+              - name: "{{ header_name }}"
+                value: "{{ header_value }}"
+              {%- endfor %}
+        {%- endif %}
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+            # Add custom request headers (proxy_set_header equivalent)
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+            {%- endif %}
+            # Add Qovery specific headers for logging and tracing
+            set:
+            - name: "x-qovery-com-environment-id"
+              value: "{{ environment_long_id }}"
+            - name: "x-qovery-com-associated-service-id"
+              value: "{{ associated_service_long_id }}"
+    {%- endfor %}
+{%- endfor %}
+{%- if advanced_settings.network_gateway_api_force_ssl_redirect and advanced_settings.network_gateway_api_force_ssl_redirect != "false" %}
+{#
+  SSL redirect routes are split exactly like the HTTPS routes.
+#}
+{%- for route in gateway_http_routes %}
+{%- set route_index = loop.index0 %}
+---
+# SSL redirect HTTPRoute (only when force_ssl_redirect is TRUE)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ sanitized_name }}-ssl-redir{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {%- if has_wildcard_domain == true %}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- else %}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {%- for key, value in annotations_group.gateway_api_routes %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  parentRefs:
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+  hostnames:
+    {%- for hostname in route.hostnames %}
+    - "{{ hostname }}"
+    {%- endfor %}
+  rules:
+  # Rule 1: Do not redirect ACME HTTP-01 challenge requests.
+  # cert-manager dynamically creates its own HTTPRoute with a more-specific path
+  # (exact challenge token), which wins over this route by Gateway API precedence.
+  # This rule exists to ensure the catch-all redirect below does NOT intercept
+  # /.well-known/acme-challenge/ requests before cert-manager can handle them,
+  # which would otherwise cause an infinite renewal loop every ~60 days.
+  #
+  # Keep valid backendRefs so Envoy does not synthesize a 500 direct response
+  # for an otherwise backend-less rule.
+  # Reuse the principal route backend targets, but force a strictly positive
+  # weight so zero-weight business routing values cannot break ACME fallback.
+  - backendRefs:
+      {%- for rule in route.rules %}
+      - group: ""
+        kind: Service
+        name: "{{ rule.service_name }}"
+        port: {{ rule.service_port }}
+        weight: 1
+      {%- endfor %}
+    matches:
+      - path:
+          type: PathPrefix
+          value: /.well-known/acme-challenge/
+  # Rule 2: Redirect all other HTTP traffic to HTTPS.
+  - filters:
+      - type: RequestRedirect
+        requestRedirect:
+          scheme: https
+          statusCode: 301
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}

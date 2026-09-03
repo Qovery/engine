@@ -1,0 +1,174 @@
+{%- if k8s_deploy_api_gateway == true %}
+{% for namespace_key, grpc_hosts in grpc_hosts_per_namespace_gateway %}
+{%- if grpc_hosts|length >= 1  %}
+{#
+  Create one BackendTrafficPolicy per GRPCRoute part.
+  See gateway-grpc-route.j2.yaml for details on why routes are split.
+#}
+{%- set max_hosts_per_route = 1 %}
+{%- set total_hosts = grpc_hosts|length %}
+{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
+{%- for route_index in range(end=num_routes) %}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: {{ sanitized_name }}-grpc-traffic-policy{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: {{ sanitized_name }}-grpc{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  {%- if advanced_settings.network_gateway_api_sticky_session_enable == true %}
+  loadBalancer:
+    type: ConsistentHash
+    consistentHash:
+      {%- if advanced_settings.network_gateway_api_sticky_session_type.Header is defined %}
+      # Header-based affinity — use this when clients cannot persist cookies
+      # across requests (e.g. MCP SDK clients keying off Mcp-Session-Id).
+      type: Header
+      header:
+        name: {{ advanced_settings.network_gateway_api_sticky_session_type.Header.name }}
+      {%- elif advanced_settings.network_gateway_api_sticky_session_type == "SourceIP" %}
+      type: SourceIP
+      {%- else %}
+      type: Cookie
+      cookie:
+        name: INGRESSCOOKIE_QOVERY
+        ttl: 85400s # 1 day
+        attributes:
+          secure: "true"
+          samesite: Lax
+      {%- endif %}
+  {%- endif %}
+  {%- if advanced_settings.network_gateway_api_route_limit_rpm or advanced_settings.network_gateway_api_route_limit_rps %}
+  rateLimit:
+    type: Local
+    local:
+      rules:
+      {%- if advanced_settings.network_gateway_api_route_limit_rpm %}
+      # RPM limit
+      - limit:
+          requests: {{ advanced_settings.network_gateway_api_route_limit_rpm }}
+          unit: Minute
+        clientSelectors:
+        {%- if advanced_settings.network_gateway_api_route_limit_source_cidrs %}
+        {%- for h in advanced_settings.network_gateway_api_route_limit_source_cidrs | split(pat=",") %}
+        - sourceCIDR:
+            value: "{{ h | trim }}"
+            type: Distinct
+        {%- endfor %}
+        {%- else %}
+        - sourceCIDR:
+            value: "0.0.0.0/0"
+            type: Distinct
+        {%- endif %}
+        {%- if advanced_settings.network_gateway_api_route_limit_headers %}
+        - headers:
+          {%- for h in advanced_settings.network_gateway_api_route_limit_headers | split(pat=",") %}
+          - name: "{{ h | trim }}"
+            type: Distinct
+          {%- endfor %}
+        {%- endif %}
+      {%- endif %}
+      {%- if advanced_settings.network_gateway_api_route_limit_rps %}
+      # RPS limit
+      - limit:
+          requests: {{ advanced_settings.network_gateway_api_route_limit_rps }}
+          unit: Second
+        clientSelectors:
+        {%- if advanced_settings.network_gateway_api_route_limit_source_cidrs %}
+        {%- for h in advanced_settings.network_gateway_api_route_limit_source_cidrs | split(pat=",") %}
+        - sourceCIDR:
+            value: "{{ h | trim }}"
+            type: Distinct
+        {%- endfor %}
+        {%- else %}
+        - sourceCIDR:
+            value: "0.0.0.0/0"
+            type: Distinct
+        {%- endif %}
+        {%- if advanced_settings.network_gateway_api_route_limit_headers %}
+        - headers:
+          {%- for h in advanced_settings.network_gateway_api_route_limit_headers | split(pat=",") %}
+          - name: "{{ h | trim }}"
+            type: Distinct
+          {%- endfor %}
+        {%- endif %}
+      {%- endif %}
+  {%- endif %}
+  {%- if resolved_gateway_api_retry_num_retries or resolved_gateway_api_retry_num_retries == 0 %}
+  retry:
+    numRetries: {{ resolved_gateway_api_retry_num_retries }}
+    {%- if resolved_gateway_api_retry_per_try_timeout_seconds or resolved_gateway_api_retry_per_try_timeout_seconds == 0 %}
+    perRetry:
+      timeout: {{ resolved_gateway_api_retry_per_try_timeout_seconds }}s
+    {%- endif %}
+    {%- if resolved_gateway_api_retry_retry_on_triggers | length > 0 or resolved_gateway_api_retry_http_status_codes | length > 0 %}
+    retryOn:
+      {%- if resolved_gateway_api_retry_retry_on_triggers | length > 0 %}
+      triggers:
+        {%- for trigger in resolved_gateway_api_retry_retry_on_triggers %}
+        - {{ trigger }}
+        {%- endfor %}
+      {%- endif %}
+      {%- if resolved_gateway_api_retry_http_status_codes | length > 0 %}
+      httpStatusCodes:
+        {%- for status_code in resolved_gateway_api_retry_http_status_codes %}
+        - {{ status_code }}
+        {%- endfor %}
+      {%- endif %}
+    {%- endif %}
+  {%- endif %}
+  {%- set service_request_timeout = advanced_settings.network_gateway_api_http_request_timeout_seconds %}
+  {%- set service_idle_timeout = advanced_settings.network_gateway_api_http_connection_idle_timeout_seconds %}
+  {%- set service_max_stream_duration = advanced_settings.network_gateway_api_http_max_stream_duration_seconds %}
+  {%- set cluster_request_timeout = cluster_envoy_gateway_api_http_request_timeout_seconds %}
+  {%- set cluster_idle_timeout = cluster_envoy_gateway_api_http_connection_idle_timeout_seconds %}
+  {%- set cluster_max_stream_duration = cluster_envoy_gateway_api_http_max_stream_duration_seconds %}
+  {%- if service_request_timeout or service_idle_timeout or service_max_stream_duration or cluster_request_timeout or cluster_idle_timeout or cluster_max_stream_duration %}
+  timeout:
+    http:
+      {%- if service_request_timeout %}
+      requestTimeout: {{ service_request_timeout }}s
+      {%- elif cluster_request_timeout %}
+      requestTimeout: {{ cluster_request_timeout }}s
+      {%- endif %}
+      {%- if service_idle_timeout %}
+      connectionIdleTimeout: {{ service_idle_timeout }}s
+      {%- elif cluster_idle_timeout %}
+      connectionIdleTimeout: {{ cluster_idle_timeout }}s
+      {%- endif %}
+      {%- if service_max_stream_duration %}
+      maxStreamDuration: {{ service_max_stream_duration }}s
+      {%- elif cluster_max_stream_duration %}
+      maxStreamDuration: {{ cluster_max_stream_duration }}s
+      {%- endif %}
+  {%- endif %}
+  {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds or advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
+  tcpKeepalive:
+    {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds %}
+    idleTime: {{ advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds }}s
+    {%- endif %}
+    {%- if advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
+    interval: {{ advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds }}s
+    {%- endif %}
+    probes: 3
+  {%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}

@@ -18,7 +18,7 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
     app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: "{{ value }}"
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   unhealthyPodEvictionPolicy: AlwaysAllow

@@ -40,8 +40,7 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     kubernetes.io/tls-acme: "true"
@@ -52,8 +51,7 @@ metadata:
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
     {%- for key, value in annotations_group.gateway_api_routes %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   parentRefs:
@@ -85,9 +83,9 @@ spec:
   hostnames:
     {%- for host in grpc_hosts %}
     {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
-    - "{{ host.domain_name }}"
+    - {{ host.domain_name | yaml_encode }}
     # TODO(QOV-1400): remove this code used for Gateway API double stack migration
-    - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    - {{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") | yaml_encode }}
     {%- endif %}
     {%- endfor %}
   rules:
@@ -105,11 +103,11 @@ spec:
         - method:
             {%- if host.grpc_method is defined and host.grpc_method | trim %}
             type: Exact
-            service: "{{ host.grpc_service | trim }}"
-            method: "{{ host.grpc_method | trim }}"
+            service: {{ host.grpc_service | trim | yaml_encode }}
+            method: {{ host.grpc_method | trim | yaml_encode }}
             {%- else %}
             type: Exact
-            service: "{{ host.grpc_service | trim }}"
+            service: {{ host.grpc_service | trim | yaml_encode }}
             {%- endif %}
       {%- endif %}
       {%- if advanced_settings.network_gateway_api_add_headers or advanced_settings.network_gateway_api_proxy_set_headers %}
@@ -120,8 +118,8 @@ spec:
           responseHeaderModifier:
             add:
             {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
-            - name: "{{ header_name }}"
-              value: "{{ header_value }}"
+            - name: {{ header_name | yaml_encode }}
+              value: {{ header_value | yaml_encode }}
             {%- endfor %}
         {%- endif %}
         - type: RequestHeaderModifier
@@ -130,8 +128,8 @@ spec:
             # Add custom request headers (proxy_set_header equivalent)
             add:
             {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
-            - name: "{{ header_name }}"
-              value: "{{ header_value }}"
+            - name: {{ header_name | yaml_encode }}
+              value: {{ header_value | yaml_encode }}
             {%- endfor %}
             {%- endif %}
             # Add Qovery specific headers for logging and tracing
