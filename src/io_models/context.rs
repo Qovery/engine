@@ -3,7 +3,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::events::{EventDetails, Transmitter};
 use crate::io_models::QoveryIdentifier;
-use crate::io_models::platform_components::{ExecutionMode, PlatformHelmUnit};
+use crate::io_models::platform_components::{ExecutionMode, PlatformHelmUnit, PlatformPreflightRequest};
 use crate::utilities::to_short_id;
 use rand::Rng;
 use rand::distr::Alphanumeric;
@@ -213,6 +213,8 @@ pub struct EngineV2Options {
     pub platform_helm_units: Vec<PlatformHelmUnit>,
     /// Request schema version understood by the Engine v2 execution path.
     pub schema_version: String,
+    /// In-cluster checks required by request schema 2 before any Helm mutation.
+    pub preflight: Option<PlatformPreflightRequest>,
 }
 
 impl Metadata {
