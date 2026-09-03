@@ -1,4 +1,5 @@
 use super::InfraLogger;
+use super::platform_preflight::run_platform_preflight;
 use super::utils::mk_logger;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::Helm;
@@ -10,7 +11,8 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::container::Registry;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{
-    PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction, PlatformUnitErrorCode, PlatformUnitResult,
+    PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction, PlatformPreflightCheckResult,
+    PlatformPreflightRequest, PlatformUnitErrorCode, PlatformUnitResult,
 };
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -24,8 +26,8 @@ const HELM_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 const HELM_DIFF_TIMEOUT: Duration = Duration::from_secs(120);
 const HELM_UPGRADE_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// The only request schema version this engine build understands for platform units.
-const SUPPORTED_REQUEST_SCHEMA_VERSION: u32 = 1;
+const LEGACY_REQUEST_SCHEMA_VERSION: u32 = 1;
+const PREFLIGHT_REQUEST_SCHEMA_VERSION: u32 = 2;
 
 /// Platform units are Qovery-owned: the namespace is protected configuration, not an input.
 const PROTECTED_PLATFORM_NAMESPACE: &str = "qovery";
@@ -70,43 +72,75 @@ pub fn deploy_platform_components(
     let result_logger = mk_logger(kubernetes, InfrastructureStep::PlatformExecutionResult);
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
 
-    let units = request
+    let engine_v2_options = request
         .metadata
         .as_ref()
-        .and_then(|metadata| metadata.engine_v2_options.as_ref())
-        .map(|engine_v2_options| engine_v2_options.platform_helm_units.as_slice())
+        .and_then(|metadata| metadata.engine_v2_options.as_ref());
+    let units = engine_v2_options
+        .map(|options| options.platform_helm_units.as_slice())
         .unwrap_or(&[]);
-    let schema_version = request
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.engine_v2_options.as_ref())
-        .map(|engine_v2_options| engine_v2_options.schema_version.as_str());
+    let schema_version = engine_v2_options.map(|options| options.schema_version.as_str());
+    let preflight = engine_v2_options.and_then(|options| options.preflight.as_ref());
 
     // Whitelist validation, fail-closed: nothing executes when any part of the request is
     // outside what this path explicitly supports.
-    if let Err(violation) = validate_platform_request(schema_version, units) {
-        let unit_results = units
-            .iter()
-            .map(|unit| match &violation.unit_key {
-                Some(key) if *key == unit.key => {
-                    PlatformUnitResult::failed(&unit.key, violation.code, &violation.message)
-                }
-                Some(_) => PlatformUnitResult::skipped(&unit.key, "VALIDATION_FAILED"),
-                None => PlatformUnitResult::failed(&unit.key, violation.code, &violation.message),
-            })
-            .collect();
-        write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
-        return Err(Box::new(EngineError::new_invalid_engine_payload(
-            event_details,
-            &violation.message,
-            None,
-        )));
-    }
+    let result_schema_version = match validate_platform_request(schema_version, units, preflight) {
+        Ok(schema_version) => schema_version,
+        Err(violation) => {
+            let unit_results = units
+                .iter()
+                .map(|unit| match &violation.unit_key {
+                    Some(key) if *key == unit.key => {
+                        PlatformUnitResult::failed(&unit.key, violation.code, &violation.message)
+                    }
+                    Some(_) => PlatformUnitResult::skipped(&unit.key, "VALIDATION_FAILED"),
+                    None => PlatformUnitResult::failed(&unit.key, violation.code, &violation.message),
+                })
+                .collect();
+            write_platform_execution_result(
+                &logger,
+                &result_logger,
+                result_schema_version_for(schema_version),
+                &request.id,
+                unit_results,
+                None,
+            );
+            return Err(Box::new(EngineError::new_invalid_engine_payload(
+                event_details,
+                &violation.message,
+                None,
+            )));
+        }
+    };
 
     logger.info(format!(
         "🧩 Platform components only: {} Helm unit(s) to apply, cluster lifecycle is skipped",
         units.len()
     ));
+
+    let (preflight_results, preflight_blocks_execution) = match preflight {
+        Some(preflight_request) => {
+            let outcome = run_platform_preflight(infra_ctx, preflight_request, units);
+            (Some(outcome.results), outcome.blocks_execution)
+        }
+        None => (None, false),
+    };
+    if preflight_blocks_execution {
+        logger.warn("Platform preflight blocked execution before any Helm mutation");
+        let unit_results = units
+            .iter()
+            .map(|unit| PlatformUnitResult::skipped(&unit.key, "PREFLIGHT_FAILED"))
+            .collect();
+        write_platform_execution_result(
+            &logger,
+            &result_logger,
+            result_schema_version,
+            &request.id,
+            unit_results,
+            preflight_results,
+        );
+        return Err(Box::new(EngineError::new_platform_preflight_failed(event_details)));
+    }
 
     // The worker runs inside the customer cluster: use the kubeconfig when the request provided
     // one, otherwise fall back to in-cluster ServiceAccount credentials (no kubeconfig file).
@@ -130,7 +164,14 @@ pub fn deploy_platform_components(
                     )
                 })
                 .collect();
-            write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
+            write_platform_execution_result(
+                &logger,
+                &result_logger,
+                result_schema_version,
+                &request.id,
+                unit_results,
+                preflight_results,
+            );
             return Err(Box::new(EngineError::new_helm_chart_error(event_details, err.into())));
         }
     };
@@ -153,7 +194,14 @@ pub fn deploy_platform_components(
         }
     }
 
-    write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
+    write_platform_execution_result(
+        &logger,
+        &result_logger,
+        result_schema_version,
+        &request.id,
+        unit_results,
+        preflight_results,
+    );
 
     match first_failure {
         Some(err) => Err(err),
@@ -181,11 +229,25 @@ pub fn fail_unknown_execution_mode(
         .iter()
         .map(|unit| PlatformUnitResult::failed(&unit.key, PlatformUnitErrorCode::InvalidPayload, MESSAGE))
         .collect();
-    write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
+    write_platform_execution_result(
+        &logger,
+        &result_logger,
+        result_schema_version_for(
+            request
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.engine_v2_options.as_ref())
+                .map(|options| options.schema_version.as_str()),
+        ),
+        &request.id,
+        unit_results,
+        None,
+    );
 
     Box::new(EngineError::new_invalid_engine_payload(event_details, MESSAGE, None))
 }
 
+#[derive(Debug)]
 struct PlatformValidationError {
     code: PlatformUnitErrorCode,
     message: String,
@@ -196,20 +258,21 @@ struct PlatformValidationError {
 fn validate_platform_request(
     schema_version: Option<&str>,
     units: &[PlatformHelmUnit],
-) -> Result<(), PlatformValidationError> {
+    preflight: Option<&PlatformPreflightRequest>,
+) -> Result<u32, PlatformValidationError> {
     let request_error = |code: PlatformUnitErrorCode, message: String| PlatformValidationError {
         code,
         message,
         unit_key: None,
     };
 
-    match schema_version.map(str::parse::<u32>) {
-        Some(Ok(SUPPORTED_REQUEST_SCHEMA_VERSION)) => {}
+    let schema_version = match schema_version.map(str::parse::<u32>) {
+        Some(Ok(version @ (LEGACY_REQUEST_SCHEMA_VERSION | PREFLIGHT_REQUEST_SCHEMA_VERSION))) => version,
         Some(Ok(version)) => {
             return Err(request_error(
                 PlatformUnitErrorCode::UnsupportedSchemaVersion,
                 format!(
-                    "unsupported request schema_version {version}: this engine supports {SUPPORTED_REQUEST_SCHEMA_VERSION}"
+                    "unsupported request schema_version {version}: this engine supports {LEGACY_REQUEST_SCHEMA_VERSION} and {PREFLIGHT_REQUEST_SCHEMA_VERSION}"
                 ),
             ));
         }
@@ -219,6 +282,29 @@ fn validate_platform_request(
                 "missing or non-numeric request schema_version".to_string(),
             ));
         }
+    };
+
+    match (schema_version, preflight) {
+        (LEGACY_REQUEST_SCHEMA_VERSION, None) => {}
+        (LEGACY_REQUEST_SCHEMA_VERSION, Some(_)) => {
+            return Err(request_error(
+                PlatformUnitErrorCode::InvalidPayload,
+                "request schema_version 1 must not contain preflight instructions".to_string(),
+            ));
+        }
+        // An omitted section is the wire representation of DISABLED and deliberately performs
+        // no extra cluster reads. This also keeps schema 2 backward-compatible for callers that
+        // do not activate preflight yet.
+        (PREFLIGHT_REQUEST_SCHEMA_VERSION, None) => {}
+        (PREFLIGHT_REQUEST_SCHEMA_VERSION, Some(preflight)) => {
+            preflight.validate().map_err(|error| {
+                request_error(
+                    PlatformUnitErrorCode::InvalidPayload,
+                    format!("invalid preflight instructions: {error}"),
+                )
+            })?;
+        }
+        _ => unreachable!("unsupported schema versions are rejected above"),
     }
 
     if units.is_empty() {
@@ -299,18 +385,28 @@ fn validate_platform_request(
         }
     }
 
-    Ok(())
+    Ok(schema_version)
+}
+
+fn result_schema_version_for(schema_version: Option<&str>) -> u32 {
+    match schema_version.and_then(|version| version.parse::<u32>().ok()) {
+        Some(PREFLIGHT_REQUEST_SCHEMA_VERSION) => PREFLIGHT_REQUEST_SCHEMA_VERSION,
+        _ => LEGACY_REQUEST_SCHEMA_VERSION,
+    }
 }
 
 fn write_platform_execution_result(
     logger: &impl InfraLogger,
     result_logger: &impl InfraLogger,
+    schema_version: u32,
     execution_id: &str,
     units: Vec<PlatformUnitResult>,
+    preflight_results: Option<Vec<PlatformPreflightCheckResult>>,
 ) {
     let path = std::env::var("QOVERY_TERMINATION_MESSAGE_PATH")
         .unwrap_or_else(|_| DEFAULT_TERMINATION_MESSAGE_PATH.to_string());
-    let (json, warnings) = write_termination_message_to(Path::new(&path), execution_id, units);
+    let (json, warnings) =
+        write_termination_message_to(Path::new(&path), schema_version, execution_id, units, preflight_results);
     for warning in warnings {
         logger.warn(warning);
     }
@@ -319,20 +415,28 @@ fn write_platform_execution_result(
 
 fn write_termination_message_to(
     path: &Path,
+    schema_version: u32,
     execution_id: &str,
     units: Vec<PlatformUnitResult>,
+    preflight_results: Option<Vec<PlatformPreflightCheckResult>>,
 ) -> (String, Vec<String>) {
     let mut warnings = Vec::new();
     let mut result = PlatformExecutionResult {
-        schema_version: 1,
+        schema_version,
         execution_id: execution_id.to_string(),
         units,
+        preflight_results,
     };
 
     let mut json = serde_json::to_string(&result).unwrap_or_default();
     if json.is_empty() || json.len() > TERMINATION_MESSAGE_MAX_BYTES {
         for unit in &mut result.units {
             unit.message = None;
+        }
+        if let Some(preflight_results) = result.preflight_results.as_mut() {
+            for preflight_result in preflight_results {
+                preflight_result.evidence.clear();
+            }
         }
         json = serde_json::to_string(&result).unwrap_or_default();
     }
@@ -344,6 +448,22 @@ fn write_termination_message_to(
         result.units = Vec::new();
         json = serde_json::to_string(&result).unwrap_or_default();
     }
+    if json.is_empty() || json.len() > TERMINATION_MESSAGE_MAX_BYTES {
+        warnings.push(format!(
+            "platform execution result exceeds the {TERMINATION_MESSAGE_MAX_BYTES}-byte termination-message limit without units: omitting preflight results"
+        ));
+        result.preflight_results = None;
+        json = serde_json::to_string(&result).unwrap_or_default();
+    }
+    if json.is_empty() || json.len() > TERMINATION_MESSAGE_MAX_BYTES {
+        warnings.push(format!(
+            "platform execution result exceeds the {TERMINATION_MESSAGE_MAX_BYTES}-byte termination-message limit without units or preflight results: writing the minimal sentinel"
+        ));
+        result.execution_id.clear();
+        json = serde_json::to_string(&result).unwrap_or_default();
+    }
+
+    debug_assert!(!json.is_empty() && json.len() <= TERMINATION_MESSAGE_MAX_BYTES);
 
     if let Err(err) = std::fs::write(path, &json) {
         warnings.push(format!("cannot write the platform execution result to {path:?}: {err}"));
@@ -571,7 +691,11 @@ fn internal_fs_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::io_models::platform_components::PlatformHelmChartSource;
+    use crate::io_models::platform_components::{
+        PlatformHelmChartSource, PlatformPreflightCheckId, PlatformPreflightCheckRequest,
+        PlatformPreflightCheckSeverity, PlatformPreflightCheckStatus, PlatformPreflightMode,
+        PlatformPreflightReasonCode, PlatformPreflightRemediation, PlatformPreflightRemediationKey,
+    };
 
     fn valid_unit() -> PlatformHelmUnit {
         PlatformHelmUnit {
@@ -586,6 +710,16 @@ mod tests {
             },
             values_yaml: "image:\n  tag: \"0.1.0\"\n".to_string(),
             images: vec![],
+        }
+    }
+
+    fn valid_preflight() -> PlatformPreflightRequest {
+        PlatformPreflightRequest {
+            mode: PlatformPreflightMode::Observe,
+            checks: vec![PlatformPreflightCheckRequest {
+                id: PlatformPreflightCheckId::KubernetesApiUnreachable,
+                severity: PlatformPreflightCheckSeverity::Mandatory,
+            }],
         }
     }
 
@@ -627,13 +761,24 @@ mod tests {
 
     #[test]
     fn valid_request_passes_validation() {
-        assert!(validate_platform_request(Some("1"), &[valid_unit()]).is_ok());
+        assert_eq!(
+            validate_platform_request(Some("1"), &[valid_unit()], None).unwrap(),
+            LEGACY_REQUEST_SCHEMA_VERSION
+        );
+        assert_eq!(
+            validate_platform_request(Some("2"), &[valid_unit()], Some(&valid_preflight())).unwrap(),
+            PREFLIGHT_REQUEST_SCHEMA_VERSION
+        );
+        assert_eq!(
+            validate_platform_request(Some("2"), &[valid_unit()], None).unwrap(),
+            PREFLIGHT_REQUEST_SCHEMA_VERSION
+        );
     }
 
     #[test]
     fn missing_or_unsupported_schema_version_is_rejected_before_execution() {
-        for schema_version in [None, Some("2"), Some("abc")] {
-            let err = validate_platform_request(schema_version, &[valid_unit()])
+        for schema_version in [None, Some("3"), Some("abc")] {
+            let err = validate_platform_request(schema_version, &[valid_unit()], None)
                 .err()
                 .unwrap();
             assert_eq!(err.code, PlatformUnitErrorCode::UnsupportedSchemaVersion);
@@ -642,8 +787,18 @@ mod tests {
     }
 
     #[test]
+    fn schema_one_cannot_carry_preflight_instructions() {
+        let preflight = valid_preflight();
+        let err = validate_platform_request(Some("1"), &[valid_unit()], Some(&preflight))
+            .err()
+            .unwrap();
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert_eq!(err.unit_key, None);
+    }
+
+    #[test]
     fn empty_units_are_rejected() {
-        let err = validate_platform_request(Some("1"), &[]).err().unwrap();
+        let err = validate_platform_request(Some("1"), &[], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
     }
 
@@ -651,7 +806,7 @@ mod tests {
     fn unknown_action_is_a_forbidden_action() {
         let mut unit = valid_unit();
         unit.action = PlatformHelmUnitAction::Unknown;
-        let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::ForbiddenAction);
         assert_eq!(err.unit_key.as_deref(), Some("cluster-agent"));
     }
@@ -660,7 +815,7 @@ mod tests {
     fn non_protected_namespace_is_a_forbidden_action() {
         let mut unit = valid_unit();
         unit.namespace = "kube-system".to_string();
-        let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::ForbiddenAction);
     }
 
@@ -669,7 +824,7 @@ mod tests {
         for version in ["latest", "LATEST", "", "  "] {
             let mut unit = valid_unit();
             unit.chart.version = version.to_string();
-            let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+            let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
             assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
         }
     }
@@ -678,7 +833,7 @@ mod tests {
     fn invalid_chart_repository_is_rejected() {
         let mut unit = valid_unit();
         unit.chart.repository = "not a url".to_string();
-        let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
     }
 
@@ -686,7 +841,7 @@ mod tests {
     fn invalid_values_yaml_is_rejected_without_leaking_its_content() {
         let mut unit = valid_unit();
         unit.values_yaml = "secret: [unclosed".to_string();
-        let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
         assert!(!err.message.contains("unclosed"));
     }
@@ -695,7 +850,7 @@ mod tests {
     fn empty_release_name_is_rejected() {
         let mut unit = valid_unit();
         unit.release_name = " ".to_string();
-        let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
     }
 
@@ -707,7 +862,7 @@ mod tests {
         for key in ["../../etc", "a/b", "a\\b", "..", ".", "", " ", &long_key] {
             let mut unit = valid_unit();
             unit.key = key.to_string();
-            let err = validate_platform_request(Some("1"), &[unit]).err().unwrap();
+            let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
             assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload, "key `{key}` must be rejected");
         }
     }
@@ -717,11 +872,13 @@ mod tests {
         let path = std::env::temp_dir().join(format!("qovery-termination-test-{}-parseable", std::process::id()));
         let (json, warnings) = write_termination_message_to(
             &path,
+            LEGACY_REQUEST_SCHEMA_VERSION,
             "exec-1",
             vec![
                 PlatformUnitResult::succeeded("cluster-agent"),
                 PlatformUnitResult::failed("shell-agent", PlatformUnitErrorCode::HelmFailed, "boom"),
             ],
+            None,
         );
         assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
         let written = std::fs::read_to_string(&path).unwrap();
@@ -745,7 +902,8 @@ mod tests {
                 )
             })
             .collect();
-        let (json, warnings) = write_termination_message_to(&path, "exec-1", units);
+        let (json, warnings) =
+            write_termination_message_to(&path, LEGACY_REQUEST_SCHEMA_VERSION, "exec-1", units, None);
         assert!(!warnings.is_empty(), "the sentinel fallback must be reported as a warning");
         let written = std::fs::read_to_string(&path).unwrap();
         assert_eq!(json, written);
@@ -753,6 +911,64 @@ mod tests {
         let parsed: PlatformExecutionResult = serde_json::from_str(&written).unwrap();
         assert_eq!(parsed.execution_id, "exec-1");
         assert!(parsed.units.is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn oversized_preflight_results_are_omitted_only_as_a_last_resort() {
+        let path = std::env::temp_dir().join(format!("qovery-termination-test-{}-preflight", std::process::id()));
+        let preflight_results = (0..100)
+            .map(|i| PlatformPreflightCheckResult {
+                id: PlatformPreflightCheckId::NamespaceTerminating,
+                status: PlatformPreflightCheckStatus::Fail,
+                severity: PlatformPreflightCheckSeverity::Mandatory,
+                reason_code: PlatformPreflightReasonCode::NamespaceTerminating,
+                evidence: std::collections::BTreeMap::from([("namespace".to_string(), format!("qovery-{i}"))]),
+                remediation: PlatformPreflightRemediation {
+                    key: PlatformPreflightRemediationKey::WaitForNamespaceTermination,
+                    message: "wait for namespace termination".repeat(20),
+                },
+            })
+            .collect();
+
+        let (json, warnings) = write_termination_message_to(
+            &path,
+            PREFLIGHT_REQUEST_SCHEMA_VERSION,
+            "exec-1",
+            vec![PlatformUnitResult::succeeded("cluster-agent")],
+            Some(preflight_results),
+        );
+
+        assert!(!warnings.is_empty(), "the preflight fallback must be reported as a warning");
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(json, written);
+        assert!(written.len() <= TERMINATION_MESSAGE_MAX_BYTES);
+        let parsed: PlatformExecutionResult = serde_json::from_str(&written).unwrap();
+        assert!(parsed.units.is_empty());
+        assert!(parsed.preflight_results.is_none());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn oversized_execution_id_degrades_to_the_minimal_sentinel() {
+        let path = std::env::temp_dir().join(format!("qovery-termination-test-{}-execution-id", std::process::id()));
+
+        let (json, warnings) = write_termination_message_to(
+            &path,
+            PREFLIGHT_REQUEST_SCHEMA_VERSION,
+            &"x".repeat(TERMINATION_MESSAGE_MAX_BYTES),
+            Vec::new(),
+            None,
+        );
+
+        assert!(!warnings.is_empty(), "the minimal fallback must be reported as a warning");
+        let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(json, written);
+        assert!(written.len() <= TERMINATION_MESSAGE_MAX_BYTES);
+        let parsed: PlatformExecutionResult = serde_json::from_str(&written).unwrap();
+        assert!(parsed.execution_id.is_empty());
+        assert!(parsed.units.is_empty());
+        assert!(parsed.preflight_results.is_none());
         let _ = std::fs::remove_file(&path);
     }
 }

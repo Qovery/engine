@@ -12,6 +12,7 @@ pub(super) mod kubeconfig_helper;
 mod kubectl_utils;
 pub mod metrics_resource_profile;
 pub mod platform_components;
+mod platform_preflight;
 mod scaleway;
 mod self_managed;
 mod utils;

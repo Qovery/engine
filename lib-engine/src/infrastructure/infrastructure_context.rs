@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use thiserror::Error;
 use uuid::Uuid;
@@ -28,6 +29,35 @@ pub enum EngineConfigError {
     KubernetesNotValid(EngineError),
 }
 
+/// Selects which Kubernetes authentication sources a caller explicitly allows.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KubeClientAuthMode {
+    /// Preserve the infrastructure lifecycle guard: an infrastructure deployment requires a kubeconfig.
+    RequireKubeconfigForInfrastructure,
+    /// Prefer an existing kubeconfig, but allow the pod ServiceAccount when no file exists.
+    AllowInCluster,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum KubeClientAuthSource {
+    Kubeconfig,
+    InCluster,
+}
+
+impl KubeClientAuthSource {
+    fn is_allowed(self, auth_mode: KubeClientAuthMode, is_infra_deployment: bool) -> bool {
+        self == Self::Kubeconfig || !is_infra_deployment || auth_mode == KubeClientAuthMode::AllowInCluster
+    }
+}
+
+struct CachedKubeClient {
+    client: QubeClient,
+    auth_source: KubeClientAuthSource,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct KubeconfigRequired;
+
 impl EngineConfigError {
     pub fn engine_error(&self) -> &EngineError {
         match self {
@@ -48,7 +78,7 @@ pub struct InfrastructureContext {
     kubernetes: Box<dyn Kubernetes>,
     metrics_registry: Box<dyn MetricsRegistry>,
     is_infra_deployment: bool,
-    kube_client: Mutex<Option<QubeClient>>,
+    kube_client: Mutex<Option<CachedKubeClient>>,
     kubernetes_api_deprecation_service: KubernetesApiDeprecationService,
     pub cluster_failure_context: SharedClusterFailureContext,
 }
@@ -125,27 +155,35 @@ impl InfrastructureContext {
 
     // The kubeconfig file may not exist yet on disk, so we create the client lazily
     pub fn mk_kube_client(&self) -> Result<QubeClient, Box<EngineError>> {
-        if let Some(client) = self.kube_client.lock().unwrap().borrow().as_ref() {
-            return Ok(client.clone());
+        self.mk_kube_client_with_auth_mode(KubeClientAuthMode::RequireKubeconfigForInfrastructure)
+    }
+
+    /// Creates a Kubernetes client using the authentication sources explicitly allowed by the caller.
+    pub fn mk_kube_client_with_auth_mode(&self, auth_mode: KubeClientAuthMode) -> Result<QubeClient, Box<EngineError>> {
+        if let Some(cached_client) = self.kube_client.lock().unwrap().borrow().as_ref()
+            && cached_client
+                .auth_source
+                .is_allowed(auth_mode, self.is_infra_deployment)
+        {
+            return Ok(cached_client.client.clone());
         }
 
         let event_details = self
             .kubernetes()
             .get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources));
 
-        let kubeconfig_path = {
-            let kubeconfig_path = self.kubernetes().kubeconfig_local_file_path();
-            if kubeconfig_path.exists() {
-                Some(kubeconfig_path)
-            } else if self.is_infra_deployment {
-                // Infra deployment must have a kubeconfig file, we cant upgrade infra within the cluster
-                return Err(Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                    event_details.clone(),
-                )));
-            } else {
-                None
-            }
-        };
+        let kubeconfig_path = select_kubeconfig_path(
+            self.kubernetes().kubeconfig_local_file_path(),
+            self.is_infra_deployment,
+            auth_mode,
+        )
+        .map_err(|_| {
+            // Infrastructure lifecycle operations must not silently switch to the credentials of
+            // the pod they may be upgrading. Only explicitly authorized callers bypass this guard.
+            Box::new(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                event_details.clone(),
+            ))
+        })?;
 
         let kube_credentials: Vec<(String, String)> = self
             .cloud_provider
@@ -154,9 +192,17 @@ impl InfrastructureContext {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
 
+        let auth_source = if kubeconfig_path.is_some() {
+            KubeClientAuthSource::Kubeconfig
+        } else {
+            KubeClientAuthSource::InCluster
+        };
         let client = QubeClient::new(event_details, kubeconfig_path, kube_credentials)?;
 
-        *self.kube_client.lock().unwrap() = Some(client.clone());
+        *self.kube_client.lock().unwrap() = Some(CachedKubeClient {
+            client: client.clone(),
+            auth_source,
+        });
         Ok(client)
     }
 
@@ -165,8 +211,70 @@ impl InfrastructureContext {
     }
 }
 
+fn select_kubeconfig_path(
+    kubeconfig_path: PathBuf,
+    is_infra_deployment: bool,
+    auth_mode: KubeClientAuthMode,
+) -> Result<Option<PathBuf>, KubeconfigRequired> {
+    if kubeconfig_path.exists() {
+        return Ok(Some(kubeconfig_path));
+    }
+    if is_infra_deployment && auth_mode == KubeClientAuthMode::RequireKubeconfigForInfrastructure {
+        return Err(KubeconfigRequired);
+    }
+    Ok(None)
+}
+
 pub fn extract_deployment_infrastructure_id(execution_id: &str) -> Option<Uuid> {
     execution_id
         .rfind('-')
         .and_then(|pos| Uuid::parse_str(&execution_id[..pos]).ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn in_cluster_auth_must_be_explicit_for_infrastructure_deployments() {
+        let missing_path = std::env::temp_dir().join(format!("missing-kubeconfig-{}", Uuid::new_v4()));
+
+        assert_eq!(
+            select_kubeconfig_path(
+                missing_path.clone(),
+                true,
+                KubeClientAuthMode::RequireKubeconfigForInfrastructure,
+            ),
+            Err(KubeconfigRequired)
+        );
+        assert_eq!(
+            select_kubeconfig_path(missing_path, true, KubeClientAuthMode::AllowInCluster),
+            Ok(None)
+        );
+    }
+
+    #[test]
+    fn explicit_in_cluster_auth_still_prefers_an_existing_kubeconfig() {
+        let kubeconfig = tempfile::NamedTempFile::new().unwrap();
+        let kubeconfig_path = kubeconfig.path().to_path_buf();
+
+        assert_eq!(
+            select_kubeconfig_path(kubeconfig_path.clone(), true, KubeClientAuthMode::AllowInCluster),
+            Ok(Some(kubeconfig_path))
+        );
+    }
+
+    #[test]
+    fn cached_in_cluster_auth_cannot_bypass_the_infrastructure_guard() {
+        assert!(
+            !KubeClientAuthSource::InCluster.is_allowed(KubeClientAuthMode::RequireKubeconfigForInfrastructure, true)
+        );
+        assert!(KubeClientAuthSource::InCluster.is_allowed(KubeClientAuthMode::AllowInCluster, true));
+        assert!(
+            KubeClientAuthSource::InCluster.is_allowed(KubeClientAuthMode::RequireKubeconfigForInfrastructure, false)
+        );
+        assert!(
+            KubeClientAuthSource::Kubeconfig.is_allowed(KubeClientAuthMode::RequireKubeconfigForInfrastructure, true)
+        );
+    }
 }

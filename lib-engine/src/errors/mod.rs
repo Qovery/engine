@@ -783,6 +783,8 @@ pub enum Tag {
     Unknown,
     /// InvalidEnginePayload: represents an error when the received payload contains invalid informations.
     InvalidEnginePayload,
+    /// PlatformPreflightFailed: a mandatory in-cluster preflight check blocked platform mutation.
+    PlatformPreflightFailed,
     /// InvalidEngineApiInput: represents an error where Engine's API input is not valid and cannot be deserialized.
     InvalidEngineApiInputCannotBeDeserialized,
     /// MissingRequiredEnvVariable: represents an error where a required env variable is not set.
@@ -1529,6 +1531,18 @@ impl EngineError {
             underlying_error,
             None,
             Some("This is a Qovery issue, please contact our support team".to_string()),
+        )
+    }
+
+    /// Creates an error when enforce-mode platform preflight prevents Helm mutation.
+    pub fn new_platform_preflight_failed(event_details: EventDetails) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::PlatformPreflightFailed,
+            "Platform preflight failed before any Helm mutation.".to_string(),
+            None,
+            None,
+            Some("Resolve the mandatory preflight checks and retry the deployment.".to_string()),
         )
     }
 

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
 
 /// `PlatformComponentsOnly` means: do not run any cluster infrastructure lifecycle action
 /// (create/pause/delete/restart); apply only the platform Helm units provided in
@@ -63,11 +64,174 @@ pub struct PlatformImageSnapshot {
     pub tag: String,
 }
 
+/// Controls whether failed mandatory preflight checks are only reported or also block Helm.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightMode {
+    Observe,
+    Enforce,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Stable identifiers for the in-cluster checks understood by the Engine v2 worker.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightCheckId {
+    KubernetesApiUnreachable,
+    RbacInsufficient,
+    NamespaceTerminating,
+    ClusterDnsUnhealthy,
+    QoveryEndpointUnresolved,
+    ChartRegistryUnreachable,
+    ContainerRegistryUnreachable,
+    ReleaseOwnershipConflict,
+    CrdOwnershipConflict,
+    IncompatibleCertManager,
+    AcmeEndpointUnreachable,
+    DnsProviderApiUnreachable,
+    DefaultStorageClassMissing,
+    #[serde(other)]
+    Unknown,
+}
+
+/// Policy selected by q-core for one preflight check.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightCheckSeverity {
+    Mandatory,
+    Advisory,
+    #[serde(other)]
+    Unknown,
+}
+
+/// One check requested by q-core.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct PlatformPreflightCheckRequest {
+    pub id: PlatformPreflightCheckId,
+    pub severity: PlatformPreflightCheckSeverity,
+}
+
+/// In-cluster preflight instructions carried by Engine v2 request schema 2.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct PlatformPreflightRequest {
+    pub mode: PlatformPreflightMode,
+    pub checks: Vec<PlatformPreflightCheckRequest>,
+}
+
+/// Structural errors that make a preflight request unsafe to execute.
+#[derive(Debug, thiserror::Error, Clone, Eq, PartialEq)]
+pub enum PlatformPreflightValidationError {
+    #[error("preflight mode is unknown")]
+    UnknownMode,
+    #[error("preflight must contain at least one check")]
+    EmptyChecks,
+    #[error("preflight contains an unknown check id")]
+    UnknownCheckId,
+    #[error("preflight check {0:?} has an unknown severity")]
+    UnknownSeverity(PlatformPreflightCheckId),
+    #[error("preflight check {0:?} is duplicated")]
+    DuplicateCheck(PlatformPreflightCheckId),
+}
+
+impl PlatformPreflightRequest {
+    /// Rejects ambiguous or forward-incompatible instructions before any cluster operation.
+    pub fn validate(&self) -> Result<(), PlatformPreflightValidationError> {
+        if self.mode == PlatformPreflightMode::Unknown {
+            return Err(PlatformPreflightValidationError::UnknownMode);
+        }
+        if self.checks.is_empty() {
+            return Err(PlatformPreflightValidationError::EmptyChecks);
+        }
+
+        let mut seen = HashSet::with_capacity(self.checks.len());
+        for check in &self.checks {
+            if check.id == PlatformPreflightCheckId::Unknown {
+                return Err(PlatformPreflightValidationError::UnknownCheckId);
+            }
+            if check.severity == PlatformPreflightCheckSeverity::Unknown {
+                return Err(PlatformPreflightValidationError::UnknownSeverity(check.id));
+            }
+            if !seen.insert(check.id) {
+                return Err(PlatformPreflightValidationError::DuplicateCheck(check.id));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Outcome of one in-cluster preflight check.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightCheckStatus {
+    Pass,
+    Fail,
+    NotEvaluated,
+}
+
+/// Stable explanation for a preflight result.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightReasonCode {
+    KubernetesApiReachable,
+    KubernetesApiUnreachable,
+    KubernetesApiNotProbed,
+    KubernetesApiUnavailable,
+    NamespaceTerminating,
+    NamespaceAccessForbidden,
+    NamespaceStateUnavailable,
+    TargetNamespacesAvailable,
+    CheckNotImplemented,
+    UnknownCheckId,
+}
+
+/// Stable action associated with a preflight check result.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightRemediationKey {
+    RestoreKubernetesApiAccess,
+    GrantRequiredRbac,
+    WaitForNamespaceTermination,
+    InspectNamespaceAccess,
+    RestoreClusterDns,
+    RestoreQoveryConnectivity,
+    RestoreChartRegistryConnectivity,
+    RestoreContainerRegistryConnectivity,
+    ResolveReleaseOwnership,
+    ResolveClusterResourceOwnership,
+    ResolveCertManagerCompatibility,
+    RestoreAcmeConnectivity,
+    RestoreDnsProviderConnectivity,
+    ConfigureDefaultStorageClass,
+    UpgradeEnginePreflight,
+}
+
+/// Safe remediation rendered by q-core when a check does not pass.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct PlatformPreflightRemediation {
+    pub key: PlatformPreflightRemediationKey,
+    pub message: String,
+}
+
+/// Safe, bounded fact returned by the worker for one requested preflight check.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct PlatformPreflightCheckResult {
+    pub id: PlatformPreflightCheckId,
+    pub status: PlatformPreflightCheckStatus,
+    pub severity: PlatformPreflightCheckSeverity,
+    pub reason_code: PlatformPreflightReasonCode,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub evidence: BTreeMap<String, String>,
+    pub remediation: PlatformPreflightRemediation,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct PlatformExecutionResult {
     pub schema_version: u32,
     pub execution_id: String,
     pub units: Vec<PlatformUnitResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preflight_results: Option<Vec<PlatformPreflightCheckResult>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -219,9 +383,79 @@ mod tests {
         let metadata: Metadata = serde_json::from_str(&json).unwrap();
         let engine_v2_options = metadata.engine_v2_options.unwrap();
         assert_eq!(engine_v2_options.execution_mode, ExecutionMode::PlatformComponentsOnly);
+        assert_eq!(engine_v2_options.preflight, None);
         let units = engine_v2_options.platform_helm_units;
         assert_eq!(units.len(), 1);
         assert_eq!(units[0].key, "cluster-agent");
+    }
+
+    #[test]
+    fn preflight_request_deserializes_and_validates_q_core_wire_values() {
+        let request: PlatformPreflightRequest = serde_json::from_str(
+            r#"{
+                "mode": "OBSERVE",
+                "checks": [
+                    {"id": "KUBERNETES_API_UNREACHABLE", "severity": "MANDATORY"},
+                    {"id": "CONTAINER_REGISTRY_UNREACHABLE", "severity": "ADVISORY"}
+                ]
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(request.mode, PlatformPreflightMode::Observe);
+        assert_eq!(request.checks.len(), 2);
+        assert_eq!(request.checks[0].id, PlatformPreflightCheckId::KubernetesApiUnreachable);
+        assert_eq!(request.checks[1].severity, PlatformPreflightCheckSeverity::Advisory);
+        assert_eq!(request.validate(), Ok(()));
+    }
+
+    #[test]
+    fn preflight_validation_rejects_unknown_and_duplicate_checks() {
+        let unknown: PlatformPreflightRequest =
+            serde_json::from_str(r#"{"mode":"OBSERVE","checks":[{"id":"FUTURE_CHECK","severity":"MANDATORY"}]}"#)
+                .unwrap();
+        assert_eq!(unknown.validate(), Err(PlatformPreflightValidationError::UnknownCheckId));
+
+        let duplicated = PlatformPreflightRequest {
+            mode: PlatformPreflightMode::Observe,
+            checks: vec![
+                PlatformPreflightCheckRequest {
+                    id: PlatformPreflightCheckId::NamespaceTerminating,
+                    severity: PlatformPreflightCheckSeverity::Mandatory,
+                },
+                PlatformPreflightCheckRequest {
+                    id: PlatformPreflightCheckId::NamespaceTerminating,
+                    severity: PlatformPreflightCheckSeverity::Mandatory,
+                },
+            ],
+        };
+        assert_eq!(
+            duplicated.validate(),
+            Err(PlatformPreflightValidationError::DuplicateCheck(
+                PlatformPreflightCheckId::NamespaceTerminating
+            ))
+        );
+    }
+
+    #[test]
+    fn preflight_validation_rejects_unknown_policy_and_empty_checks() {
+        for (json, expected) in [
+            (
+                r#"{"mode":"FUTURE_MODE","checks":[{"id":"KUBERNETES_API_UNREACHABLE","severity":"MANDATORY"}]}"#,
+                PlatformPreflightValidationError::UnknownMode,
+            ),
+            (
+                r#"{"mode":"OBSERVE","checks":[]}"#,
+                PlatformPreflightValidationError::EmptyChecks,
+            ),
+            (
+                r#"{"mode":"OBSERVE","checks":[{"id":"KUBERNETES_API_UNREACHABLE","severity":"FUTURE_SEVERITY"}]}"#,
+                PlatformPreflightValidationError::UnknownSeverity(PlatformPreflightCheckId::KubernetesApiUnreachable),
+            ),
+        ] {
+            let request: PlatformPreflightRequest = serde_json::from_str(json).unwrap();
+            assert_eq!(request.validate(), Err(expected));
+        }
     }
 
     #[test]
@@ -244,11 +478,39 @@ mod tests {
                 PlatformUnitResult::failed("shell-agent", PlatformUnitErrorCode::HelmFailed, "helm upgrade failed"),
                 PlatformUnitResult::skipped("loki", "UPSTREAM_FAILED"),
             ],
+            preflight_results: None,
         };
         let json = serde_json::to_string(&result).unwrap();
         assert_eq!(
             json,
             r#"{"schema_version":1,"execution_id":"exec-1","units":[{"key":"cluster-agent","status":"SUCCEEDED"},{"key":"shell-agent","status":"FAILED","error_code":"HELM_FAILED","message":"helm upgrade failed"},{"key":"loki","status":"SKIPPED","message":"UPSTREAM_FAILED"}]}"#
+        );
+    }
+
+    #[test]
+    fn schema_two_result_serializes_preflight_facts() {
+        let result = PlatformExecutionResult {
+            schema_version: 2,
+            execution_id: "exec-2".to_string(),
+            units: vec![PlatformUnitResult::skipped("cluster-agent", "PREFLIGHT_FAILED")],
+            preflight_results: Some(vec![PlatformPreflightCheckResult {
+                id: PlatformPreflightCheckId::NamespaceTerminating,
+                status: PlatformPreflightCheckStatus::Fail,
+                severity: PlatformPreflightCheckSeverity::Mandatory,
+                reason_code: PlatformPreflightReasonCode::NamespaceTerminating,
+                evidence: BTreeMap::from([("namespace".to_string(), "qovery".to_string())]),
+                remediation: PlatformPreflightRemediation {
+                    key: PlatformPreflightRemediationKey::WaitForNamespaceTermination,
+                    message: "Wait for target namespace termination to finish, then retry.".to_string(),
+                },
+            }]),
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+
+        assert_eq!(
+            json,
+            r#"{"schema_version":2,"execution_id":"exec-2","units":[{"key":"cluster-agent","status":"SKIPPED","message":"PREFLIGHT_FAILED"}],"preflight_results":[{"id":"NAMESPACE_TERMINATING","status":"FAIL","severity":"MANDATORY","reason_code":"NAMESPACE_TERMINATING","evidence":{"namespace":"qovery"},"remediation":{"key":"WAIT_FOR_NAMESPACE_TERMINATION","message":"Wait for target namespace termination to finish, then retry."}}]}"#
         );
     }
 
@@ -263,6 +525,7 @@ mod tests {
                 PlatformUnitErrorCode::Internal,
                 &long_message,
             )],
+            preflight_results: None,
         };
         let json = serde_json::to_string(&result).unwrap();
         // Kubernetes truncates termination messages at 4096 bytes; the whole JSON must fit.
