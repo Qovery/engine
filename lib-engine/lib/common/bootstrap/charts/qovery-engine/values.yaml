@@ -26,6 +26,17 @@ overprovisionning:
   # specify the number of over provisioned engine pods
   # Set the number of replicas depending on the node size (to define how many node overprovidsionned you want)
   replicas: 2
+  # PriorityClass is cluster-scoped: when several releases on one cluster enable
+  # overprovisioning, exactly one keeps create=true (it owns the class), the others
+  # set create=false and reference the same name
+  priorityClass:
+    create: true
+    name: qovery-engine-overprovisioning
+  # placement of the warm-capacity pods, so each release warms its own node pool;
+  # nodeSelector entries are merged with the per-arch selector of each deployment
+  # (kubernetes.io/arch is reserved and ignored here — each deployment keeps its own)
+  nodeSelector: {}
+  tolerations: []
   resources:
     requests:
       cpu: 1

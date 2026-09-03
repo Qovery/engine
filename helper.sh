@@ -316,19 +316,41 @@ engineResources.requests.cpu="300m",\
 engineResources.requests.memory="4Gi"
 }
 
-function deploy_engines_environment_static_ip() { ## Release GA to prod
+function deploy_engines_environment_static_ip() { ## Release GA to prod, engine + builder + overprovisioner pods pinned to qovery-default-private nodes (QOV-2202)
   tag=$(generate_image_tag)
+  # this release owns the cluster-scoped overprovisioning PriorityClass (create=true);
+  # every other release on this kubeconfig must keep priorityClass.create=false.
+  # overprovisionning.tolerations deliberately omits the engine's 6h not-ready toleration:
+  # warm pods hold no in-flight work, and fast eviction from a NotReady node lets the
+  # warm buffer be rebuilt on a healthy node instead of staying pinned to a dead one
   AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
   helm upgrade --kubeconfig="$AWS_PROD_ENVIRONMENT_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set \
+tolerations[0].key="node.kubernetes.io/not-ready",\
+tolerations[0].operator="Exists",\
+tolerations[0].effect="NoExecute",\
+tolerations[0].tolerationSeconds=21600,\
+tolerations[1].key="nodepool/qovery-default-private",\
+tolerations[1].operator="Exists",\
+tolerations[1].effect="NoSchedule",\
+overprovisionning.tolerations[0].key="nodepool/qovery-default-private",\
+overprovisionning.tolerations[0].operator="Exists",\
+overprovisionning.tolerations[0].effect="NoSchedule",\
+overprovisionning.priorityClass.create=true \
   --set-string \
 image.tag="$tag",\
+nodeSelector."karpenter\.sh/nodepool"="qovery-default-private",\
+nodeSelector."kubernetes\.io/arch"="amd64",\
+overprovisionning.nodeSelector."karpenter\.sh/nodepool"="qovery-default-private",\
 buildContainer.enabled="true",\
 buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
 buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
 buildContainer.environmentVariables.BUILDER_ROOTLESS_ENABLED="false",\
+buildContainer.environmentVariables.BUILDER_NODE_SELECTOR="karpenter.sh/nodepool=qovery-default-private",\
+buildContainer.environmentVariables.BUILDER_TOLERATIONS="key=nodepool/qovery-default-private\,operator=Exists\,effect=NoSchedule",\
 environmentVariables.ENGINE_TAG_VERSION="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
@@ -377,7 +399,8 @@ tolerations[0].tolerationSeconds=21600,\
 tolerations[1].key="nodepool/qovery-default-public",\
 tolerations[1].operator="Exists",\
 tolerations[1].effect="NoSchedule",\
-overprovisionning.enabled=false \
+overprovisionning.enabled=false,\
+overprovisionning.priorityClass.create=false \
   --set-string \
 image.tag="$tag",\
 fullnameOverride="qovery-engine-env-public",\
@@ -414,16 +437,26 @@ engineResources.requests.memory="3Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 }
 
-function deploy_engines_blueprint_static_ip() {
+function deploy_engines_blueprint_static_ip() { ## Release blueprint engines, pods pinned to qovery-default-private nodes (QOV-2202, no builders: buildContainer disabled)
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
   helm upgrade --kubeconfig="$AWS_PROD_ENVIRONMENT_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-engine-blueprint qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set \
+tolerations[0].key="node.kubernetes.io/not-ready",\
+tolerations[0].operator="Exists",\
+tolerations[0].effect="NoExecute",\
+tolerations[0].tolerationSeconds=21600,\
+tolerations[1].key="nodepool/qovery-default-private",\
+tolerations[1].operator="Exists",\
+tolerations[1].effect="NoSchedule" \
   --set-string \
 image.tag="$tag",\
 fullnameOverride="qovery-engine-blueprint",\
+nodeSelector."karpenter\.sh/nodepool"="qovery-default-private",\
+nodeSelector."kubernetes\.io/arch"="amd64",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.ENGINE_TAG_VERSION="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\

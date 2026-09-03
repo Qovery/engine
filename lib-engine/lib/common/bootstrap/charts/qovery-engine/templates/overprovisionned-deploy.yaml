@@ -15,9 +15,16 @@ spec:
       labels:
         app: qovery-engine-overprovisioning-amd64
     spec:
-      priorityClassName: qovery-engine-overprovisioning
+      priorityClassName: {{ .Values.overprovisionning.priorityClass.name }}
       nodeSelector:
         kubernetes.io/arch: amd64
+        {{- with omit .Values.overprovisionning.nodeSelector "kubernetes.io/arch" }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.overprovisionning.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       terminationGracePeriodSeconds: 1
       containers:
       - name: buildkit
@@ -45,9 +52,16 @@ spec:
       labels:
         app: qovery-engine-overprovisioning-arm64
     spec:
-      priorityClassName: qovery-engine-overprovisioning
+      priorityClassName: {{ .Values.overprovisionning.priorityClass.name }}
       nodeSelector:
         kubernetes.io/arch: arm64
+        {{- with omit .Values.overprovisionning.nodeSelector "kubernetes.io/arch" }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.overprovisionning.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       terminationGracePeriodSeconds: 1
       containers:
       - name: buildkit
