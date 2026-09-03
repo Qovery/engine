@@ -18,17 +18,15 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
     app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.cronjob %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
-  schedule: "{{ service.cronjob_schedule }}"
-  timeZone: "{{ service.cronjob_timezone }}"
+  schedule: {{ service.cronjob_schedule | yaml_encode }}
+  timeZone: {{ service.cronjob_timezone | yaml_encode }}
   concurrencyPolicy: {{ service.advanced_settings.cronjob_concurrency_policy }}
   failedJobsHistoryLimit: {{ service.advanced_settings.cronjob_failed_jobs_history_limit }}
   successfulJobsHistoryLimit: {{ service.advanced_settings.cronjob_success_jobs_history_limit }}
@@ -48,14 +46,12 @@ spec:
         app.kubernetes.io/managed-by: "qovery"
         app.kubernetes.io/version: "{{ service.image_tag_label }}"
         {%- for key, value in labels_group.common %}
-        {{ key }}: |-
-           {{ value }}
+        {{ key | yaml_encode }}: {{ value | yaml_encode }}
         {%- endfor %}
       annotations:
         qovery.com/service-version: {{ service.version }}
         {%- for key, value in annotations_group.job %}
-        {{ key }}: |-
-           {{ value }}
+        {{ key | yaml_encode }}: {{ value | yaml_encode }}
         {%- endfor %}
     spec:
       backoffLimit: {{ service.max_nb_restart }}
@@ -79,23 +75,21 @@ spec:
             app.kubernetes.io/managed-by: "qovery"
             app.kubernetes.io/version: "{{ service.image_tag_label }}"
             {%- for key, value in labels_group.common %}
-            {{ key }}: |-
-               {{ value }}
+            {{ key | yaml_encode }}: {{ value | yaml_encode }}
             {%- endfor %}
           annotations:
             qovery.com/service-version: {{ service.version }}
             karpenter.sh/do-not-disrupt: "true"
             {%- for key, value in annotations_group.pods %}
-            {{ key }}: |-
-               {{ value }}
+            {{ key | yaml_encode }}: {{ value | yaml_encode }}
             {%- endfor %}
         spec:
           {%- if service.tolerations %}
           tolerations:
             {%- for key, value in service.tolerations %}
-            - key: "{{ key }}"
+            - key: {{ key | yaml_encode }}
               operator: "Exists"
-              effect: "{{ value }}"
+              effect: {{ value | yaml_encode }}
             {%- endfor %}
           {%- endif %}
           affinity:
@@ -106,10 +100,10 @@ spec:
                 nodeSelectorTerms:
                 - matchExpressions:
               {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
-                    - key: "{{ key }}"
+                    - key: {{ key | yaml_encode }}
                       operator: In
                       values:
-                      - "{{ value }}"
+                      - {{ value | yaml_encode }}
               {%- endfor %}
               {%- endif %}
               {%- if service.deployment_affinity_node_preferred %}
@@ -118,23 +112,24 @@ spec:
                   preference:
                     matchExpressions:
                       {%- for key, value in service.deployment_affinity_node_preferred %}
-                      - key: "{{ key }}"
+                      - key: {{ key | yaml_encode }}
                         operator: In
                         values:
-                        - "{{ value }}"
+                        - {{ value | yaml_encode }}
                       {%- endfor %}
               {%- endif %}
             {%- endif %}
           restartPolicy: OnFailure
           automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
           {%- if service.advanced_settings.security_service_account_name != "" %}
-          serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+          serviceAccountName: {{ service.advanced_settings.security_service_account_name | yaml_encode }}
           {%- endif %}
           terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
           {%- if service.advanced_settings.network_dns_ndots %}
           dnsConfig:
             options:
             - name: ndots
+              # quoted deliberately: the setting is numeric but the API field is a string
               value: "{{ service.advanced_settings.network_dns_ndots }}"
           {%- endif %}
           {%- if registry %}
@@ -155,8 +150,8 @@ spec:
                 secretName: {{ external_secret.secret_name }}
                 defaultMode: 420
                 items:
-                  - key: "{{ entry.env_var_key }}"
-                    path: "{{ entry.mount_path_relative }}"
+                  - key: {{ entry.env_var_key | yaml_encode }}
+                    path: {{ entry.mount_path_relative | yaml_encode }}
               {%- endif %}
               {%- endfor %}
             {%- endfor %}
@@ -165,17 +160,15 @@ spec:
               image: "{{ service.image_full }}"
           {%- if service.entrypoint %}
               command:
-                - |-
-                  {{ service.entrypoint }}
+                - {{ service.entrypoint | yaml_encode }}
           {%- endif %}
               args:
                 {%- for arg in service.command_args %}
-                - |-
-                  {{ arg }}
+                - {{ arg | yaml_encode }}
                 {%- endfor %}
               volumeMounts:
                 {%- for mounted_file in mounted_files %}
-                - mountPath: "{{ mounted_file.mount_path }}"
+                - mountPath: {{ mounted_file.mount_path | yaml_encode }}
                   subPath: content
                   name: {{ mounted_file.kube_name }}
                   readOnly: true
@@ -183,8 +176,8 @@ spec:
                 {%- for external_secret in external_secrets %}
                   {%- for entry in external_secret.entries %}
                   {%- if entry.mount_path %}
-                - mountPath: "{{ entry.mount_path }}"
-                  subPath: "{{ entry.mount_path_relative }}"
+                - mountPath: {{ entry.mount_path | yaml_encode }}
+                  subPath: {{ entry.mount_path_relative | yaml_encode }}
                   name: {{ entry.volume_name }}
                   readOnly: true
                   {%- endif %}
@@ -198,14 +191,14 @@ spec:
               env:
                 {%- for external_secret in external_secrets %}
                   {%- for entry in external_secret.entries %}
-                - name: {{ entry.env_var_key }}
+                - name: {{ entry.env_var_key | yaml_encode }}
                     {%- if not entry.mount_path %}
                   valueFrom:
                     secretKeyRef:
                       name: {{ external_secret.secret_name }}
-                      key: {{ entry.env_var_key }}
+                      key: {{ entry.env_var_key | yaml_encode }}
                     {%- else %}
-                  value: "{{ entry.mount_path }}"
+                  value: {{ entry.mount_path | yaml_encode }}
                     {%- endif %}
                   {%- endfor %}
                 {%- endfor %}
@@ -221,26 +214,25 @@ spec:
                 {%- if service.readiness_probe.type.tcp %}
                 tcpSocket:
                   port: {{ service.readiness_probe.port }}
-                  host: {{ service.readiness_probe.type.tcp.host }}
+                  host: {{ service.readiness_probe.type.tcp.host | yaml_encode }}
                 {%- endif %}
                 {%- if service.readiness_probe.type.http %}
                 httpGet:
                   port: {{ service.readiness_probe.port }}
-                  path: {{ service.readiness_probe.type.http.path }}
+                  path: {{ service.readiness_probe.type.http.path | yaml_encode }}
                   scheme: {{ service.readiness_probe.type.http.scheme }}
                 {%- endif %}
                 {%- if service.readiness_probe.type.exec %}
                 exec:
                   command:
                   {%- for cmd in service.readiness_probe.type.exec.commands %}
-                  - |-
-                    {{ cmd }}
+                  - {{ cmd | yaml_encode }}
                   {%- endfor %}
                 {%- endif %}
                 {%- if service.readiness_probe.type.grpc %}
                 grpc:
                   port: {{ service.readiness_probe.port }}
-                  service: {{ service.readiness_probe.type.grpc.service }}
+                  service: {{ service.readiness_probe.type.grpc.service | yaml_encode }}
                 {%- endif %}
                 initialDelaySeconds: {{ service.readiness_probe.initial_delay_seconds }}
                 periodSeconds: {{ service.readiness_probe.period_seconds }}
@@ -253,26 +245,25 @@ spec:
                 {%- if service.liveness_probe.type.tcp %}
                 tcpSocket:
                   port: {{ service.liveness_probe.port }}
-                  host: {{ service.liveness_probe.type.tcp.host }}
+                  host: {{ service.liveness_probe.type.tcp.host | yaml_encode }}
                 {%- endif %}
                 {%- if service.liveness_probe.type.http %}
                 httpGet:
                   port: {{ service.liveness_probe.port }}
-                  path: {{ service.liveness_probe.type.http.path }}
+                  path: {{ service.liveness_probe.type.http.path | yaml_encode }}
                   scheme: {{ service.liveness_probe.type.http.scheme }}
                 {%- endif %}
                 {%- if service.liveness_probe.type.exec %}
                 exec:
                   command:
                   {%- for cmd in service.liveness_probe.type.exec.commands %}
-                  - |-
-                    {{ cmd }}
+                  - {{ cmd | yaml_encode }}
                   {%- endfor %}
                 {%- endif %}
                 {%- if service.liveness_probe.type.grpc %}
                 grpc:
                   port: {{ service.liveness_probe.port }}
-                  service: {{ service.liveness_probe.type.grpc.service }}
+                  service: {{ service.liveness_probe.type.grpc.service | yaml_encode }}
                 {%- endif %}
                 initialDelaySeconds: {{ service.liveness_probe.initial_delay_seconds }}
                 periodSeconds: {{ service.liveness_probe.period_seconds }}

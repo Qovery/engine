@@ -1,0 +1,118 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ service.kube_name }}
+  labels:
+    qovery.com/service-id: "{{ service.long_id }}"
+    qovery.com/service-type: "agentic-workflow"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+    qovery.com/deployment-id: "{{ deployment_id }}"
+    app.kubernetes.io/name: "{{ service.kube_name }}"
+    app.kubernetes.io/instance: "{{ service.long_id }}"
+    app.kubernetes.io/component: "agentic-workflow"
+    app.kubernetes.io/part-of: "{{ namespace }}"
+    app.kubernetes.io/managed-by: "qovery"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ service.max_duration_in_sec }}
+  template:
+    metadata:
+      labels:
+        qovery.com/service-id: "{{ service.long_id }}"
+        qovery.com/service-type: "agentic-workflow"
+        qovery.com/environment-id: "{{ environment_long_id }}"
+        qovery.com/project-id: "{{ project_long_id }}"
+        qovery.com/deployment-id: "{{ deployment_id }}"
+        app.kubernetes.io/name: "{{ service.kube_name }}"
+        app.kubernetes.io/instance: "{{ service.long_id }}"
+        app.kubernetes.io/component: "agentic-workflow"
+        app.kubernetes.io/part-of: "{{ namespace }}"
+        app.kubernetes.io/managed-by: "qovery"
+    spec:
+      restartPolicy: Never
+      {%- if registry.docker_json_config %}
+      # Only set when the agent image was built by the engine from a docker fragment, and therefore
+      # lives in the cluster's private registry. The output-waiter sidecar is public and unaffected.
+      # Guarded on `docker_json_config`, the same condition secret.j2.yaml creates the Secret under,
+      # so this can never reference a Secret that was not rendered.
+      imagePullSecrets:
+        - name: {{ registry.secret_name }}
+      {%- endif %}
+      volumes:
+        - name: output
+          emptyDir: {}
+        - name: prompt
+          configMap:
+            name: {{ service.kube_name }}-prompt
+        {%- for mounted_file in mounted_files %}
+        - name: {{ mounted_file.kube_name }}
+          secret:
+            secretName: {{ mounted_file.kube_name }}
+        {%- endfor %}
+      initContainers:
+        - name: qovery-wait-container-output
+          # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
+          restartPolicy: Always # this tells that the initContainer is a sidecar
+          image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-07-15T14-06-16
+          command: ["/qovery-job-output-waiter", "--watch"]
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+      containers:
+        - name: {{ service.kube_name }}
+          image: "{{ service.image_full }}"
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
+            - name: prompt
+              mountPath: /qovery-agentic-workflow/prompt.txt
+              subPath: prompt.txt
+              readOnly: true
+            # Second key on the same ConfigMap, so no extra volume is needed.
+            - name: prompt
+              mountPath: /qovery-agentic-workflow/inputs.json
+              subPath: inputs.json
+              readOnly: true
+            # File variables. The matching env var (via envFrom below) holds this same mount path.
+            {%- for mounted_file in mounted_files %}
+            - name: {{ mounted_file.kube_name }}
+              mountPath: "{{ mounted_file.mount_path }}"
+              subPath: content
+              readOnly: true
+            {%- endfor %}
+          envFrom:
+            - secretRef:
+                name: {{ service.kube_name }}
+          env:
+            # A Job runs the agent once and exits; force oneshot (the ai-runner default is `server`,
+            # which starts a long-lived HTTP server and never processes the prompt). RUN_MODE is a
+            # plain clap env var (NOT one of the base64-encoded contract vars), so it is set here in
+            # plaintext, not via the Secret. See qovery-ai-runner `ai-runner/src/main.rs` (`Mode`).
+            - name: RUN_MODE
+              value: "oneshot"
+            - name: PROMPT_FILE
+              value: "/qovery-agentic-workflow/prompt.txt"
+            # Plaintext here, not via the Secret: like PROMPT_FILE this is a plain path, and the
+            # engine base64-encodes every Secret value. See ai-runner's `load_inputs`.
+            - name: INPUTS_FILE
+              value: "/qovery-agentic-workflow/inputs.json"
+          resources:
+            limits:
+              {%- if service.cpu_limit_in_milli %}
+              cpu: {{ service.cpu_limit_in_milli }}
+              {%- else %}
+              cpu: {{ service.cpu_request_in_milli }}
+              {%- endif %}
+              memory: {{ service.ram_limit_in_mib }}
+            requests:
+              cpu: {{ service.cpu_request_in_milli }}
+              memory: {{ service.ram_request_in_mib }}

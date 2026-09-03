@@ -666,7 +666,8 @@ mod tests {
     use super::*;
     use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
-    use tera::{Context, Tera};
+    use crate::tera_utils::render_one_off;
+    use tera::Context;
 
     #[test]
     fn test_add_credentials_when_flag_is_true() {
@@ -871,7 +872,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rendered = Tera::one_off(
+        let rendered = render_one_off(
             include_str!("../../../lib/common/charts/q-terraform-service/templates/job.j2.yaml"),
             &Context::from_serialize(TerraformServiceTeraContext {
                 organization_long_id: Uuid::new_v4(),
@@ -920,7 +921,6 @@ mod tests {
                 },
             })
             .expect("terraform tera context should serialize"),
-            false,
         )
         .expect("template should render");
 
@@ -934,10 +934,9 @@ mod tests {
 
     #[test]
     fn terraform_job_does_not_restart_failed_container() {
-        let rendered = Tera::one_off(
+        let rendered = render_one_off(
             include_str!("../../../lib/common/charts/q-terraform-service/templates/job.j2.yaml"),
             &Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"),
-            false,
         )
         .expect("template should render");
 
@@ -996,10 +995,9 @@ mod tests {
 
     #[test]
     fn pdb_template_rendered_when_karpenter_disabled() {
-        let rendered = Tera::one_off(
+        let rendered = render_one_off(
             include_str!("../../../lib/common/charts/q-terraform-service/templates/pdb.j2.yaml"),
             &Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"),
-            false,
         )
         .expect("template should render");
 
@@ -1010,10 +1008,9 @@ mod tests {
 
     #[test]
     fn pdb_template_not_rendered_when_karpenter_enabled() {
-        let rendered = Tera::one_off(
+        let rendered = render_one_off(
             include_str!("../../../lib/common/charts/q-terraform-service/templates/pdb.j2.yaml"),
             &Context::from_serialize(minimal_pdb_context(true)).expect("should serialize"),
-            false,
         )
         .expect("template should render");
 

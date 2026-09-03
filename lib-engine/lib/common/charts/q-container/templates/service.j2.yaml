@@ -17,13 +17,11 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
     app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
     {%- for key, value in annotations_group.service %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   type: ClusterIP
@@ -58,18 +56,16 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
     app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: "{{ l4_ports.hostnames | join(sep=",") }}"
+    external-dns.alpha.kubernetes.io/hostname: {{ l4_ports.hostnames | join(sep=",") | yaml_encode }}
     external-dns.alpha.kubernetes.io/ttl: "300"
     {%- for annotation in loadbalancer_l4_annotations %}
     {{ annotation | first }}: "{{ annotation | last }}"
     {%- endfor %}
     {%- for key, value in annotations_group.service %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   type: LoadBalancer

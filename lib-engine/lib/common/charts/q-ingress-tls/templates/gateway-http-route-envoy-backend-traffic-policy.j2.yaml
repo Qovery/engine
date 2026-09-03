@@ -22,8 +22,7 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
-    {{ key }}: |-
-       {{ value }}
+    {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
   targetRefs:
@@ -39,7 +38,7 @@ spec:
       # across requests (e.g. MCP SDK clients keying off Mcp-Session-Id).
       type: Header
       header:
-        name: {{ advanced_settings.network_gateway_api_sticky_session_type.Header.name }}
+        name: {{ advanced_settings.network_gateway_api_sticky_session_type.Header.name | yaml_encode }}
       {%- elif advanced_settings.network_gateway_api_sticky_session_type == "SourceIP" %}
       type: SourceIP
       {%- else %}
@@ -66,7 +65,7 @@ spec:
         {%- if advanced_settings.network_gateway_api_route_limit_source_cidrs %}
         {%- for h in advanced_settings.network_gateway_api_route_limit_source_cidrs | split(pat=",") %}
         - sourceCIDR:
-            value: "{{ h | trim }}"
+            value: {{ h | trim | yaml_encode }}
             type: Distinct
         {%- endfor %}
         {%- else %}
@@ -77,7 +76,7 @@ spec:
         {%- if advanced_settings.network_gateway_api_route_limit_headers %}
         - headers:
           {%- for h in advanced_settings.network_gateway_api_route_limit_headers | split(pat=",") %}
-          - name: "{{ h | trim }}"
+          - name: {{ h | trim | yaml_encode }}
             type: Distinct
           {%- endfor %}
         {%- endif %}
@@ -91,7 +90,7 @@ spec:
         {%- if advanced_settings.network_gateway_api_route_limit_source_cidrs %}
         {%- for h in advanced_settings.network_gateway_api_route_limit_source_cidrs | split(pat=",") %}
         - sourceCIDR:
-            value: "{{ h | trim }}"
+            value: {{ h | trim | yaml_encode }}
             type: Distinct
         {%- endfor %}
         {%- else %}
@@ -102,7 +101,7 @@ spec:
         {%- if advanced_settings.network_gateway_api_route_limit_headers %}
         - headers:
           {%- for h in advanced_settings.network_gateway_api_route_limit_headers | split(pat=",") %}
-          - name: "{{ h | trim }}"
+          - name: {{ h | trim | yaml_encode }}
             type: Distinct
           {%- endfor %}
         {%- endif %}

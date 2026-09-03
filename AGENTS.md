@@ -119,6 +119,18 @@
 - Apply the stricter rule when instructions overlap.
 - Apply the more specific rule when instructions overlap.
 
+### Chart Templates (`lib-engine/lib/**/*.j2.yaml`)
+
+- Interpolate every deployment-supplied value through `yaml_encode`: `{{ value | yaml_encode }}`.
+- Never hand-quote an interpolation — `yaml_encode` emits its own quotes, and `"{{ v }}"` still lets a value containing `"` close the scalar and add sibling fields to the manifest.
+- Apply it to mapping keys too: `{{ key | yaml_encode }}: {{ value | yaml_encode }}`.
+- Treat labels, annotations, tolerations, affinity, env var keys, command args, probe commands, mount paths, headers, and every free-form advanced setting as deployment-supplied.
+- Skip it only for engine-generated identifiers, numeric and enum fields, and base64 payloads — and only when a passing reader can tell which it is.
+- Never interpolate a value into a literal block scalar (`key: |-`): a newline in it leaves the scalar and the manifest. Use `yaml_encode`, which folds newlines into `\n`.
+- Register filters through `tera_utils::register_filters`, and render in tests through `tera_utils::render_one_off` — `Tera::one_off` knows no filters and fails with `FilterNotFound`.
+- Remember Helm re-renders the manifest as a Go template after Tera: a `{{` surviving from deployment input is executed, and `lookup` reads anything the engine's credentials can. `yaml_encode` neutralizes it; raw passthroughs (`raw_yaml`, cluster snippets) do not.
+- Add a rendering test for any new interpolation: render the real template with a break-out payload, parse the result, and assert no field was added.
+
 ### Cloud Provider Abstractions
 
 - Pass `cloud_provider::Kind` to abstractions whose behavior varies per provider.

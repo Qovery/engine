@@ -596,16 +596,17 @@ mod tests {
     use crate::environment::models::container::RegistryTeraContext;
     use crate::io_models::models::{EnvironmentVariable, MountedFile};
     use crate::io_models::variable_utils::VariableInfo;
+    use crate::tera_utils::render_one_off;
     use base64::Engine;
     use base64::engine::general_purpose;
     use serde::Deserialize;
     use std::collections::BTreeMap;
-    use tera::{Context, Tera};
+    use tera::Context;
     use uuid::Uuid;
 
     fn render_template(template: &str, context: AgenticWorkflowTeraContext) -> String {
         let tera_context = Context::from_serialize(context).expect("agentic workflow tera context should serialize");
-        Tera::one_off(template, &tera_context, false).expect("template should render")
+        render_one_off(template, &tera_context).expect("template should render")
     }
 
     fn build_agentic_workflow_tera_context() -> AgenticWorkflowTeraContext {
@@ -718,6 +719,32 @@ mod tests {
         assert!(rendered.contains(r#"mountPath: "/etc/config.json""#));
         // subPath, so the file lands AT the path rather than as a directory containing it.
         assert!(rendered.contains("subPath: content"));
+    }
+
+    /// The assertion above cannot tell the escaped form from the raw one — `yaml_encode` renders an
+    /// ordinary path identically. This one can: a mount path is customer-controlled, and a quote
+    /// followed by a newline at container-spec indentation would otherwise add fields to the pod.
+    #[test]
+    fn job_mount_path_cannot_inject_manifest_fields() {
+        let payload = "/etc/config.json\"\n      hostPID: true\n      dummy: \"x";
+        let mut context = build_context_with_mounted_file();
+        context.mounted_files[0].mount_path = payload.to_string();
+
+        let rendered = render_template(job_template(), context);
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+        let pod_spec = &job["spec"]["template"]["spec"];
+
+        assert!(pod_spec["hostPID"].is_null(), "injected hostPID in:\n{rendered}");
+        assert!(pod_spec["dummy"].is_null(), "injected dummy field in:\n{rendered}");
+        // the workflow's own mount sits after the engine's, so match on the value
+        assert!(
+            pod_spec["containers"][0]["volumeMounts"]
+                .as_sequence()
+                .expect("volumeMounts must be a sequence")
+                .iter()
+                .any(|mount| mount["mountPath"].as_str() == Some(payload)),
+            "the path must land intact inside the mount it was meant for:\n{rendered}"
+        );
     }
 
     #[test]
@@ -1007,7 +1034,8 @@ mod tests {
 
         let encoded = rendered
             .lines()
-            .find_map(|line| line.trim().strip_prefix("MULTILINE: "))
+            .find_map(|line| line.trim().strip_prefix(r#""MULTILINE": "#))
+            .map(|value| value.trim_matches('"'))
             .expect("MULTILINE should be rendered");
         let decoded = String::from_utf8(
             general_purpose::STANDARD
@@ -1016,6 +1044,31 @@ mod tests {
         )
         .expect("decoded value must be valid UTF-8");
         assert_eq!(decoded, " first\nsecond");
+    }
+
+    #[test]
+    fn user_variable_keys_cannot_inject_manifest_fields() {
+        // `to_user_environment_variables` rejects a key like this, but the template must not depend
+        // on that: it is the last line of defence if the identifier filter ever loosens.
+        let mut context = build_agentic_workflow_tera_context();
+        context.user_environment_variables = vec![EnvironmentVariable {
+            key: "EVIL\ntype: Opaque\ninjected: true".to_string(),
+            value: general_purpose::STANDARD.encode("v"),
+            is_secret: false,
+        }];
+
+        let rendered = render_template(secret_template(), context);
+        let secret: serde_yaml::Value = serde_yaml::Deserializer::from_str(&rendered)
+            .map(|doc| serde_yaml::Value::deserialize(doc).expect("rendered secret must parse as YAML"))
+            .find(|doc| !doc.is_null())
+            .expect("a secret must be rendered");
+
+        assert!(secret["injected"].is_null(), "injected root field in:\n{rendered}");
+        assert_eq!(
+            secret["data"].as_mapping().expect("data mapping").len(),
+            1,
+            "one variable must produce exactly one key in:\n{rendered}"
+        );
     }
 
     #[test]
@@ -1035,7 +1088,7 @@ mod tests {
         let keys = rendered
             .lines()
             .filter_map(|line| line.trim().split_once(':'))
-            .map(|(key, _)| key.to_string())
+            .map(|(key, _)| key.trim_matches('"').to_string())
             .filter(|key| ["ALPHA", "MIKE", "ZEBRA"].contains(&key.as_str()))
             .collect::<Vec<_>>();
         // Sorted, so a redeploy with unchanged variables does not churn the Helm release.

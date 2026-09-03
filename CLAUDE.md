@@ -10,6 +10,12 @@
 - Use `get_architecture_overview` and `list_communities` for architecture questions.
 - Fall back to `Grep`/`Glob`/`Read` only when graph coverage is insufficient.
 
+## Chart Templates
+
+- ALWAYS pipe deployment-supplied values through `yaml_encode` in `*.j2.yaml`, keys included: `{{ key | yaml_encode }}: {{ value | yaml_encode }}`.
+- NEVER add your own quotes around it, and never interpolate into a block scalar (`key: |-`).
+- See `AGENTS.md` → *Chart Templates* for what counts as deployment-supplied and why (YAML break-out, plus Helm's second Go-template pass).
+
 ## Workflow
 
 - Treat graph updates as automatic via repository hooks.
