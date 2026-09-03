@@ -9,14 +9,11 @@ use crate::cmd::git;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
-use crate::environment::models::scaleway::ScwZone;
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
 use crate::io_models::Action;
-use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{BlueprintEngineRequest, CloudProviderOptions};
 use crate::log_file_writer::LogFileWriter;
@@ -25,7 +22,6 @@ use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHa
 use crate::{engine_task, hack};
 use git2::{Cred, CredentialType};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
@@ -323,7 +319,7 @@ impl Task for BlueprintTask {
         let record =
             metrics_registry.start_record(self.request.target_environment.long_id, StepLabel::Service, StepName::Total);
 
-        let mut target_env = self.request.target_environment.clone();
+        let target_env = self.request.target_environment.clone();
 
         let deployment_ret = (|| -> Result<BlueprintTaskOutcome, Box<EngineError>> {
             // 2. Clone blueprint repo
@@ -331,14 +327,6 @@ impl Task for BlueprintTask {
 
             // 3. Parse QBM manifest
             let manifest = self.parse_manifest(&blueprint_dir)?;
-
-            // 4. Inject context variables
-            inject_context_variables(
-                &mut target_env,
-                &self.request.cloud_provider.kind,
-                &self.request.kubernetes.region,
-                &self.request.kubernetes.name,
-            );
 
             // 5. Resolve spec
             let resolved_spec = ResolvedBlueprintSpec::resolve(&manifest, &target_env.spec_overrides).map_err(|e| {
@@ -587,133 +575,5 @@ impl Task for BlueprintTask {
     }
 }
 
-fn inject_context_variables(
-    target_env: &mut BlueprintRequest,
-    cloud_provider_kind: &CloudProviderKind,
-    cluster_region: &str,
-    cluster_name: &str,
-) {
-    if !target_env.variables.iter().any(|v| v.name == "region") {
-        target_env.variables.push(BlueprintVariable {
-            name: "region".to_string(),
-            value: resolve_cluster_region(cloud_provider_kind, cluster_region),
-            is_secret: false,
-        });
-    }
-    if !target_env.variables.iter().any(|v| v.name == "qovery_cluster_name") {
-        target_env.variables.push(BlueprintVariable {
-            name: "qovery_cluster_name".to_string(),
-            value: cluster_name.to_string(),
-            is_secret: false,
-        });
-    }
-}
-
-// Scaleway stores a zone (e.g. `pl-waw-1`) in `kubernetes.region`; terraform providers expect the region (`pl-waw`).
-fn resolve_cluster_region(kind: &CloudProviderKind, cluster_region: &str) -> String {
-    match kind {
-        CloudProviderKind::Scw => ScwZone::from_str(cluster_region)
-            .map(|zone| zone.region().as_str().to_string())
-            .unwrap_or_else(|_| cluster_region.to_string()),
-        CloudProviderKind::Aws | CloudProviderKind::Azure | CloudProviderKind::Gcp | CloudProviderKind::OnPremise => {
-            cluster_region.to_string()
-        }
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use uuid::Uuid;
-
-    #[test]
-    fn test_inject_context_variables() {
-        let mut request = BlueprintRequest {
-            execution_id: "exec-1".to_string(),
-            long_id: Uuid::new_v4(),
-            name: "test".to_string(),
-            kube_name: "test".to_string(),
-            project_long_id: Uuid::new_v4(),
-            organization_long_id: Uuid::new_v4(),
-            max_parallel_build: 1,
-            max_parallel_deploy: 1,
-            variables: vec![],
-            git_url: "https://github.com/test/test".to_string(),
-            tag: "v1".to_string(),
-            git_credentials: None,
-            git_token_id: None,
-            spec_overrides: None,
-            qovery_api_token: "token".to_string(),
-            environment_id: "env-1".to_string(),
-            import_id: None,
-            icon: String::new(),
-            env_kube_name: "env-test-ns".into(),
-            backend_type: None,
-        };
-
-        inject_context_variables(&mut request, &CloudProviderKind::Aws, "eu-west-3", "my-cluster");
-
-        assert!(
-            request
-                .variables
-                .iter()
-                .any(|v| v.name == "region" && v.value == "eu-west-3")
-        );
-        assert!(
-            request
-                .variables
-                .iter()
-                .any(|v| v.name == "qovery_cluster_name" && v.value == "my-cluster")
-        );
-    }
-
-    #[test]
-    fn test_inject_context_variables_does_not_overwrite() {
-        let mut request = BlueprintRequest {
-            execution_id: "exec-1".to_string(),
-            long_id: Uuid::new_v4(),
-            name: "test".to_string(),
-            kube_name: "test".to_string(),
-            project_long_id: Uuid::new_v4(),
-            organization_long_id: Uuid::new_v4(),
-            max_parallel_build: 1,
-            max_parallel_deploy: 1,
-            variables: vec![BlueprintVariable {
-                name: "region".to_string(),
-                value: "us-east-1".to_string(),
-                is_secret: false,
-            }],
-            git_url: "https://github.com/test/test".to_string(),
-            tag: "v1".to_string(),
-            git_credentials: None,
-            git_token_id: None,
-            spec_overrides: None,
-            qovery_api_token: "token".to_string(),
-            environment_id: "env-1".to_string(),
-            import_id: None,
-            icon: String::new(),
-            env_kube_name: "env-test-ns".into(),
-            backend_type: None,
-        };
-
-        inject_context_variables(&mut request, &CloudProviderKind::Aws, "eu-west-3", "my-cluster");
-
-        assert_eq!(request.variables.len(), 2);
-        assert_eq!(request.variables[0].name, "region");
-        assert_eq!(request.variables[0].value, "us-east-1"); // Not overwritten
-        assert_eq!(request.variables[1].name, "qovery_cluster_name");
-        assert_eq!(request.variables[1].value, "my-cluster");
-    }
-
-    #[test]
-    fn test_resolve_cluster_region() {
-        // Scaleway stores a zone in `kubernetes.region` — strip it down to the region.
-        assert_eq!(resolve_cluster_region(&CloudProviderKind::Scw, "pl-waw-1"), "pl-waw");
-        assert_eq!(resolve_cluster_region(&CloudProviderKind::Scw, "fr-par-2"), "fr-par");
-        // Unknown Scaleway value falls back to the raw value.
-        assert_eq!(resolve_cluster_region(&CloudProviderKind::Scw, "pl-waw"), "pl-waw");
-        // Other providers already pass a region — left untouched.
-        assert_eq!(resolve_cluster_region(&CloudProviderKind::Aws, "eu-west-3"), "eu-west-3");
-        assert_eq!(resolve_cluster_region(&CloudProviderKind::Gcp, "europe-west9"), "europe-west9");
-    }
-}
+mod tests {}

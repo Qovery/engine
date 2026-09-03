@@ -2,7 +2,8 @@
 //
 // Parses the qbm.yml file found in a service-catalog blueprint directory.
 // Only the fields the engine needs for execution are parsed here.
-// Metadata, variables, contextVariables are for the console/q-core layer.
+// Metadata, variables and contextVariables are for the console/q-core layer: q-core resolves the
+// context variables against the cluster and sends them with the rest of the variable set.
 
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer};
