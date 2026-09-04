@@ -8,6 +8,7 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::io_models::Action;
 use crate::io_models::container::Registry;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{
@@ -84,7 +85,7 @@ pub fn deploy_platform_components(
 
     // Whitelist validation, fail-closed: nothing executes when any part of the request is
     // outside what this path explicitly supports.
-    let result_schema_version = match validate_platform_request(schema_version, units, preflight) {
+    let result_schema_version = match validate_platform_request(request.action, schema_version, units, preflight) {
         Ok(schema_version) => schema_version,
         Err(violation) => {
             let unit_results = units
@@ -214,7 +215,6 @@ pub fn fail_unknown_execution_mode(
     request: &InfrastructureEngineRequest,
 ) -> Box<EngineError> {
     const MESSAGE: &str = "unsupported execution_mode: this engine version does not know this mode; refusing to fall back to the cluster lifecycle";
-
     let kubernetes = infra_ctx.kubernetes();
     let logger = mk_logger(kubernetes, InfrastructureStep::Create);
     let result_logger = mk_logger(kubernetes, InfrastructureStep::PlatformExecutionResult);
@@ -256,6 +256,7 @@ struct PlatformValidationError {
 }
 
 fn validate_platform_request(
+    action: Action,
     schema_version: Option<&str>,
     units: &[PlatformHelmUnit],
     preflight: Option<&PlatformPreflightRequest>,
@@ -265,6 +266,13 @@ fn validate_platform_request(
         message,
         unit_key: None,
     };
+
+    if action != Action::Create {
+        return Err(request_error(
+            PlatformUnitErrorCode::InvalidPayload,
+            format!("unsupported action `{action}` for platform_components_only: only `create` is allowed"),
+        ));
+    }
 
     let schema_version = match schema_version.map(str::parse::<u32>) {
         Some(Ok(version @ (LEGACY_REQUEST_SCHEMA_VERSION | PREFLIGHT_REQUEST_SCHEMA_VERSION))) => version,
@@ -723,6 +731,14 @@ mod tests {
         }
     }
 
+    fn validate_create_request(
+        schema_version: Option<&str>,
+        units: &[PlatformHelmUnit],
+        preflight: Option<&PlatformPreflightRequest>,
+    ) -> Result<u32, PlatformValidationError> {
+        validate_platform_request(Action::Create, schema_version, units, preflight)
+    }
+
     #[test]
     fn platform_helm_deployment_events_use_expected_messages() {
         let chart_name = "cluster-agent";
@@ -762,23 +778,34 @@ mod tests {
     #[test]
     fn valid_request_passes_validation() {
         assert_eq!(
-            validate_platform_request(Some("1"), &[valid_unit()], None).unwrap(),
+            validate_create_request(Some("1"), &[valid_unit()], None).unwrap(),
             LEGACY_REQUEST_SCHEMA_VERSION
         );
         assert_eq!(
-            validate_platform_request(Some("2"), &[valid_unit()], Some(&valid_preflight())).unwrap(),
+            validate_create_request(Some("2"), &[valid_unit()], Some(&valid_preflight())).unwrap(),
             PREFLIGHT_REQUEST_SCHEMA_VERSION
         );
         assert_eq!(
-            validate_platform_request(Some("2"), &[valid_unit()], None).unwrap(),
+            validate_create_request(Some("2"), &[valid_unit()], None).unwrap(),
             PREFLIGHT_REQUEST_SCHEMA_VERSION
         );
     }
 
     #[test]
+    fn non_create_platform_request_is_rejected_before_execution() {
+        let err = validate_platform_request(Action::Delete, Some("2"), &[valid_unit()], Some(&valid_preflight()))
+            .err()
+            .unwrap();
+
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert_eq!(err.unit_key, None);
+        assert!(err.message.contains("only `create` is allowed"));
+    }
+
+    #[test]
     fn missing_or_unsupported_schema_version_is_rejected_before_execution() {
         for schema_version in [None, Some("3"), Some("abc")] {
-            let err = validate_platform_request(schema_version, &[valid_unit()], None)
+            let err = validate_create_request(schema_version, &[valid_unit()], None)
                 .err()
                 .unwrap();
             assert_eq!(err.code, PlatformUnitErrorCode::UnsupportedSchemaVersion);
@@ -789,7 +816,7 @@ mod tests {
     #[test]
     fn schema_one_cannot_carry_preflight_instructions() {
         let preflight = valid_preflight();
-        let err = validate_platform_request(Some("1"), &[valid_unit()], Some(&preflight))
+        let err = validate_create_request(Some("1"), &[valid_unit()], Some(&preflight))
             .err()
             .unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
@@ -798,7 +825,7 @@ mod tests {
 
     #[test]
     fn empty_units_are_rejected() {
-        let err = validate_platform_request(Some("1"), &[], None).err().unwrap();
+        let err = validate_create_request(Some("1"), &[], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
     }
 
@@ -806,7 +833,7 @@ mod tests {
     fn unknown_action_is_a_forbidden_action() {
         let mut unit = valid_unit();
         unit.action = PlatformHelmUnitAction::Unknown;
-        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+        let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::ForbiddenAction);
         assert_eq!(err.unit_key.as_deref(), Some("cluster-agent"));
     }
@@ -815,7 +842,7 @@ mod tests {
     fn non_protected_namespace_is_a_forbidden_action() {
         let mut unit = valid_unit();
         unit.namespace = "kube-system".to_string();
-        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+        let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::ForbiddenAction);
     }
 
@@ -824,7 +851,7 @@ mod tests {
         for version in ["latest", "LATEST", "", "  "] {
             let mut unit = valid_unit();
             unit.chart.version = version.to_string();
-            let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+            let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
             assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
         }
     }
@@ -833,7 +860,7 @@ mod tests {
     fn invalid_chart_repository_is_rejected() {
         let mut unit = valid_unit();
         unit.chart.repository = "not a url".to_string();
-        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+        let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
     }
 
@@ -841,7 +868,7 @@ mod tests {
     fn invalid_values_yaml_is_rejected_without_leaking_its_content() {
         let mut unit = valid_unit();
         unit.values_yaml = "secret: [unclosed".to_string();
-        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+        let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
         assert!(!err.message.contains("unclosed"));
     }
@@ -850,7 +877,7 @@ mod tests {
     fn empty_release_name_is_rejected() {
         let mut unit = valid_unit();
         unit.release_name = " ".to_string();
-        let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+        let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
     }
 
@@ -862,7 +889,7 @@ mod tests {
         for key in ["../../etc", "a/b", "a\\b", "..", ".", "", " ", &long_key] {
             let mut unit = valid_unit();
             unit.key = key.to_string();
-            let err = validate_platform_request(Some("1"), &[unit], None).err().unwrap();
+            let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
             assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload, "key `{key}` must be rejected");
         }
     }
