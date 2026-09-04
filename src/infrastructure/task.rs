@@ -87,27 +87,32 @@ impl InfrastructureTask {
         EventDetails::clone_changing_stage(self.request.event_details(), Infrastructure(step))
     }
 
-    fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: Result<(), Box<EngineError>>) {
+    fn handle_transaction_result(
+        &self,
+        logger: Box<dyn Logger>,
+        transaction_result: Result<(), Box<EngineError>>,
+        execution_mode: Option<&ExecutionMode>,
+    ) {
         match transaction_result {
-            Ok(()) => self.send_infrastructure_progress(logger.clone(), None),
-            Err(err) => self.send_infrastructure_progress(logger.clone(), Some(err)),
+            Ok(()) => self.send_infrastructure_progress(logger.clone(), None, execution_mode),
+            Err(err) => self.send_infrastructure_progress(logger.clone(), Some(err), execution_mode),
         }
     }
 
-    fn send_infrastructure_progress(&self, logger: Box<dyn Logger>, option_engine_error: Option<Box<EngineError>>) {
+    fn send_infrastructure_progress(
+        &self,
+        logger: Box<dyn Logger>,
+        option_engine_error: Option<Box<EngineError>>,
+        execution_mode: Option<&ExecutionMode>,
+    ) {
         let kubernetes = &self.request.kubernetes;
         if let Some(engine_error) = option_engine_error {
-            let infrastructure_step = match self.request.action {
-                Action::Create => InfrastructureStep::CreateError,
-                Action::Pause => InfrastructureStep::PauseError,
-                Action::Delete => InfrastructureStep::DeleteError,
-                Action::Restart => InfrastructureStep::RestartedError,
-                // Diff is blueprint-only; falls back to GlobalError if it ever reaches the
-                // infrastructure task (would indicate a routing bug upstream, not a runtime crash).
-                Action::Diff => InfrastructureStep::GlobalError,
-            };
-            let event_message =
-                EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", infrastructure_step));
+            let infrastructure_step = infrastructure_progress_step(self.request.action, execution_mode, false);
+            let event_message = EventMessage::new_from_safe(infrastructure_progress_message(
+                execution_mode,
+                &infrastructure_step,
+                false,
+            ));
 
             let engine_event = EngineEvent::Error(
                 engine_error.clone_engine_error_with_stage(Infrastructure(infrastructure_step)),
@@ -116,17 +121,12 @@ impl InfrastructureTask {
 
             logger.log(engine_event);
         } else {
-            let infrastructure_step = match self.request.action {
-                Action::Create => InfrastructureStep::Created,
-                Action::Pause => InfrastructureStep::Paused,
-                Action::Delete => InfrastructureStep::Deleted,
-                Action::Restart => InfrastructureStep::RestartedError,
-                // Diff is blueprint-only; see comment in the error branch above. Map to
-                // GlobalError so the event still emits with a recognisable shape.
-                Action::Diff => InfrastructureStep::GlobalError,
-            };
-            let event_message =
-                EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", infrastructure_step));
+            let infrastructure_step = infrastructure_progress_step(self.request.action, execution_mode, true);
+            let event_message = EventMessage::new_from_safe(infrastructure_progress_message(
+                execution_mode,
+                &infrastructure_step,
+                true,
+            ));
             let engine_event = EngineEvent::Info(
                 EventDetails::new(
                     Some(self.request.cloud_provider.kind.clone()),
@@ -205,7 +205,7 @@ impl Task for InfrastructureTask {
         ) {
             Ok(engine) => engine,
             Err(err) => {
-                self.send_infrastructure_progress(self.logger.clone(), Some(err));
+                self.send_infrastructure_progress(self.logger.clone(), Some(err), execution_mode);
                 return;
             }
         };
@@ -222,7 +222,7 @@ impl Task for InfrastructureTask {
                 .as_infra_actions()
                 .run(&infra_ctx, self.request.action.into()),
         };
-        self.handle_transaction_result(self.logger.clone(), ret);
+        self.handle_transaction_result(self.logger.clone(), ret, execution_mode);
 
         let failure_context = infra_ctx.cluster_failure_context.lock().clone();
         if failure_context.has_data()
@@ -291,5 +291,101 @@ impl Task for InfrastructureTask {
             self.request.event_details(),
         )
         .with_skip_reconcile(self.request.skip_reconcile)
+    }
+}
+
+fn infrastructure_progress_step(
+    action: Action,
+    execution_mode: Option<&ExecutionMode>,
+    succeeded: bool,
+) -> InfrastructureStep {
+    match (execution_mode, succeeded, action) {
+        (Some(ExecutionMode::PlatformComponentsOnly), true, _) => InfrastructureStep::Created,
+        (Some(ExecutionMode::PlatformComponentsOnly), false, _) => InfrastructureStep::CreateError,
+        (Some(ExecutionMode::Unknown), _, _) => InfrastructureStep::GlobalError,
+        (None, false, Action::Create) => InfrastructureStep::CreateError,
+        (None, false, Action::Pause) => InfrastructureStep::PauseError,
+        (None, false, Action::Delete) => InfrastructureStep::DeleteError,
+        (None, false, Action::Restart) => InfrastructureStep::RestartedError,
+        (None, true, Action::Create) => InfrastructureStep::Created,
+        (None, true, Action::Pause) => InfrastructureStep::Paused,
+        (None, true, Action::Delete) => InfrastructureStep::Deleted,
+        (None, true, Action::Restart) => InfrastructureStep::RestartedError,
+        // Diff is blueprint-only. GlobalError keeps an accidental infrastructure-task event
+        // recognisable without claiming that a cluster lifecycle operation ran.
+        (None, _, Action::Diff) => InfrastructureStep::GlobalError,
+    }
+}
+
+fn infrastructure_progress_message(
+    execution_mode: Option<&ExecutionMode>,
+    infrastructure_step: &InfrastructureStep,
+    succeeded: bool,
+) -> String {
+    match (execution_mode, succeeded) {
+        (Some(ExecutionMode::PlatformComponentsOnly), true) => {
+            "✅ Platform components successfully deployed".to_string()
+        }
+        (Some(ExecutionMode::PlatformComponentsOnly), false) => "❌ Platform components deployment failed".to_string(),
+        (Some(ExecutionMode::Unknown), _) => "❌ Unsupported execution mode: request refused".to_string(),
+        (_, true) => format!("Kubernetes cluster successfully {infrastructure_step}"),
+        (_, false) => format!("Kubernetes cluster failure {infrastructure_step}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_components_only_uses_platform_specific_progress_messages() {
+        assert_eq!(
+            infrastructure_progress_message(
+                Some(&ExecutionMode::PlatformComponentsOnly),
+                &InfrastructureStep::Created,
+                true,
+            ),
+            "✅ Platform components successfully deployed"
+        );
+        assert_eq!(
+            infrastructure_progress_message(
+                Some(&ExecutionMode::PlatformComponentsOnly),
+                &InfrastructureStep::CreateError,
+                false,
+            ),
+            "❌ Platform components deployment failed"
+        );
+    }
+
+    #[test]
+    fn regular_infrastructure_keeps_cluster_progress_messages() {
+        assert_eq!(
+            infrastructure_progress_message(None, &InfrastructureStep::Created, true),
+            "Kubernetes cluster successfully created"
+        );
+        assert_eq!(
+            infrastructure_progress_message(None, &InfrastructureStep::CreateError, false),
+            "Kubernetes cluster failure create-error"
+        );
+    }
+
+    #[test]
+    fn unknown_execution_mode_reports_a_request_refusal() {
+        assert_eq!(
+            infrastructure_progress_message(Some(&ExecutionMode::Unknown), &InfrastructureStep::GlobalError, false,),
+            "❌ Unsupported execution mode: request refused"
+        );
+        assert_eq!(
+            infrastructure_progress_step(Action::Create, Some(&ExecutionMode::Unknown), false),
+            InfrastructureStep::GlobalError
+        );
+    }
+
+    #[test]
+    fn platform_components_only_always_uses_create_steps() {
+        assert_eq!(
+            infrastructure_progress_step(Action::Delete, Some(&ExecutionMode::PlatformComponentsOnly), false,),
+            InfrastructureStep::CreateError
+        );
     }
 }
