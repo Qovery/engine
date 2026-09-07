@@ -180,6 +180,81 @@ fn operator_renders_the_slim_engine_worker_image_tag_suffix() {
 }
 
 #[test]
+fn operator_can_list_worker_pods_with_default_or_external_service_accounts() {
+    for (namespace, service_account, extra_arguments) in [
+        ("qovery", "qovery-operator", &[][..]),
+        (
+            "worker-space",
+            "custom-operator",
+            &[
+                "--set",
+                "namespace=worker-space,serviceAccount.create=false,serviceAccount.name=custom-operator",
+            ][..],
+        ),
+    ] {
+        let documents = render(
+            "qovery-operator",
+            "lib-engine/lib/common/bootstrap/charts/qovery-operator",
+            namespace,
+            &[values(
+                "platform-catalog/components/qovery-operator/config/static-values/base.yaml",
+            )],
+            extra_arguments,
+        );
+        let deployment = document_by_kind_and_name(&documents, "Deployment", "qovery-operator")
+            .expect("Operator Deployment must be rendered");
+        assert_eq!(
+            yaml_string(deployment, &["spec", "template", "spec", "serviceAccountName"]),
+            Some(service_account)
+        );
+
+        let binding = document_by_kind_and_name(&documents, "RoleBinding", "qovery-operator")
+            .expect("Operator RoleBinding must be rendered");
+        assert_eq!(yaml_string(binding, &["metadata", "namespace"]), Some(namespace));
+        assert_eq!(yaml_string(binding, &["roleRef", "kind"]), Some("Role"));
+        let role_name = yaml_string(binding, &["roleRef", "name"]).expect("binding must select a Role");
+        let subjects = yaml_path(binding, &["subjects"])
+            .and_then(Value::as_sequence)
+            .expect("binding must declare subjects");
+        assert!(subjects.iter().any(|subject| {
+            yaml_string(subject, &["kind"]) == Some("ServiceAccount")
+                && yaml_string(subject, &["name"]) == Some(service_account)
+                && yaml_string(subject, &["namespace"]) == Some(namespace)
+        }));
+
+        let role = document_by_kind_and_name(&documents, "Role", role_name)
+            .expect("binding must reference the rendered Operator Role");
+        assert_eq!(yaml_string(role, &["metadata", "namespace"]), Some(namespace));
+        let rules = yaml_path(role, &["rules"])
+            .and_then(Value::as_sequence)
+            .expect("Role must declare rules");
+        assert!(
+            rules.iter().any(|rule| {
+                yaml_path(rule, &["apiGroups"]).is_some_and(|groups| contains_string(groups, ""))
+                    && yaml_path(rule, &["resources"]).is_some_and(|resources| contains_string(resources, "pods"))
+                    && yaml_path(rule, &["verbs"]).is_some_and(|verbs| contains_string(verbs, "list"))
+            }),
+            "Operator must be able to confirm worker Pod termination before releasing capacity"
+        );
+    }
+}
+
+#[test]
+fn operator_leaves_rbac_to_external_management_when_disabled() {
+    let documents = render(
+        "qovery-operator",
+        "lib-engine/lib/common/bootstrap/charts/qovery-operator",
+        "qovery",
+        &[],
+        &["--set", "rbac.create=false"],
+    );
+
+    for kind in ["Role", "RoleBinding"] {
+        assert!(document_by_kind_and_name(&documents, kind, "qovery-operator").is_none());
+    }
+}
+
+#[test]
 fn alloy_renders_the_expected_public_image_resources_and_loki_pipeline() {
     let value_file = values("platform-catalog/components/alloy/config/static-values/base.yaml");
     let documents = render(
