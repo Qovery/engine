@@ -15,4 +15,10 @@ rules:
       - create
       - get
       - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - list
 {{- end }}
