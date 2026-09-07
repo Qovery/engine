@@ -8,7 +8,7 @@ use super::{
     QoverySelfManagedChart, SupportedCharts, chart_dot_yaml,
     values_dot_yaml::{
         AwsServices, CertificateServices, ChartConfig, DnsServices, GcpServices, ImageTag, IngressServices,
-        LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryOperator, QoveryServices,
+        LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryServices,
         QoveryShellAgent, ScalewayServices, ServiceEnabled, ServicesEnabler, ValuesFile,
     },
 };
@@ -147,7 +147,6 @@ impl ValuesFile {
                 qovery: QoveryServices {
                     qovery_cluster_agent: ServiceEnabled { enabled: true },
                     qovery_shell_agent: ServiceEnabled { enabled: true },
-                    qovery_operator: ServiceEnabled { enabled: false },
                     qovery_engine: ServiceEnabled { enabled: false },
                     priority_class: ServiceEnabled { enabled: true },
                 },
@@ -206,7 +205,6 @@ impl ValuesFile {
                 architectures: "&architectures set-by-customer".to_string(),
                 shell_agent_version: "&shellAgentVersion set-by-customer".to_string(),
                 cluster_agent_version: "&clusterAgentVersion set-by-customer".to_string(),
-                operator_version: "&operatorVersion set-by-customer".to_string(),
                 engine_version: "&engineVersion set-by-customer".to_string(),
             },
             qovery_cluster_agent: QoveryClusterAgent {
@@ -233,18 +231,6 @@ impl ValuesFile {
                     ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                     ("GRPC_SERVER".to_string(), "*agentGatewayUrl".to_string()),
-                ]),
-            },
-            qovery_operator: QoveryOperator {
-                fullname_override: "qovery-operator".to_string(),
-                image: ImageTag {
-                    tag: "*operatorVersion".to_string(),
-                },
-                environment_variables: BTreeMap::from([
-                    ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
-                    ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
-                    ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
-                    ("GRPC_SERVER".to_string(), "*engineGatewayUrl".to_string()),
                 ]),
             },
             qovery_engine: Some(QoveryEngine {
@@ -562,10 +548,24 @@ mod tests {
     use crate::byok_chart_gen::values_dot_yaml::ValuesFile;
 
     #[test]
-    fn minimal_values_disable_qovery_operator_by_default() {
-        let values = ValuesFile::new_minimal();
+    fn byok_values_leave_operator_installation_to_the_platform_catalog() {
+        for values in [
+            ValuesFile::new_minimal(),
+            ValuesFile::new_aws(),
+            ValuesFile::new_gcp(),
+            ValuesFile::new_scaleway(),
+            ValuesFile::new_azure(),
+            ValuesFile::new_local(),
+            ValuesFile::new_demo_local(),
+        ] {
+            let values = serde_yaml::to_value(values).expect("BYOK values must serialize");
 
-        assert!(!values.services.qovery.qovery_operator.enabled);
+            assert!(values.get("qovery-operator").is_none());
+            assert!(values["services"]["qovery"].get("qovery-operator").is_none());
+            assert!(values["qovery"].get("operatorVersion").is_none());
+            assert!(values.get("qovery-cluster-agent").is_some());
+            assert!(values.get("qovery-shell-agent").is_some());
+        }
     }
 
     #[test]
