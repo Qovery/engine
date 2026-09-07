@@ -150,8 +150,6 @@ pub enum SupportedCharts {
     QoveryClusterAgent,
     #[display("qovery-shell-agent")]
     QoveryShellAgent,
-    #[display("qovery-operator")]
-    QoveryOperator,
     #[display("qovery-engine")]
     QoveryEngine,
     #[display("qovery-priority-class")]
@@ -434,7 +432,7 @@ mod tests {
             "Qovery Helm chart - self managed version".to_string(),
             ChartDotYamlApiVersion::V2,
             ChartDotYamlType::Application,
-            Version::new(1, 0, 0),
+            Version::new(2, 0, 0),
             Version::new(1, 0, 0),
             None,
             Url::parse("https://www.qovery.com").expect("failed to parse Qovery url"),
@@ -534,12 +532,6 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
-                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -659,12 +651,6 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::QoveryOperator,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -761,12 +747,6 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
-                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -873,12 +853,6 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::QoveryOperator,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -975,12 +949,6 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
-                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -1087,12 +1055,6 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::QoveryOperator,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -1189,12 +1151,6 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
-                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -1301,12 +1257,6 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::QoveryOperator,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -1390,12 +1340,6 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::QoveryOperator,
-                category: ChartCategory::Qovery,
-                source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
                 name: SupportedCharts::QoveryEngine,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -1460,6 +1404,15 @@ mod tests {
                 println!("{e}");
             })
             .expect("failed to generate Chart.yaml");
+        assert!(
+            chart_dot_yaml
+                .dependencies
+                .as_ref()
+                .expect("global chart must contain dependencies")
+                .iter()
+                .all(|dependency| dependency.name != "qovery-operator"),
+            "the global chart must leave Operator installation to the platform catalog"
+        );
         chart_dot_yaml
             .save_to_file(aws_qovery_chart.destination)
             .expect("failed to save Chart.yaml");
@@ -1476,6 +1429,10 @@ mod tests {
         }
 
         let generated_chart_path = aws_qovery_chart.destination.to_string_lossy();
+        assert!(
+            !aws_qovery_chart.destination.join("charts/qovery-operator").exists(),
+            "the generated package must not embed the Operator chart"
+        );
         let helm_dependency_update_status = Command::new("helm")
             .args(["dependency", "update", &generated_chart_path])
             .status()
