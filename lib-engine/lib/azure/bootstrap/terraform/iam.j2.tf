@@ -8,12 +8,11 @@ resource "azurerm_user_assigned_identity" "karpenter_msi" {
 }
 
 resource "azurerm_federated_identity_credential" "karpenter_fid" {
-  name                = "KARPENTER_FID"
-  resource_group_name = azurerm_resource_group.main.name
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = azurerm_kubernetes_cluster.primary.oidc_issuer_url
-  parent_id           = azurerm_user_assigned_identity.karpenter_msi.id
-  subject             = "system:serviceaccount:kube-system:karpenter-sa"
+  name                      = "KARPENTER_FID"
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = azurerm_kubernetes_cluster.primary.oidc_issuer_url
+  user_assigned_identity_id = azurerm_user_assigned_identity.karpenter_msi.id
+  subject                   = "system:serviceaccount:kube-system:karpenter-sa"
 }
 
 resource "azurerm_role_assignment" "karpenter_rg_mc_virtual_machine_contributor" {
@@ -63,12 +62,11 @@ resource "azurerm_user_assigned_identity" "storage_msi" {
 }
 
 resource "azurerm_federated_identity_credential" "storage_fid" {
-  name                = "STORAGE_FID"
-  resource_group_name = azurerm_resource_group.main.name
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = azurerm_kubernetes_cluster.primary.oidc_issuer_url
-  parent_id           = azurerm_user_assigned_identity.storage_msi.id
-  subject             = "system:serviceaccount:qovery:qovery-storage"
+  name                      = "STORAGE_FID"
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = azurerm_kubernetes_cluster.primary.oidc_issuer_url
+  user_assigned_identity_id = azurerm_user_assigned_identity.storage_msi.id
+  subject                   = "system:serviceaccount:qovery:qovery-storage"
 }
 
 resource "azurerm_role_assignment" "storage_msi_blob_data_contributor" {
