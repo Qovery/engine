@@ -20,7 +20,7 @@ use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tempfile::NamedTempFile;
 use url::Url;
 use uuid::Uuid;
@@ -41,26 +41,84 @@ const DEFAULT_TERMINATION_MESSAGE_PATH: &str = "/dev/termination-log";
 const TERMINATION_MESSAGE_MAX_BYTES: usize = 4096;
 
 enum PlatformHelmDeploymentEvent<'a> {
-    RetrievingDependencies { chart_name: &'a str },
-    ShowingDiff { chart_name: &'a str },
-    Deploying { chart_name: &'a str },
-    Deployed { chart_name: &'a str },
+    Started {
+        unit: &'a PlatformHelmUnit,
+        position: usize,
+        total: usize,
+    },
+    /// Release and chart identity: the unit key is not always the release name, and the chart
+    /// origin is what an operator needs when a Helm command fails.
+    Source {
+        unit: &'a PlatformHelmUnit,
+    },
+    RetrievingDependencies {
+        chart_name: &'a str,
+    },
+    ShowingDiff,
+    Deploying,
+    Finished {
+        chart_name: &'a str,
+        elapsed: Duration,
+        outcome: PlatformHelmDeploymentOutcome,
+    },
+}
+
+#[derive(Clone, Copy)]
+enum PlatformHelmDeploymentOutcome {
+    Deployed,
+    DryRun,
+    Failed { code: PlatformUnitErrorCode },
+}
+
+/// Wire spelling of the error code (`HELM_FAILED`), the same one q-core renders in its result rows.
+fn error_code_label(code: PlatformUnitErrorCode) -> String {
+    serde_json::to_value(code)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| format!("{code:?}"))
 }
 
 impl Display for PlatformHelmDeploymentEvent<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            PlatformHelmDeploymentEvent::Started { unit, position, total } => {
+                write!(
+                    formatter,
+                    "┌ [{position}/{total}] {} · {} · {}",
+                    unit.key, unit.chart.version, unit.namespace
+                )
+            }
+            PlatformHelmDeploymentEvent::Source { unit } => {
+                write!(
+                    formatter,
+                    "│ release {} · chart {}/{}",
+                    unit.release_name,
+                    unit.chart.repository.trim_end_matches('/'),
+                    unit.chart.name
+                )
+            }
             PlatformHelmDeploymentEvent::RetrievingDependencies { chart_name } => {
                 write!(formatter, "🪤 Retrieving dependencies for chart: {chart_name}")
             }
-            PlatformHelmDeploymentEvent::ShowingDiff { chart_name } => {
-                write!(formatter, "🔍 Showing diff for chart: {chart_name}")
+            PlatformHelmDeploymentEvent::ShowingDiff => {
+                write!(formatter, "│ Comparing Helm manifests")
             }
-            PlatformHelmDeploymentEvent::Deploying { chart_name } => {
-                write!(formatter, "🛳️ Deploying chart: 📥 {chart_name}")
+            PlatformHelmDeploymentEvent::Deploying => {
+                write!(formatter, "│ Deploying chart")
             }
-            PlatformHelmDeploymentEvent::Deployed { chart_name } => {
-                write!(formatter, "✅ Chart {chart_name} deployed")
+            PlatformHelmDeploymentEvent::Finished {
+                chart_name,
+                elapsed,
+                outcome,
+            } => {
+                let (icon, status) = match outcome {
+                    PlatformHelmDeploymentOutcome::Deployed => ("✅", "deployed".to_string()),
+                    PlatformHelmDeploymentOutcome::DryRun => ("👻", "dry run completed".to_string()),
+                    PlatformHelmDeploymentOutcome::Failed { code } => {
+                        ("❌", format!("failed · {}", error_code_label(*code)))
+                    }
+                };
+                write!(formatter, "└ {icon} {chart_name} {status} · {:.1}s", elapsed.as_secs_f64())
             }
         }
     }
@@ -188,18 +246,46 @@ pub fn deploy_platform_components(
     // units are reported SKIPPED/UPSTREAM_FAILED and never start (docs-v2 step semantics).
     let mut unit_results: Vec<PlatformUnitResult> = Vec::with_capacity(units.len());
     let mut first_failure: Option<Box<EngineError>> = None;
-    for unit in units {
+    for (index, unit) in units.iter().enumerate() {
         if first_failure.is_some() {
             unit_results.push(PlatformUnitResult::skipped(&unit.key, "UPSTREAM_FAILED"));
             continue;
         }
+        let started_at = Instant::now();
+        logger.info(
+            PlatformHelmDeploymentEvent::Started {
+                unit,
+                position: index + 1,
+                total: units.len(),
+            }
+            .to_string(),
+        );
+        logger.info(PlatformHelmDeploymentEvent::Source { unit }.to_string());
         let prepared_unit = prepared_plan.take(&unit.key);
-        match apply_platform_helm_unit(infra_ctx, &helm, &logger, &event_details, unit, prepared_unit) {
-            Ok(()) => unit_results.push(PlatformUnitResult::succeeded(&unit.key)),
+        let outcome = match apply_platform_helm_unit(infra_ctx, &helm, &logger, &event_details, unit, prepared_unit) {
+            Ok(()) => {
+                unit_results.push(PlatformUnitResult::succeeded(&unit.key));
+                if infra_ctx.context().is_dry_run_deploy() {
+                    PlatformHelmDeploymentOutcome::DryRun
+                } else {
+                    PlatformHelmDeploymentOutcome::Deployed
+                }
+            }
             Err((code, message, err)) => {
                 unit_results.push(PlatformUnitResult::failed(&unit.key, code, &message));
                 first_failure = Some(err);
+                PlatformHelmDeploymentOutcome::Failed { code }
             }
+        };
+        let message = PlatformHelmDeploymentEvent::Finished {
+            chart_name: &unit.key,
+            elapsed: started_at.elapsed(),
+            outcome,
+        }
+        .to_string();
+        match outcome {
+            PlatformHelmDeploymentOutcome::Deployed | PlatformHelmDeploymentOutcome::DryRun => logger.info(message),
+            PlatformHelmDeploymentOutcome::Failed { .. } => logger.warn(message),
         }
     }
 
@@ -532,11 +618,6 @@ fn apply_platform_helm_unit(
     unit: &PlatformHelmUnit,
     prepared: Option<PreparedPlatformUnit>,
 ) -> Result<(), (PlatformUnitErrorCode, String, Box<EngineError>)> {
-    logger.info(format!(
-        "⚓ Preparing platform Helm unit `{}`: release `{}` in namespace `{}` from {} {} {}",
-        unit.key, unit.release_name, unit.namespace, unit.chart.repository, unit.chart.name, unit.chart.version,
-    ));
-
     let (chart_dir, values_file) = match prepared {
         Some(prepared) => (prepared.chart_dir, prepared.values_file),
         None => {
@@ -563,45 +644,34 @@ fn apply_platform_helm_unit(
         ..Default::default()
     };
 
-    logger.info(
-        PlatformHelmDeploymentEvent::ShowingDiff {
-            chart_name: &unit.release_name,
-        }
-        .to_string(),
-    );
+    logger.info(PlatformHelmDeploymentEvent::ShowingDiff.to_string());
     // Keep the traditional cluster behavior: a best-effort diff must never block the deployment.
     // Do not log the Helm error because command errors may contain sensitive values.
-    if helm
-        .upgrade_diff_with_secrets_suppressed(
-            &chart_info,
-            &[],
-            &CommandKiller::from_timeout(HELM_DIFF_TIMEOUT),
-            &mut |line| {
+    let mut has_visible_diff = false;
+    let diff_result = helm.upgrade_diff_with_secrets_suppressed(
+        &chart_info,
+        &[],
+        &CommandKiller::from_timeout(HELM_DIFF_TIMEOUT),
+        &mut |line| {
+            if let Some(line) = platform_helm_diff_line(&line) {
+                has_visible_diff = true;
                 logger.diff(InfrastructureDiffType::Helm, line);
-            },
-        )
-        .is_err()
-    {
-        logger.warn(format!(
-            "Unable to show diff for chart {}; continuing deployment",
-            unit.release_name
-        ));
+            }
+        },
+    );
+    match diff_result {
+        // Not diff content: report it as an ordinary informational line.
+        Ok(()) if !has_visible_diff => logger.info("│ No diff to display"),
+        Ok(()) => {}
+        Err(_) => logger.warn("│ Diff unavailable; continuing deployment"),
     }
 
     if infra_ctx.context().is_dry_run_deploy() {
-        logger.warn(format!(
-            "👻 Dry run mode enabled, skipping installation of platform Helm unit `{}`",
-            unit.key
-        ));
+        logger.warn(format!("│ Dry run: skipping installation of `{}`", unit.key));
         return Ok(());
     }
 
-    logger.info(
-        PlatformHelmDeploymentEvent::Deploying {
-            chart_name: &unit.release_name,
-        }
-        .to_string(),
-    );
+    logger.info(PlatformHelmDeploymentEvent::Deploying.to_string());
     helm.upgrade(&chart_info, &[], &CommandKiller::from_timeout(HELM_UPGRADE_TIMEOUT))
         .map_err(|err| {
             (
@@ -614,14 +684,11 @@ fn apply_platform_helm_unit(
             )
         })?;
 
-    logger.info(
-        PlatformHelmDeploymentEvent::Deployed {
-            chart_name: &unit.release_name,
-        }
-        .to_string(),
-    );
-
     Ok(())
+}
+
+fn platform_helm_diff_line(line: &str) -> Option<String> {
+    (!line.trim().is_empty()).then(|| format!("│ {line}"))
 }
 
 pub(super) fn write_platform_values_to_temporary_file(unit: &PlatformHelmUnit) -> std::io::Result<NamedTempFile> {
@@ -796,22 +863,73 @@ mod tests {
     #[test]
     fn platform_helm_deployment_events_use_expected_messages() {
         let chart_name = "cluster-agent";
-
         assert_eq!(
             PlatformHelmDeploymentEvent::RetrievingDependencies { chart_name }.to_string(),
             "🪤 Retrieving dependencies for chart: cluster-agent"
         );
         assert_eq!(
-            PlatformHelmDeploymentEvent::ShowingDiff { chart_name }.to_string(),
-            "🔍 Showing diff for chart: cluster-agent"
+            PlatformHelmDeploymentEvent::ShowingDiff.to_string(),
+            "│ Comparing Helm manifests"
+        );
+        assert_eq!(PlatformHelmDeploymentEvent::Deploying.to_string(), "│ Deploying chart");
+        for (outcome, expected) in [
+            (PlatformHelmDeploymentOutcome::Deployed, "└ ✅ cluster-agent deployed · 2.5s"),
+            (
+                PlatformHelmDeploymentOutcome::DryRun,
+                "└ 👻 cluster-agent dry run completed · 2.5s",
+            ),
+            (
+                PlatformHelmDeploymentOutcome::Failed {
+                    code: PlatformUnitErrorCode::HelmFailed,
+                },
+                "└ ❌ cluster-agent failed · HELM_FAILED · 2.5s",
+            ),
+        ] {
+            assert_eq!(
+                PlatformHelmDeploymentEvent::Finished {
+                    chart_name,
+                    elapsed: Duration::from_millis(2500),
+                    outcome,
+                }
+                .to_string(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn platform_helm_sections_identify_the_chart_and_its_position() {
+        let unit = valid_unit();
+        assert_eq!(
+            PlatformHelmDeploymentEvent::Started {
+                unit: &unit,
+                position: 2,
+                total: 10
+            }
+            .to_string(),
+            format!("┌ [2/10] cluster-agent · {} · qovery", unit.chart.version)
         );
         assert_eq!(
-            PlatformHelmDeploymentEvent::Deploying { chart_name }.to_string(),
-            "🛳️ Deploying chart: 📥 cluster-agent"
+            PlatformHelmDeploymentEvent::Source { unit: &unit }.to_string(),
+            "│ release cluster-agent · chart https://helm.qovery.com/qovery-cluster-agent"
         );
+        let mut oci_unit = valid_unit();
+        oci_unit.release_name = "dns".to_string();
+        oci_unit.chart.repository = "oci://public.ecr.aws/qovery/".to_string();
+        oci_unit.chart.name = "external-dns".to_string();
         assert_eq!(
-            PlatformHelmDeploymentEvent::Deployed { chart_name }.to_string(),
-            "✅ Chart cluster-agent deployed"
+            PlatformHelmDeploymentEvent::Source { unit: &oci_unit }.to_string(),
+            "│ release dns · chart oci://public.ecr.aws/qovery/external-dns"
+        );
+    }
+
+    #[test]
+    fn platform_helm_diff_omits_empty_lines_and_preserves_manifest_indentation() {
+        assert_eq!(platform_helm_diff_line(""), None);
+        assert_eq!(platform_helm_diff_line(" \t"), None);
+        assert_eq!(
+            platform_helm_diff_line("  - replicas: 1"),
+            Some("│   - replicas: 1".to_string())
         );
     }
 
