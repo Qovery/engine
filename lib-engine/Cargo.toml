@@ -146,6 +146,7 @@ curl = "0.4.47"
 dotenv = "0.15.0"
 faux = "0.1.12"
 testcontainers = { version = "0.24.0", features = ["blocking"] }
+tower = { version = "0.5.2", features = ["util"] }
 
 
 [features]

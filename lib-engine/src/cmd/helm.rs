@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use tracing::{error, info, warn};
 
-use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
+use crate::cmd::command::{AbortReason, CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{
     DEPENDENCY, DIFF, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE,
 };
@@ -32,6 +32,10 @@ use uuid::Uuid;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 const HELM_MAX_HISTORY: &str = "50";
+/// Bounded instead of relying on Helm's "0 disables truncation" special case: the limit only
+/// applies when it is smaller than the result set, so this never truncates a plausible inventory
+/// and a saturated result is detectable instead of silently partial.
+const HELM_RELEASE_HARD_CAP: usize = 1_000;
 const ENGINE_POST_RENDERER_BINARY: &str = "engine_post_renderer";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,6 +65,16 @@ impl Timeout<u32> {
             Timeout::Value(t) => t,
         }
     }
+}
+
+/// Outcome of a complete release inventory read: a saturated inventory is not a Helm failure,
+/// but it is not a usable inventory either.
+#[derive(thiserror::Error, Debug)]
+pub enum HelmInventoryError {
+    #[error("Helm release inventory reached the {limit}-release cap and may be incomplete")]
+    Saturated { limit: usize },
+    #[error(transparent)]
+    Helm(#[from] HelmError),
 }
 
 #[derive(thiserror::Error, Clone, Debug)]
@@ -452,6 +466,71 @@ impl Helm {
     /// * `namespace` - list charts from a kubernetes namespace or use None to select all namespaces
     #[track_caller]
     pub fn list_release(&self, namespace: Option<&str>, envs: &[(&str, &str)]) -> Result<Vec<HelmChart>, HelmError> {
+        Ok(self
+            .list_release_raw(namespace, envs, &CommandKiller::never())?
+            .into_iter()
+            .map(parse_legacy_helm_release)
+            .collect())
+    }
+
+    /// List releases without interpreting chart references, honoring the caller's cancellation or timeout policy.
+    #[track_caller]
+    pub(crate) fn list_release_raw(
+        &self,
+        namespace: Option<&str>,
+        envs: &[(&str, &str)],
+        command_killer: &CommandKiller,
+    ) -> Result<Vec<HelmListItem>, HelmError> {
+        self.list_release_raw_with_args(namespace, envs, &[], command_killer)
+    }
+
+    /// Read the complete preflight inventory in one invocation, without changing legacy lookups.
+    /// Helm applies --max after loading release history; paging repeats that expensive work.
+    /// A result that reaches the cap is rejected rather than reported as a complete inventory.
+    pub(crate) fn list_all_releases_raw(
+        &self,
+        namespace: Option<&str>,
+        envs: &[(&str, &str)],
+        command_killer: &CommandKiller,
+    ) -> Result<Vec<HelmListItem>, HelmInventoryError> {
+        match command_killer.should_abort() {
+            Some(AbortReason::Timeout(_)) => {
+                return Err(HelmInventoryError::Helm(HelmError::Timeout(
+                    "none".to_string(),
+                    LIST,
+                    "release inventory timed out".to_string(),
+                )));
+            }
+            Some(AbortReason::Canceled(_)) => {
+                return Err(HelmInventoryError::Helm(HelmError::Killed("none".to_string(), LIST)));
+            }
+            None => {}
+        }
+        let releases = self.list_release_raw_with_args(
+            namespace,
+            envs,
+            &["--max", &HELM_RELEASE_HARD_CAP.to_string()],
+            command_killer,
+        )?;
+        // Helm truncates silently, so a saturated page is indistinguishable from a complete one:
+        // refuse it instead of letting preflight treat missing releases as absent, and keep the
+        // saturation distinct from a Helm failure so the caller can report the limit.
+        if releases.len() >= HELM_RELEASE_HARD_CAP {
+            return Err(HelmInventoryError::Saturated {
+                limit: HELM_RELEASE_HARD_CAP,
+            });
+        }
+        Ok(releases)
+    }
+
+    #[track_caller]
+    fn list_release_raw_with_args(
+        &self,
+        namespace: Option<&str>,
+        envs: &[(&str, &str)],
+        pagination_args: &[&str],
+        command_killer: &CommandKiller,
+    ) -> Result<Vec<HelmListItem>, HelmError> {
         if tracing::enabled!(tracing::Level::DEBUG) {
             let caller = Location::caller();
             debug!(
@@ -467,6 +546,7 @@ impl Helm {
             Some(ns) => helm_args.append(&mut vec!["-n", ns]),
             None => helm_args.push("-A"),
         }
+        helm_args.extend_from_slice(pagination_args);
 
         let mut output_string: Vec<String> = Vec::with_capacity(20);
         if let Err(cmd_error) = helm_exec_with_output(
@@ -474,40 +554,13 @@ impl Helm {
             &self.get_all_envs(envs),
             &mut |line| output_string.push(line),
             &mut |line| error!("{}", line),
-            &CommandKiller::never(),
+            command_killer,
         ) {
             return Err(CmdError("none".to_string(), LIST, cmd_error.into()));
         }
 
-        let values = serde_json::from_str::<Vec<HelmListItem>>(&output_string.join(""));
-        let mut helms_charts: Vec<HelmChart> = Vec::new();
-
-        match values {
-            Ok(all_helms) => {
-                for helm in all_helms {
-                    // chart version is stored in chart name (i.e loki-3.4.5) so we look for last dash position to parse name.
-                    let mut last_dash_pos = helm.chart.rfind('-').expect("Can't parse helm chart") + 1;
-                    // sometime chart version in name start with 'v' (i.e loki-v3.4.5). We squeeze it.
-                    if helm.chart[last_dash_pos..].starts_with('v') {
-                        last_dash_pos += 1
-                    }
-
-                    let chart_version_raw = helm.chart[last_dash_pos..].to_string();
-                    let chart_version = Version::from_str(chart_version_raw.as_str()).ok();
-
-                    let mut app_version_raw = helm.app_version;
-                    // sometime app version start with 'v'. We squeeze it.
-                    if app_version_raw.starts_with('v') {
-                        app_version_raw = app_version_raw[1..].to_string()
-                    }
-                    let app_version = Version::from_str(app_version_raw.as_str()).ok();
-
-                    helms_charts.push(HelmChart::new(helm.name, helm.namespace, chart_version, app_version))
-                }
-
-                Ok(helms_charts)
-            }
-            Err(e) => Err(CmdError(
+        serde_json::from_str::<Vec<HelmListItem>>(&output_string.join("")).map_err(|e| {
+            CmdError(
                 "none".to_string(),
                 LIST,
                 errors::CommandError::new(
@@ -519,8 +572,8 @@ impl Helm {
                             .collect::<Vec<(String, String)>>(),
                     ),
                 ),
-            )),
-        }
+            )
+        })
     }
 
     pub fn get_chart_version(
@@ -1683,6 +1736,50 @@ impl Helm {
     where
         STDERR: FnMut(String),
     {
+        self.template_raw_with_logging(release_name, chart_path, namespace, args, envs, cmd_killer, true, stderr_output)
+    }
+
+    /// Render a chart without tracing Helm stderr, which may contain values supplied by the caller.
+    pub fn template_raw_silent<STDERR>(
+        &self,
+        release_name: &str,
+        chart_path: &Path,
+        namespace: &str,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stderr_output: &mut STDERR,
+    ) -> Result<String, HelmError>
+    where
+        STDERR: FnMut(String),
+    {
+        self.template_raw_with_logging(
+            release_name,
+            chart_path,
+            namespace,
+            args,
+            envs,
+            cmd_killer,
+            false,
+            stderr_output,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn template_raw_with_logging<STDERR>(
+        &self,
+        release_name: &str,
+        chart_path: &Path,
+        namespace: &str,
+        args: &[&str],
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        log_stderr: bool,
+        stderr_output: &mut STDERR,
+    ) -> Result<String, HelmError>
+    where
+        STDERR: FnMut(String),
+    {
         let chart_path = chart_path.to_string_lossy();
         let args: Vec<&str> = ["template", release_name, chart_path.as_ref(), "-n", namespace]
             .into_iter()
@@ -1700,7 +1797,9 @@ impl Helm {
             },
             &mut |line| {
                 stderr_msg.push_str(&line);
-                warn!("chart {}: {}", release_name, line);
+                if log_stderr {
+                    warn!("chart {}: {}", release_name, line);
+                }
                 stderr_output(line);
             },
             cmd_killer,
@@ -1713,7 +1812,9 @@ impl Helm {
                 CommandError::TimeoutError(_) => Err(HelmError::Timeout(release_name.to_string(), UPGRADE, stderr_msg)),
                 CommandError::Killed(_) => Err(HelmError::Killed(release_name.to_string(), UPGRADE)),
                 _ => {
-                    error!("Helm error: {:?}", err);
+                    if log_stderr {
+                        error!("Helm error: {:?}", err);
+                    }
                     Err(CmdError(release_name.to_string(), HelmCommand::TEMPLATE, err.into()))
                 }
             },
@@ -1946,6 +2047,88 @@ impl Helm {
                 Err(CmdError(chart.name.to_string(), HelmCommand::TEMPLATE, err.into()))
             }
         }
+    }
+}
+
+fn parse_legacy_helm_release(helm: HelmListItem) -> HelmChart {
+    // Preserve last-dash parsing: existing skip/reinstall decisions depend on unknown prerelease versions.
+    let mut last_dash_pos = helm.chart.rfind('-').expect("Can't parse helm chart") + 1;
+    // sometime chart version in name start with 'v' (i.e loki-v3.4.5). We squeeze it.
+    if helm.chart[last_dash_pos..].starts_with('v') {
+        last_dash_pos += 1
+    }
+
+    let chart_version_raw = helm.chart[last_dash_pos..].to_string();
+    let chart_version = Version::from_str(chart_version_raw.as_str()).ok();
+
+    let mut app_version_raw = helm.app_version;
+    // sometime app version start with 'v'. We squeeze it.
+    if app_version_raw.starts_with('v') {
+        app_version_raw = app_version_raw[1..].to_string()
+    }
+    let app_version = Version::from_str(app_version_raw.as_str()).ok();
+
+    HelmChart::new(helm.name, helm.namespace, chart_version, app_version)
+}
+
+#[cfg(test)]
+mod legacy_release_tests {
+    use super::{Helm, HelmListCache, parse_legacy_helm_release};
+    use crate::cmd::structs::{HelmChart, HelmListItem};
+    use semver::Version;
+    use std::path::Path;
+
+    #[test]
+    fn preserves_legacy_chart_and_app_version_parsing() {
+        for (reference, expected_version) in [
+            ("loki-5.48.0", Some(Version::new(5, 48, 0))),
+            ("loki-v5.48.0", Some(Version::new(5, 48, 0))),
+            ("qovery-cert-manager-webhook-0.2.0", Some(Version::new(0, 2, 0))),
+            ("loki-5.48.0+build.1", Some(Version::parse("5.48.0+build.1").unwrap())),
+            ("loki-5.48.0-rc.1", None),
+            ("loki-v5.48.0-rc.1", None),
+            ("loki-5.48.0+build-1", None),
+            ("chart-without-version", None),
+        ] {
+            let release = parse_legacy_helm_release(HelmListItem {
+                name: "test-release".to_string(),
+                namespace: "test-namespace".to_string(),
+                chart: reference.to_string(),
+                app_version: "v2.9.0-rc.1".to_string(),
+                ..Default::default()
+            });
+
+            assert_eq!(
+                release,
+                HelmChart::new(
+                    "test-release".to_string(),
+                    "test-namespace".to_string(),
+                    expected_version,
+                    Some(Version::parse("2.9.0-rc.1").unwrap()),
+                ),
+                "{reference}",
+            );
+        }
+    }
+
+    #[test]
+    fn cached_prerelease_version_remains_unknown_to_deployment_lookups() {
+        let release = parse_legacy_helm_release(HelmListItem {
+            name: "loki".to_string(),
+            namespace: "logging".to_string(),
+            chart: "loki-5.48.0-rc.1".to_string(),
+            app_version: "2.9.0".to_string(),
+            ..Default::default()
+        });
+        let cache = HelmListCache::new();
+        cache.get_or_fetch("logging", || Ok(vec![release])).unwrap();
+        let helm = Helm::new_with_cache(Option::<&Path>::None, &[], cache).unwrap();
+
+        let versions = helm.get_chart_version("loki", Some("logging"), &[]).unwrap().unwrap();
+
+        // Both skip-if-installed and reinstall-below-version require a known chart version.
+        assert_eq!(versions.chart_version, None);
+        assert_eq!(versions.app_version, Some(Version::new(2, 9, 0)));
     }
 }
 

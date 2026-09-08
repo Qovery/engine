@@ -4577,6 +4577,7 @@ dependencies = [
  "timeout-readwrite",
  "tokio",
  "tokio-util",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "tracing-test",
