@@ -873,6 +873,7 @@ impl Docker {
         context: &Path,
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
+        secrets: &[(&str, &Path)],
         cache: Option<&ContainerImage>,
         push_after_build: bool,
         architectures: &[Architecture],
@@ -904,6 +905,7 @@ impl Docker {
             context,
             image_to_build,
             build_args,
+            secrets,
             cache,
             push_after_build,
             architectures,
@@ -921,6 +923,7 @@ impl Docker {
         context: &Path,
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
+        secrets: &[(&str, &Path)],
         cache: Option<&ContainerImage>,
         push_after_build: bool,
         architectures: &[Architecture],
@@ -990,6 +993,13 @@ impl Docker {
         for (k, v) in build_args {
             args_string.push("--build-arg".to_string());
             args_string.push(format!("{k}={v}"));
+        }
+
+        // `src=` and not `env=`: the command line is logged at info level, and `Command`'s Debug
+        // prints altered environment variables with their values. Only the path reaches the logs.
+        for (id, path) in secrets {
+            args_string.push("--secret".to_string());
+            args_string.push(format!("id={id},src={}", path.to_str().unwrap_or_default()));
         }
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
@@ -1420,6 +1430,7 @@ mod builder_placement_tests {
 mod tests {
     use crate::cmd::command::CommandKiller;
     use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError};
+    use std::fs;
     use std::num::NonZeroUsize;
     use std::path::Path;
     use std::time::Duration;
@@ -1501,6 +1512,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
+            &[],
             Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
@@ -1518,6 +1530,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
+            &[],
             Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
@@ -1528,6 +1541,85 @@ mod tests {
         );
 
         assert!(ret.is_ok());
+    }
+
+    /// Writes a build context whose secret-mounted step carries a nonce.
+    ///
+    /// BuildKit leaves secret contents out of its cache keys, so two builds of the same Dockerfile
+    /// share one cache entry for that step whatever the secret is: the second is answered from the
+    /// first one's result and mounts nothing. Both assertions below would then hold for the wrong
+    /// reason — the value never arrives in the first, `required=true` is never evaluated in the
+    /// second. The nonce lands in the RUN command, which is part of the cache key, so each build
+    /// starts cold.
+    fn build_secret_context(nonce: &Uuid) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let dockerfile = format!(
+            r#"FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6-ci
+RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
+    echo "nonce {nonce}" && \
+    test "$(cat /run/secrets/MY_BUILD_SECRET)" = "s3cr3t"
+"#
+        );
+        fs::write(dir.path().join("Dockerfile"), dockerfile).unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn test_buildkit_build_with_secret() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_local_builder(None).unwrap();
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/build-secret".to_string(),
+            vec!["1.0".to_string()],
+        );
+
+        let secret_dir = tempfile::tempdir().unwrap();
+        let secret_path = secret_dir.path().join("secret-0");
+        fs::write(&secret_path, "s3cr3t").unwrap();
+
+        // The Dockerfile compares the value it reads, so a build that succeeds proves the secret
+        // reached the build step through the flag.
+        let context = build_secret_context(&Uuid::new_v4());
+        let ret = docker.build_with_buildkit(
+            &None,
+            &context.path().join("Dockerfile"),
+            context.path(),
+            &image_to_build,
+            &[],
+            &[("MY_BUILD_SECRET", secret_path.as_path())],
+            None,
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            None,
+        );
+
+        assert!(ret.is_ok());
+
+        // Without the flag, the mount is declared `required=true`, so BuildKit fails the step.
+        let context = build_secret_context(&Uuid::new_v4());
+        let ret = docker.build_with_buildkit(
+            &None,
+            &context.path().join("Dockerfile"),
+            context.path(),
+            &image_to_build,
+            &[],
+            &[],
+            None,
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            None,
+        );
+
+        assert!(ret.is_err());
     }
 
     #[test]
@@ -1552,6 +1644,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
+            &[],
             &[],
             Some(&image_cache),
             false,
@@ -1690,6 +1783,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
+            &[],
             Some(&image_cache),
             false,
             &[Architecture::AMD64],
@@ -1725,6 +1819,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
+            &[],
             Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
@@ -1741,6 +1836,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
+            &[],
             &[],
             Some(&image_cache),
             false,
@@ -1771,6 +1867,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
+            &[],
             &[],
             None,
             false,

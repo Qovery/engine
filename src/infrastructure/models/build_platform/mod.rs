@@ -377,3 +377,68 @@ impl Display for Image {
 pub enum Kind {
     LocalDocker,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_with(environment_variables: BTreeMap<String, String>) -> Build {
+        Build {
+            source: BuildSource::Dockerfile {
+                content: "FROM node\nRUN --mount=type=secret,id=A_SECRET npm ci".to_string(),
+            },
+            image: Image {
+                service_id: "my_service_id".to_string(),
+                service_long_id: Uuid::nil(),
+                service_name: "my-service".to_string(),
+                name: "my-service".to_string(),
+                tag: String::new(),
+                commit_id: String::new(),
+                registry_name: "my-registry".to_string(),
+                registry_docker_json_config: None,
+                registry_url: Url::parse("https://registry.qovery.com").expect("url should be valid"),
+                registry_insecure: false,
+                repository_name: "my-repository".to_string(),
+                shared_repository_name: "my-repository".to_string(),
+                shared_image_feature_enabled: false,
+            },
+            environment_variables,
+            disable_buildkit_cache: false,
+            timeout: Duration::from_secs(60),
+            architectures: vec![CpuArchitecture::AMD64],
+            max_cpu_in_milli: 1000,
+            max_ram_in_gib: 1,
+            ephemeral_storage_in_gib: None,
+            registries: vec![],
+            dockerfile_fragment: None,
+        }
+    }
+
+    fn image_tag_for(environment_variables: &[(&str, &str)]) -> String {
+        let mut build = build_with(
+            environment_variables
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect(),
+        );
+        build.compute_image_tag();
+        build.image.tag
+    }
+
+    /// The whole point of keeping the secret mount ids in `Build::environment_variables`: their
+    /// values reach the hashed map, so rotating a secret produces a new tag and therefore a
+    /// rebuild, instead of the build being skipped as already-present in the registry.
+    #[test]
+    fn test_rotating_a_build_variable_changes_the_image_tag() {
+        let before = image_tag_for(&[("A_SECRET", "old-value")]);
+        let after = image_tag_for(&[("A_SECRET", "new-value")]);
+
+        assert_ne!(before, after);
+        assert_eq!(before, image_tag_for(&[("A_SECRET", "old-value")]));
+    }
+
+    #[test]
+    fn test_dropping_a_build_variable_changes_the_image_tag() {
+        assert_ne!(image_tag_for(&[("A_SECRET", "value")]), image_tag_for(&[]));
+    }
+}

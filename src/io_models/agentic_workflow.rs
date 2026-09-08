@@ -252,7 +252,14 @@ impl AgenticWorkflow {
         let mut build = Build {
             source: BuildSource::Dockerfile { content },
             image: self.to_image(cr_info, cluster_id),
-            environment_variables: BTreeMap::new(),
+            // Values are plaintext here, unlike the base64-encoded `environment_vars_with_infos`
+            // every other service carries. The build only keeps the names the Dockerfile fragment
+            // actually declares, as an `ARG` or as a secret mount id.
+            environment_variables: self
+                .environment_variables
+                .iter()
+                .map(|(name, variable_info)| (name.clone(), variable_info.value.clone()))
+                .collect(),
             disable_buildkit_cache: false,
             timeout: Duration::from_secs(BUILD_TIMEOUT_MAX_SEC),
             architectures,

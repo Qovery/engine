@@ -1,7 +1,9 @@
 #![allow(clippy::redundant_closure)]
 
-use std::io::Error;
+use std::collections::{BTreeMap, HashSet};
+use std::io::{Error, Write};
 use std::num::NonZeroUsize;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -11,6 +13,7 @@ use std::{fs, thread};
 use git2::{Cred, CredentialType, ErrorClass};
 use retry::OperationResult;
 use retry::delay::Fibonacci;
+use tempfile::TempDir;
 use time::Instant;
 use uuid::Uuid;
 
@@ -19,7 +22,9 @@ use crate::cmd::docker;
 use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
-use crate::infrastructure::models::build_platform::dockerfile_utils::extract_dockerfile_args;
+use crate::infrastructure::models::build_platform::dockerfile_utils::{
+    DockerfileSecretMounts, extract_dockerfile_args, extract_dockerfile_secret_mounts,
+};
 use crate::infrastructure::models::build_platform::{
     Build, BuildError, BuildPlatform, BuildSource, CUSTOM_FRAGMENT_PLACEHOLDER, DockerfileFragment, Kind,
     SYNTHESIZED_DOCKERFILE_NAME, to_build_error,
@@ -144,7 +149,7 @@ impl LocalDocker {
             action_description: "reading dockerfile content".to_string(),
             raw_error: err,
         })?;
-        let dockerfile_args = match extract_dockerfile_args(dockerfile_content) {
+        let dockerfile_args = match extract_dockerfile_args(&dockerfile_content) {
             Ok(dockerfile_args) => dockerfile_args,
             Err(err) => {
                 build_record.stop(StepStatus::Error);
@@ -154,10 +159,35 @@ impl LocalDocker {
                 });
             }
         };
+        let secret_mounts = match extract_dockerfile_secret_mounts(&dockerfile_content) {
+            Ok(secret_mounts) => secret_mounts,
+            Err(err) => {
+                build_record.stop(StepStatus::Error);
+                return Err(BuildError::InvalidConfig {
+                    application: build.image.service_id.clone(),
+                    raw_error_message: format!("Cannot extract secret mounts from your dockerfile {err}"),
+                });
+            }
+        };
+
+        // Fail before doing any work: nothing later can wire a mount whose id we would have to guess.
+        if secret_mounts.has_mount_without_id {
+            build_record.stop(StepStatus::Error);
+            return Err(BuildError::InvalidConfig {
+                application: build.image.service_id.clone(),
+                raw_error_message: "Your Dockerfile declares a `RUN --mount=type=secret` without an `id=`. \
+                     Add `id=<BUILD_VARIABLE_NAME>` to the mount so Qovery knows which build variable to pass."
+                    .to_string(),
+            });
+        }
 
         // Keep only the env variables we want for our build
-        // and force re-compute the image tag
-        build.environment_variables.retain(|k, _| dockerfile_args.contains(k));
+        // and force re-compute the image tag.
+        // Secret mount ids are kept too: `compute_image_tag` hashes values, so a rotated secret
+        // yields a new tag and therefore a rebuild instead of being skipped as already-present.
+        build
+            .environment_variables
+            .retain(|k, _| dockerfile_args.contains(k) || secret_mounts.ids.contains(k));
         build.compute_image_tag();
 
         // Prepare image we want to build
@@ -258,11 +288,8 @@ impl LocalDocker {
         }
 
         // Actually do the build of the image
-        let env_vars: Vec<(&str, &str)> = build
-            .environment_variables
-            .iter()
-            .map(|(k, v)| (k.as_str(), v.as_str()))
-            .collect();
+        let (build_args, secret_values) =
+            split_build_inputs(&build.environment_variables, &dockerfile_args, &secret_mounts);
 
         let arch: Vec<Architecture> = build
             .architectures
@@ -273,12 +300,25 @@ impl LocalDocker {
         let builder_handle =
             self.provision_builder(build, |line| logger.send_progress(line), &CommandKiller::from_cancelable(abort))?;
 
+        // Written as late as possible, and held only until the build returns: dropping it removes
+        // the files, whatever ended the build, including a `CommandKiller` timeout or an abort that
+        // never returns normally.
+        let secret_files = match BuildSecretFiles::new(&build.image.service_id, &secret_values) {
+            Ok(secret_files) => secret_files,
+            Err(err) => {
+                build_record.stop(StepStatus::Error);
+                return Err(err);
+            }
+        };
+        let secrets = secret_files.as_build_flags();
+
         let exit_status = self.context.docker.build(
             &builder_handle.builder_name.as_deref(),
             Path::new(dockerfile_complete_path),
             Path::new(into_dir_docker_style),
             &image_to_build,
-            &env_vars,
+            &build_args,
+            &secrets,
             image_cache.as_ref(),
             true,
             &arch,
@@ -475,6 +515,115 @@ impl LocalDocker {
             action_description: "when creating build workspace".to_string(),
             raw_error: err,
         })
+    }
+}
+
+/// Name and value of one variable handed to a build, borrowed from `Build::environment_variables`.
+type BuildVariable<'a> = (&'a str, &'a str);
+
+/// Split the build variables into the values passed as `--build-arg` and the values mounted as
+/// `--secret`.
+///
+/// The Dockerfile decides which is which: a name it declares as an `ARG` becomes a build arg, a
+/// name it mounts as a secret id becomes a secret. A name declared both ways goes to both, because
+/// both consumers are then real. Whether the user flagged the variable as secret plays no part —
+/// see the plan for QOV-2210: gating on it would drop a variable the user can plainly see.
+fn split_build_inputs<'a>(
+    environment_variables: &'a BTreeMap<String, String>,
+    dockerfile_args: &HashSet<String>,
+    secret_mounts: &DockerfileSecretMounts,
+) -> (Vec<BuildVariable<'a>>, Vec<BuildVariable<'a>>) {
+    let mut build_args = Vec::new();
+    let mut secrets = Vec::new();
+
+    for (key, value) in environment_variables {
+        if dockerfile_args.contains(key) {
+            build_args.push((key.as_str(), value.as_str()));
+        }
+        if secret_mounts.ids.contains(key) {
+            secrets.push((key.as_str(), value.as_str()));
+        }
+    }
+
+    (build_args, secrets)
+}
+
+/// Build secret values written to disk so that BuildKit can read them through
+/// `--secret id=<id>,src=<path>`.
+///
+/// The files sit in their own temporary directory, outside the build context: `local_docker` only
+/// writes a `.dockerignore` for the synthesized-Dockerfile path, so a Git build uses the user's and
+/// the context cannot be relied on to exclude anything.
+struct BuildSecretFiles {
+    /// Held only for its `Drop`, which removes the directory and everything in it. `None` when the
+    /// Dockerfile mounts no secret, so that a build without one touches the filesystem exactly as
+    /// it did before build secrets existed.
+    _dir: Option<TempDir>,
+
+    /// Secret id, and the file its value was written to.
+    files: Vec<(String, PathBuf)>,
+}
+
+impl BuildSecretFiles {
+    fn new(service_id: &str, secrets: &[BuildVariable]) -> Result<Self, BuildError> {
+        if secrets.is_empty() {
+            return Ok(BuildSecretFiles {
+                _dir: None,
+                files: Vec::new(),
+            });
+        }
+
+        let io_error = |action_description: &str| {
+            let (service_id, action_description) = (service_id.to_string(), action_description.to_string());
+            move |err: Error| BuildError::IoError {
+                application: service_id.clone(),
+                action_description: action_description.clone(),
+                raw_error: err,
+            }
+        };
+
+        let dir = tempfile::Builder::new()
+            .prefix("qovery-build-secrets-")
+            .tempdir()
+            .map_err(io_error("creating the build secrets directory"))?;
+
+        // tempfile creates the directory with the process umask applied, which is 0755 on a default
+        // macOS and on most Linux images. The 0600 on each file below is what actually protects the
+        // values; narrowing the directory too just keeps the file names from being listed.
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700))
+            .map_err(io_error("restricting the build secrets directory"))?;
+
+        let mut files = Vec::with_capacity(secrets.len());
+        for (index, (id, value)) in secrets.iter().enumerate() {
+            // Named by index rather than by id: the id comes from the Dockerfile, and must not be
+            // able to steer where we write. BuildKit resolves the secret on the flag's `id=`.
+            let path = dir.path().join(format!("secret-{index}"));
+
+            // Created with the mode instead of chmod-ed afterwards, which would leave the value
+            // world-readable for a moment.
+            let mut file = fs::OpenOptions::new()
+                .mode(0o600)
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .map_err(io_error("creating a build secret file"))?;
+
+            // Written verbatim: the build step reads the file bytes as the secret value, so a
+            // trailing newline would end up inside the secret.
+            file.write_all(value.as_bytes())
+                .map_err(io_error("writing a build secret file"))?;
+
+            files.push(((*id).to_string(), path));
+        }
+
+        Ok(BuildSecretFiles { _dir: Some(dir), files })
+    }
+
+    fn as_build_flags(&self) -> Vec<(&str, &Path)> {
+        self.files
+            .iter()
+            .map(|(id, path)| (id.as_str(), path.as_path()))
+            .collect()
     }
 }
 
@@ -990,5 +1139,106 @@ RUN chmod +x entrypoint.sh"#;
             "FROM public.ecr.aws/r3m4q3r9/qovery-ai-runner:0.0.3\nUSER root\nRUN apt-get update && apt-get install -y jq\n"
         );
         assert!(!result.contains(CUSTOM_FRAGMENT_PLACEHOLDER));
+    }
+
+    fn secret_mounts(ids: &[&str]) -> DockerfileSecretMounts {
+        DockerfileSecretMounts {
+            ids: ids.iter().map(|id| id.to_string()).collect(),
+            has_mount_without_id: false,
+        }
+    }
+
+    fn env_vars(vars: &[(&str, &str)]) -> BTreeMap<String, String> {
+        vars.iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn test_split_build_inputs_routes_by_dockerfile_declaration() {
+        let vars = env_vars(&[
+            ("AN_ARG", "arg-value"),
+            ("A_SECRET", "secret-value"),
+            ("UNUSED", "unused-value"),
+        ]);
+
+        let (build_args, secrets) =
+            split_build_inputs(&vars, &HashSet::from(["AN_ARG".to_string()]), &secret_mounts(&["A_SECRET"]));
+
+        assert_eq!(build_args, vec![("AN_ARG", "arg-value")]);
+        assert_eq!(secrets, vec![("A_SECRET", "secret-value")]);
+    }
+
+    #[test]
+    fn test_split_build_inputs_sends_a_name_declared_both_ways_to_both() {
+        let vars = env_vars(&[("BOTH", "value")]);
+
+        let (build_args, secrets) =
+            split_build_inputs(&vars, &HashSet::from(["BOTH".to_string()]), &secret_mounts(&["BOTH"]));
+
+        assert_eq!(build_args, vec![("BOTH", "value")]);
+        assert_eq!(secrets, vec![("BOTH", "value")]);
+    }
+
+    #[test]
+    fn test_split_build_inputs_ignores_an_unmatched_secret_id() {
+        // D4: an id with no matching variable produces no flag at all. BuildKit then fails the step
+        // only if the mount is declared `required=true`.
+        let vars = env_vars(&[("AN_ARG", "arg-value")]);
+
+        let (build_args, secrets) =
+            split_build_inputs(&vars, &HashSet::from(["AN_ARG".to_string()]), &secret_mounts(&["NEVER_SET"]));
+
+        assert_eq!(build_args, vec![("AN_ARG", "arg-value")]);
+        assert!(secrets.is_empty());
+    }
+
+    /// A Dockerfile without a secret mount is the overwhelming majority, and it must not gain a
+    /// filesystem write it did not have before build secrets existed.
+    #[test]
+    fn test_build_secret_files_touches_nothing_when_there_is_no_secret() {
+        let secret_files = BuildSecretFiles::new("my_service_id", &[]).unwrap();
+
+        assert!(secret_files._dir.is_none());
+        assert!(secret_files.as_build_flags().is_empty());
+    }
+
+    #[test]
+    fn test_build_secret_files_writes_the_value_verbatim_and_privately() {
+        let secret_files = BuildSecretFiles::new("my_service_id", &[("NPM_TOKEN", "s3cr3t"), ("OTHER", "")]).unwrap();
+        let flags = secret_files.as_build_flags();
+
+        assert_eq!(flags.len(), 2);
+        assert_eq!(flags[0].0, "NPM_TOKEN");
+        // No trailing newline: the build step reads the file bytes as the secret value.
+        assert_eq!(fs::read(flags[0].1).unwrap(), b"s3cr3t");
+        assert_eq!(fs::read(flags[1].1).unwrap(), b"");
+
+        for (_, path) in &flags {
+            let mode = fs::metadata(path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600, "{path:?} should not be readable by anyone else");
+
+            let dir = path
+                .parent()
+                .expect("a secret file always sits in the secrets directory");
+            let dir_mode = fs::metadata(dir).unwrap().permissions().mode();
+            assert_eq!(dir_mode & 0o777, 0o700, "{dir:?} should not be listable by anyone else");
+        }
+    }
+
+    #[test]
+    fn test_build_secret_files_removes_the_files_when_dropped() {
+        let paths: Vec<PathBuf> = {
+            let secret_files = BuildSecretFiles::new("my_service_id", &[("NPM_TOKEN", "s3cr3t")]).unwrap();
+            secret_files
+                .as_build_flags()
+                .iter()
+                .map(|(_, path)| path.to_path_buf())
+                .collect()
+        };
+
+        for path in paths {
+            assert!(!path.exists(), "{path:?} should have been removed with its directory");
+        }
     }
 }
