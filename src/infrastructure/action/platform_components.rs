@@ -1,5 +1,5 @@
 use super::InfraLogger;
-use super::platform_preflight::run_platform_preflight;
+use super::platform_preflight::{PreparedPlatformUnit, prepare_platform_preflight_plan, run_platform_preflight};
 use super::utils::mk_logger;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::Helm;
@@ -13,8 +13,10 @@ use crate::io_models::container::Registry;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{
     PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction, PlatformPreflightCheckResult,
-    PlatformPreflightRequest, PlatformUnitErrorCode, PlatformUnitResult,
+    PlatformPreflightCheckStatus, PlatformPreflightRequest, PlatformPreflightRequirement, PlatformUnitErrorCode,
+    PlatformUnitResult,
 };
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::path::Path;
@@ -119,30 +121,6 @@ pub fn deploy_platform_components(
         units.len()
     ));
 
-    let (preflight_results, preflight_blocks_execution) = match preflight {
-        Some(preflight_request) => {
-            let outcome = run_platform_preflight(infra_ctx, preflight_request, units);
-            (Some(outcome.results), outcome.blocks_execution)
-        }
-        None => (None, false),
-    };
-    if preflight_blocks_execution {
-        logger.warn("Platform preflight blocked execution before any Helm mutation");
-        let unit_results = units
-            .iter()
-            .map(|unit| PlatformUnitResult::skipped(&unit.key, "PREFLIGHT_FAILED"))
-            .collect();
-        write_platform_execution_result(
-            &logger,
-            &result_logger,
-            result_schema_version,
-            &request.id,
-            unit_results,
-            preflight_results,
-        );
-        return Err(Box::new(EngineError::new_platform_preflight_failed(event_details)));
-    }
-
     // The worker runs inside the customer cluster: use the kubeconfig when the request provided
     // one, otherwise fall back to in-cluster ServiceAccount credentials (no kubeconfig file).
     let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
@@ -171,11 +149,40 @@ pub fn deploy_platform_components(
                 result_schema_version,
                 &request.id,
                 unit_results,
-                preflight_results,
+                None,
             );
             return Err(Box::new(EngineError::new_helm_chart_error(event_details, err.into())));
         }
     };
+
+    let mut prepared_plan = preflight
+        .map(|preflight_request| {
+            prepare_platform_preflight_plan(infra_ctx, &helm, &logger, &event_details, preflight_request, units)
+        })
+        .unwrap_or_default();
+    let (preflight_results, preflight_blocks_execution) = match preflight {
+        Some(preflight_request) => {
+            let outcome = run_platform_preflight(infra_ctx, preflight_request, units, &prepared_plan);
+            (Some(outcome.results), outcome.blocks_execution)
+        }
+        None => (None, false),
+    };
+    if preflight_blocks_execution {
+        logger.warn("Platform preflight blocked execution before any Helm mutation");
+        let unit_results = units
+            .iter()
+            .map(|unit| PlatformUnitResult::skipped(&unit.key, "PREFLIGHT_FAILED"))
+            .collect();
+        write_platform_execution_result(
+            &logger,
+            &result_logger,
+            result_schema_version,
+            &request.id,
+            unit_results,
+            preflight_results,
+        );
+        return Err(Box::new(EngineError::new_platform_preflight_failed(event_details)));
+    }
 
     // Units execute sequentially (one step for Slice 1). After the first failure, remaining
     // units are reported SKIPPED/UPSTREAM_FAILED and never start (docs-v2 step semantics).
@@ -186,7 +193,8 @@ pub fn deploy_platform_components(
             unit_results.push(PlatformUnitResult::skipped(&unit.key, "UPSTREAM_FAILED"));
             continue;
         }
-        match apply_platform_helm_unit(infra_ctx, &helm, &logger, &event_details, unit) {
+        let prepared_unit = prepared_plan.take(&unit.key);
+        match apply_platform_helm_unit(infra_ctx, &helm, &logger, &event_details, unit, prepared_unit) {
             Ok(()) => unit_results.push(PlatformUnitResult::succeeded(&unit.key)),
             Err((code, message, err)) => {
                 unit_results.push(PlatformUnitResult::failed(&unit.key, code, &message));
@@ -322,6 +330,7 @@ fn validate_platform_request(
         ));
     }
 
+    let mut unit_keys = HashSet::with_capacity(units.len());
     for unit in units {
         let unit_error = |code: PlatformUnitErrorCode, message: String| PlatformValidationError {
             code,
@@ -344,6 +353,12 @@ fn validate_platform_request(
                 ),
             ));
         }
+        if !unit_keys.insert(unit.key.as_str()) {
+            return Err(unit_error(
+                PlatformUnitErrorCode::InvalidPayload,
+                format!("platform Helm unit key `{}` is duplicated", unit.key),
+            ));
+        }
         if unit.action != PlatformHelmUnitAction::Create {
             return Err(unit_error(
                 PlatformUnitErrorCode::ForbiddenAction,
@@ -363,6 +378,16 @@ fn validate_platform_request(
             return Err(unit_error(
                 PlatformUnitErrorCode::InvalidPayload,
                 format!("platform Helm unit `{}` has an empty release name", unit.key),
+            ));
+        }
+        if preflight.is_some()
+            && unit
+                .preflight_requirements
+                .contains(&PlatformPreflightRequirement::Unknown)
+        {
+            return Err(unit_error(
+                PlatformUnitErrorCode::InvalidPayload,
+                format!("platform Helm unit `{}` has an unsupported preflight requirement", unit.key),
             ));
         }
         if unit.chart.version.trim().is_empty() || unit.chart.version.trim().eq_ignore_ascii_case("latest") {
@@ -443,6 +468,26 @@ fn write_termination_message_to(
         }
         if let Some(preflight_results) = result.preflight_results.as_mut() {
             for preflight_result in preflight_results {
+                // q-core owns and renders remediation copy; omit the duplicate prose before
+                // sacrificing diagnostic evidence from the worker.
+                preflight_result.remediation.message.clear();
+            }
+        }
+        json = serde_json::to_string(&result).unwrap_or_default();
+    }
+    if json.is_empty() || json.len() > TERMINATION_MESSAGE_MAX_BYTES {
+        if let Some(preflight_results) = result.preflight_results.as_mut() {
+            for preflight_result in preflight_results {
+                if preflight_result.status != PlatformPreflightCheckStatus::Fail {
+                    preflight_result.evidence.clear();
+                }
+            }
+        }
+        json = serde_json::to_string(&result).unwrap_or_default();
+    }
+    if json.is_empty() || json.len() > TERMINATION_MESSAGE_MAX_BYTES {
+        if let Some(preflight_results) = result.preflight_results.as_mut() {
+            for preflight_result in preflight_results {
                 preflight_result.evidence.clear();
             }
         }
@@ -485,19 +530,26 @@ fn apply_platform_helm_unit(
     logger: &impl InfraLogger,
     event_details: &EventDetails,
     unit: &PlatformHelmUnit,
+    prepared: Option<PreparedPlatformUnit>,
 ) -> Result<(), (PlatformUnitErrorCode, String, Box<EngineError>)> {
     logger.info(format!(
         "⚓ Preparing platform Helm unit `{}`: release `{}` in namespace `{}` from {} {} {}",
         unit.key, unit.release_name, unit.namespace, unit.chart.repository, unit.chart.name, unit.chart.version,
     ));
 
-    let chart_dir = download_platform_chart(infra_ctx, helm, logger, event_details, unit)?;
-    let values_file = write_platform_values_to_temporary_file(unit).map_err(|err| {
-        internal_fs_error(
-            event_details,
-            format!("cannot prepare temporary Helm values for platform unit `{}`: {err}", unit.key),
-        )
-    })?;
+    let (chart_dir, values_file) = match prepared {
+        Some(prepared) => (prepared.chart_dir, prepared.values_file),
+        None => {
+            let chart_dir = download_platform_chart(infra_ctx, helm, logger, event_details, unit)?;
+            let values_file = write_platform_values_to_temporary_file(unit).map_err(|err| {
+                internal_fs_error(
+                    event_details,
+                    format!("cannot prepare temporary Helm values for platform unit `{}`: {err}", unit.key),
+                )
+            })?;
+            (chart_dir, values_file)
+        }
+    };
 
     let chart_info = ChartInfo {
         name: unit.release_name.clone(),
@@ -572,7 +624,7 @@ fn apply_platform_helm_unit(
     Ok(())
 }
 
-fn write_platform_values_to_temporary_file(unit: &PlatformHelmUnit) -> std::io::Result<NamedTempFile> {
+pub(super) fn write_platform_values_to_temporary_file(unit: &PlatformHelmUnit) -> std::io::Result<NamedTempFile> {
     let mut values_file = tempfile::Builder::new()
         .prefix("qovery-platform-values-")
         .suffix(".yaml")
@@ -586,7 +638,7 @@ fn write_platform_values_to_temporary_file(unit: &PlatformHelmUnit) -> std::io::
 /// local chart directory the Helm upgrade runs from. Reuses the same Helm-level building blocks
 /// as the Helm service deployment (`deploy_helm_chart.rs`): the https/oci download dispatcher
 /// and the chart dependency build.
-fn download_platform_chart(
+pub(super) fn download_platform_chart(
     infra_ctx: &InfrastructureContext,
     helm: &Helm,
     logger: &impl InfraLogger,
@@ -718,6 +770,7 @@ mod tests {
             },
             values_yaml: "image:\n  tag: \"0.1.0\"\n".to_string(),
             images: vec![],
+            preflight_requirements: Default::default(),
         }
     }
 
@@ -728,6 +781,7 @@ mod tests {
                 id: PlatformPreflightCheckId::KubernetesApiUnreachable,
                 severity: PlatformPreflightCheckSeverity::Mandatory,
             }],
+            qovery_endpoints: Vec::new(),
         }
     }
 
@@ -839,6 +893,30 @@ mod tests {
     }
 
     #[test]
+    fn unknown_preflight_requirement_is_rejected_as_an_invalid_unit() {
+        let mut unit = valid_unit();
+        unit.preflight_requirements
+            .insert(PlatformPreflightRequirement::Unknown);
+
+        let err = validate_create_request(Some("2"), &[unit], Some(&valid_preflight()))
+            .err()
+            .unwrap();
+
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert_eq!(err.unit_key.as_deref(), Some("cluster-agent"));
+        assert!(err.message.contains("unsupported preflight requirement"));
+    }
+
+    #[test]
+    fn unknown_preflight_requirement_is_ignored_when_preflight_is_disabled() {
+        let mut unit = valid_unit();
+        unit.preflight_requirements
+            .insert(PlatformPreflightRequirement::Unknown);
+
+        assert!(validate_create_request(Some("2"), &[unit], None).is_ok());
+    }
+
+    #[test]
     fn non_protected_namespace_is_a_forbidden_action() {
         let mut unit = valid_unit();
         unit.namespace = "kube-system".to_string();
@@ -895,6 +973,19 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_unit_keys_are_rejected_before_chart_preparation() {
+        let units = vec![valid_unit(), valid_unit()];
+
+        let err = validate_create_request(Some("2"), &units, Some(&valid_preflight()))
+            .err()
+            .unwrap();
+
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert_eq!(err.unit_key.as_deref(), Some("cluster-agent"));
+        assert!(err.message.contains("duplicated"));
+    }
+
+    #[test]
     fn termination_message_is_written_as_parseable_json() {
         let path = std::env::temp_dir().join(format!("qovery-termination-test-{}-parseable", std::process::id()));
         let (json, warnings) = write_termination_message_to(
@@ -938,6 +1029,107 @@ mod tests {
         let parsed: PlatformExecutionResult = serde_json::from_str(&written).unwrap();
         assert_eq!(parsed.execution_id, "exec-1");
         assert!(parsed.units.is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn termination_message_preserves_failure_evidence_before_duplicate_remediation_text() {
+        let path =
+            std::env::temp_dir().join(format!("qovery-termination-test-{}-failure-evidence", std::process::id()));
+        let checks = [
+            (
+                PlatformPreflightCheckId::KubernetesApiUnreachable,
+                PlatformPreflightReasonCode::KubernetesApiReachable,
+            ),
+            (
+                PlatformPreflightCheckId::NamespaceTerminating,
+                PlatformPreflightReasonCode::TargetNamespacesAvailable,
+            ),
+            (
+                PlatformPreflightCheckId::RbacInsufficient,
+                PlatformPreflightReasonCode::RbacSufficient,
+            ),
+            (
+                PlatformPreflightCheckId::ClusterDnsUnhealthy,
+                PlatformPreflightReasonCode::ClusterDnsHealthy,
+            ),
+            (
+                PlatformPreflightCheckId::QoveryEndpointUnresolved,
+                PlatformPreflightReasonCode::QoveryEndpointsReachable,
+            ),
+            (
+                PlatformPreflightCheckId::ChartRegistryUnreachable,
+                PlatformPreflightReasonCode::ChartRegistriesReachable,
+            ),
+            (
+                PlatformPreflightCheckId::ContainerRegistryUnreachable,
+                PlatformPreflightReasonCode::ContainerRegistriesReachable,
+            ),
+            (
+                PlatformPreflightCheckId::ReleaseOwnershipConflict,
+                PlatformPreflightReasonCode::ReleasesOwnedByPlan,
+            ),
+            (
+                PlatformPreflightCheckId::CrdOwnershipConflict,
+                PlatformPreflightReasonCode::ClusterResourcesOwnedByPlan,
+            ),
+            (
+                PlatformPreflightCheckId::IncompatibleCertManager,
+                PlatformPreflightReasonCode::CertManagerCompatible,
+            ),
+            (
+                PlatformPreflightCheckId::DefaultStorageClassMissing,
+                PlatformPreflightReasonCode::DefaultStorageClassMissing,
+            ),
+        ];
+        let preflight_results = checks
+            .into_iter()
+            .map(|(id, reason_code)| PlatformPreflightCheckResult {
+                id,
+                status: if id == PlatformPreflightCheckId::DefaultStorageClassMissing {
+                    PlatformPreflightCheckStatus::Fail
+                } else {
+                    PlatformPreflightCheckStatus::Pass
+                },
+                severity: PlatformPreflightCheckSeverity::Advisory,
+                reason_code,
+                evidence: if id == PlatformPreflightCheckId::DefaultStorageClassMissing {
+                    std::collections::BTreeMap::from([("component".to_string(), "loki".to_string())])
+                } else {
+                    std::collections::BTreeMap::new()
+                },
+                remediation: PlatformPreflightRemediation {
+                    key: PlatformPreflightRemediationKey::UpgradeEnginePreflight,
+                    message: "duplicated remediation text that q-core already owns ".repeat(4),
+                },
+            })
+            .collect();
+        let units = (0..10)
+            .map(|index| PlatformUnitResult::succeeded(&format!("platform-unit-{index}")))
+            .collect();
+
+        let (json, warnings) = write_termination_message_to(
+            &path,
+            PREFLIGHT_REQUEST_SCHEMA_VERSION,
+            "exec-1",
+            units,
+            Some(preflight_results),
+        );
+
+        assert!(json.len() <= TERMINATION_MESSAGE_MAX_BYTES);
+        assert!(
+            warnings.is_empty(),
+            "unit/preflight sentinel fallback was not expected: {warnings:?}"
+        );
+        let parsed: PlatformExecutionResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.units.len(), 10);
+        let failure = parsed
+            .preflight_results
+            .unwrap()
+            .into_iter()
+            .find(|result| result.id == PlatformPreflightCheckId::DefaultStorageClassMissing)
+            .unwrap();
+        assert_eq!(failure.evidence.get("component").map(String::as_str), Some("loki"));
         let _ = std::fs::remove_file(&path);
     }
 

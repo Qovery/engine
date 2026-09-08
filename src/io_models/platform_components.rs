@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 /// `PlatformComponentsOnly` means: do not run any cluster infrastructure lifecycle action
 /// (create/pause/delete/restart); apply only the platform Helm units provided in
@@ -25,6 +25,8 @@ pub struct PlatformHelmUnit {
     pub values_yaml: String,
     #[serde(default)]
     pub images: Vec<PlatformImageSnapshot>,
+    #[serde(default)]
+    pub preflight_requirements: BTreeSet<PlatformPreflightRequirement>,
 }
 
 impl std::fmt::Debug for PlatformHelmUnit {
@@ -37,6 +39,7 @@ impl std::fmt::Debug for PlatformHelmUnit {
             .field("chart", &self.chart)
             .field("values_yaml", &"<redacted>")
             .field("images", &self.images)
+            .field("preflight_requirements", &self.preflight_requirements)
             .finish()
     }
 }
@@ -62,6 +65,15 @@ pub struct PlatformImageSnapshot {
     pub key: String,
     pub repository: String,
     pub tag: String,
+}
+
+/// Plan-derived requirement declared by a platform component manifest.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, Ord, PartialEq, PartialOrd, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformPreflightRequirement {
+    DefaultStorageClass,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Controls whether failed mandatory preflight checks are only reported or also block Helm.
@@ -112,11 +124,20 @@ pub struct PlatformPreflightCheckRequest {
     pub severity: PlatformPreflightCheckSeverity,
 }
 
+/// A named, non-secret Qovery endpoint that must be reachable from the worker.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct PlatformPreflightEndpoint {
+    pub key: String,
+    pub url: String,
+}
+
 /// In-cluster preflight instructions carried by Engine v2 request schema 2.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct PlatformPreflightRequest {
     pub mode: PlatformPreflightMode,
     pub checks: Vec<PlatformPreflightCheckRequest>,
+    #[serde(default)]
+    pub qovery_endpoints: Vec<PlatformPreflightEndpoint>,
 }
 
 /// Structural errors that make a preflight request unsafe to execute.
@@ -181,6 +202,35 @@ pub enum PlatformPreflightReasonCode {
     NamespaceAccessForbidden,
     NamespaceStateUnavailable,
     TargetNamespacesAvailable,
+    RbacSufficient,
+    RbacInsufficient,
+    RbacStateUnavailable,
+    ClusterDnsHealthy,
+    ClusterDnsUnhealthy,
+    ClusterDnsStateUnavailable,
+    QoveryEndpointsReachable,
+    QoveryEndpointUnreachable,
+    QoveryEndpointNotConfigured,
+    ChartRegistriesReachable,
+    ChartRegistryUnreachable,
+    ChartRegistryStateUnavailable,
+    ContainerRegistriesReachable,
+    ContainerRegistryUnreachable,
+    ContainerRegistryNotConfigured,
+    ReleasesOwnedByPlan,
+    ReleaseOwnershipConflict,
+    ReleaseStateUnavailable,
+    ReleaseInventoryTooLarge,
+    ClusterResourcesOwnedByPlan,
+    CrdOwnershipConflict,
+    ClusterResourceStateUnavailable,
+    CertManagerCompatible,
+    IncompatibleCertManager,
+    CertManagerNotPlanned,
+    DefaultStorageClassAvailable,
+    DefaultStorageClassMissing,
+    DefaultStorageClassNotRequired,
+    StorageClassStateUnavailable,
     CheckNotImplemented,
     UnknownCheckId,
 }
@@ -203,6 +253,8 @@ pub enum PlatformPreflightRemediationKey {
     RestoreAcmeConnectivity,
     RestoreDnsProviderConnectivity,
     ConfigureDefaultStorageClass,
+    RetryPreflightCheck,
+    ReportReleaseInventoryLimit,
     UpgradeEnginePreflight,
 }
 
@@ -210,6 +262,7 @@ pub enum PlatformPreflightRemediationKey {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct PlatformPreflightRemediation {
     pub key: PlatformPreflightRemediationKey,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,
 }
 
@@ -356,6 +409,20 @@ mod tests {
     }
 
     #[test]
+    fn unknown_preflight_requirement_maps_to_unknown_for_structured_validation() {
+        let json = Q_CORE_UNIT_JSON.replace(
+            "\n    }",
+            ",\n        \"preflight_requirements\": [\"FUTURE_REQUIREMENT\"]\n    }",
+        );
+        let unit: PlatformHelmUnit = serde_json::from_str(&json).unwrap();
+
+        assert!(
+            unit.preflight_requirements
+                .contains(&PlatformPreflightRequirement::Unknown)
+        );
+    }
+
+    #[test]
     fn debug_redacts_values_yaml() {
         let unit: PlatformHelmUnit = serde_json::from_str(Q_CORE_UNIT_JSON).unwrap();
         let debug = format!("{unit:?}");
@@ -428,6 +495,7 @@ mod tests {
                     severity: PlatformPreflightCheckSeverity::Mandatory,
                 },
             ],
+            qovery_endpoints: Vec::new(),
         };
         assert_eq!(
             duplicated.validate(),
