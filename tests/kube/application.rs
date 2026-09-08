@@ -229,7 +229,7 @@ fn should_have_mounted_files_as_volume() {
         // Use an app crashing in case file doesn't exists
         application.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
         application.branch = "app-crashing-if-file-doesnt-exist".to_string();
-        application.commit_id = "44b889f36c81cce7dee678993bb7986c86899e5d".to_string();
+        application.commit_id = "7e86c06be6c985a41d14e720843b62e67eb110e2".to_string();
         application.ports = vec![];
         application.mounted_files = vec![mounted_file];
         application.readiness_probe = None;
