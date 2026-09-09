@@ -340,6 +340,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             provisioning_mode: Default::default(),
             blueprint_db_hostname: None,
             blueprint_db_identifier: None,
+            blueprint_owns_external_name: false,
         }];
         environment.applications = environment
             .applications

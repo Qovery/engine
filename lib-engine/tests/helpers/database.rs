@@ -499,6 +499,7 @@ pub fn environment_3_apps_3_databases(
                 provisioning_mode: Default::default(),
                 blueprint_db_hostname: None,
                 blueprint_db_identifier: None,
+                blueprint_owns_external_name: false,
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -532,6 +533,7 @@ pub fn environment_3_apps_3_databases(
                 provisioning_mode: Default::default(),
                 blueprint_db_hostname: None,
                 blueprint_db_identifier: None,
+                blueprint_owns_external_name: false,
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -565,6 +567,7 @@ pub fn environment_3_apps_3_databases(
                 provisioning_mode: Default::default(),
                 blueprint_db_hostname: None,
                 blueprint_db_identifier: None,
+                blueprint_owns_external_name: false,
             },
         ],
         helms: vec![],
@@ -838,6 +841,7 @@ pub fn test_db(
         provisioning_mode: Default::default(),
         blueprint_db_hostname: None,
         blueprint_db_identifier: None,
+        blueprint_owns_external_name: false,
     };
 
     environment.databases = vec![db.clone()];
@@ -1268,6 +1272,7 @@ pub fn test_pause_managed_db(
         provisioning_mode: Default::default(),
         blueprint_db_hostname: None,
         blueprint_db_identifier: None,
+        blueprint_owns_external_name: false,
     };
 
     environment.databases = vec![db];
@@ -1608,6 +1613,7 @@ pub fn test_db_on_upgrade(
         provisioning_mode: Default::default(),
         blueprint_db_hostname: None,
         blueprint_db_identifier: None,
+        blueprint_owns_external_name: false,
     };
 
     environment.databases = vec![db];

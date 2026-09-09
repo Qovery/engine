@@ -13,7 +13,7 @@ use crate::environment::report::terraform_service::reporter::TerraformServiceDep
 use crate::environment::report::{DeploymentTaskMut, execute_long_deployment};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::helm::{ChartInfo, HelmChartNamespaces};
+use crate::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::runtime::block_on;
@@ -56,6 +56,7 @@ where
                 let task_ctx = self
                     .deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.take())?
                     .0;
+                deploy_managed_db_external_name(self, target, &event_details)?;
                 Ok(task_ctx)
             },
         );
@@ -102,6 +103,7 @@ where
                     let helm = self.delete_job_and_cleanup(target, &event_details)?;
                     // Uninstall helm release
                     helm.on_delete(target)?;
+                    delete_managed_db_external_name(self, target, &event_details)?;
                     // Drop the sender to signal no pod will be sent
                     drop(pod_tx.take());
                     Ok(state)
@@ -114,6 +116,7 @@ where
                     let (task, helm) =
                         self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.take())?;
                     helm.on_delete(target)?;
+                    delete_managed_db_external_name(self, target, &event_details)?;
                     Ok(task)
                 },
             )
@@ -426,4 +429,122 @@ where
             service_eso_secret_names,
         );
     })
+}
+
+/// Publishes the ExternalName a blueprint-adopted managed database used to own, so consumers keep
+/// resolving the legacy in-cluster name once the `database` service is gone. No-op for every other
+/// terraform service. The release name matches the one the database deployment used, so this updates
+/// that release instead of racing a second one.
+fn deploy_managed_db_external_name<T: CloudProvider>(
+    terraform: &TerraformService<T>,
+    target: &DeploymentTarget,
+    event_details: &EventDetails,
+) -> Result<(), Box<EngineError>>
+where
+    TerraformService<T>: ToTeraContext,
+{
+    let Some(connectivity) = &terraform.managed_db_connectivity else {
+        return Ok(());
+    };
+
+    // A plan-only run is a read: publishing here would write to the cluster the user asked us to
+    // inspect. A noop has nothing to publish either.
+    if !matches!(
+        terraform.terraform_action,
+        TerraformAction::TerraformPlanAndApply | TerraformAction::TerraformApplyFromPlan { .. }
+    ) {
+        return Ok(());
+    }
+
+    let mut tera_context = tera::Context::new();
+    tera_context.insert("publicly_accessible", &connectivity.publicly_accessible);
+
+    let values = vec![
+        ChartSetValue {
+            key: "target_hostname".to_string(),
+            value: connectivity.target_hostname.to_string(),
+        },
+        ChartSetValue {
+            key: "source_fqdn".to_string(),
+            value: connectivity.source_fqdn.to_string(),
+        },
+        ChartSetValue {
+            key: "service_name".to_string(),
+            value: connectivity.service_name.to_string(),
+        },
+        ChartSetValue {
+            key: "database_id".to_string(),
+            value: connectivity.database_id.to_string(),
+        },
+        ChartSetValue {
+            key: "database_long_id".to_string(),
+            value: connectivity.database_long_id.to_string(),
+        },
+        ChartSetValue {
+            key: "environment_id".to_string(),
+            value: target.environment.id.to_string(),
+        },
+        ChartSetValue {
+            key: "environment_long_id".to_string(),
+            value: target.environment.long_id.to_string(),
+        },
+        ChartSetValue {
+            key: "project_long_id".to_string(),
+            value: target.environment.project_long_id.to_string(),
+        },
+        ChartSetValue {
+            key: "publicly_accessible".to_string(),
+            value: connectivity.publicly_accessible.to_string(),
+        },
+    ];
+
+    let chart = ChartInfo {
+        name: format!("{}-externalname", connectivity.service_name),
+        path: format!("{}/external-name-svc", terraform.workspace_directory()),
+        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+        values,
+        ..Default::default()
+    };
+
+    HelmDeployment::new(
+        event_details.clone(),
+        tera_context,
+        PathBuf::from(terraform.helm_chart_external_name_service_dir()),
+        None,
+        chart,
+    )
+    .on_create(target)
+}
+
+/// Removes the ExternalName this service published for an adopted managed database. Without it the
+/// Service outlives the RDS its terraform just destroyed, and a public DNS record keeps pointing at
+/// a host that no longer exists.
+fn delete_managed_db_external_name<T: CloudProvider>(
+    terraform: &TerraformService<T>,
+    target: &DeploymentTarget,
+    event_details: &EventDetails,
+) -> Result<(), Box<EngineError>>
+where
+    TerraformService<T>: ToTeraContext,
+{
+    let Some(connectivity) = &terraform.managed_db_connectivity else {
+        return Ok(());
+    };
+
+    let chart = ChartInfo {
+        name: format!("{}-externalname", connectivity.service_name),
+        path: format!("{}/external-name-svc", terraform.workspace_directory()),
+        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+        action: HelmAction::Destroy,
+        ..Default::default()
+    };
+
+    HelmDeployment::new(
+        event_details.clone(),
+        tera::Context::default(),
+        PathBuf::from(terraform.helm_chart_external_name_service_dir()),
+        None,
+        chart,
+    )
+    .on_delete(target)
 }

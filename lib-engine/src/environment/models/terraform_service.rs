@@ -19,6 +19,7 @@ use crate::io_models::models::ExternalSecret;
 use crate::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
+use crate::io_models::terraform::ManagedDbConnectivity;
 use crate::io_models::terraform::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::{sanitize_k8s_label_value, to_short_id};
@@ -72,6 +73,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) lib_root_directory: String,
     pub(crate) terraform_credentials: TerraformCredentials,
     pub(crate) external_secrets: Vec<ExternalSecretGroup>,
+    pub(crate) managed_db_connectivity: Option<ManagedDbConnectivity>,
     pub(crate) aws_apn_id: AwsApnId,
 }
 
@@ -104,6 +106,7 @@ impl<T: CloudProvider> TerraformService<T> {
         labels_groups: Vec<LabelsGroup>,
         terraform_credentials: TerraformCredentials,
         external_secrets: BTreeMap<String, ExternalSecret>,
+        managed_db_connectivity: Option<ManagedDbConnectivity>,
     ) -> Result<Self, TerraformServiceError> {
         let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.clone()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
@@ -152,6 +155,7 @@ impl<T: CloudProvider> TerraformService<T> {
             lib_root_directory: context.lib_root_dir().to_string(),
             terraform_credentials,
             external_secrets,
+            managed_db_connectivity,
             aws_apn_id: context.aws_apn_id().clone(),
         })
     }
@@ -188,6 +192,10 @@ impl<T: CloudProvider> TerraformService<T> {
 
     pub fn startup_timeout(&self) -> Duration {
         Duration::from_secs(5 * 60)
+    }
+
+    pub fn helm_chart_external_name_service_dir(&self) -> String {
+        format!("{}/common/charts/external-name-svc", self.lib_root_directory)
     }
 
     pub fn helm_chart_dir(&self) -> String {
