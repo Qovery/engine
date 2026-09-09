@@ -9,6 +9,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{ClusterAnalysisStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::fs::workspace_directory;
 use crate::infrastructure::models::kubernetes;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{
     AnalysisOutputFormat, ClusterAnalysisEngineRequest, ClusterAnalysisRequest, CostRecommendationRequest,
@@ -36,7 +37,7 @@ const QOVERY_OBS_THANOS_QUERY_PORT: u16 = 9090;
 pub struct ClusterAnalysisTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
     engine_version: DeployedEngineVersion,
     docker: Arc<Docker>,
     request: ClusterAnalysisEngineRequest,
@@ -53,7 +54,7 @@ impl ClusterAnalysisTask {
         request: ClusterAnalysisEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
         engine_version: DeployedEngineVersion,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,

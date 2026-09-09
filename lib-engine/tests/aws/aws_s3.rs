@@ -6,6 +6,7 @@ use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::object_storage::s3::S3;
 use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
+use qovery_engine::io_models::aws_apn_id::AwsApnId;
 use retry::delay::Fixed;
 use std::str::FromStr;
 use std::thread;
@@ -33,7 +34,13 @@ fn test_delete_hard_strategy_bucket() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
+        let aws_os = S3::new(
+            id.to_string(),
+            name,
+            credentials,
+            aws_region.clone(),
+            AwsApnId::from("pc:test-apn-id"),
+        );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -91,7 +98,13 @@ fn test_delete_empty_strategy_bucket() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
+        let aws_os = S3::new(
+            id.to_string(),
+            name,
+            credentials,
+            aws_region.clone(),
+            AwsApnId::from("pc:test-apn-id"),
+        );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -143,7 +156,13 @@ fn test_create_bucket() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
+        let aws_os = S3::new(
+            id.to_string(),
+            name,
+            credentials,
+            aws_region.clone(),
+            AwsApnId::from("pc:test-apn-id"),
+        );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -198,7 +217,13 @@ fn test_get_bucket() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
+        let aws_os = S3::new(
+            id.to_string(),
+            name,
+            credentials,
+            aws_region.clone(),
+            AwsApnId::from("pc:test-apn-id"),
+        );
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -248,7 +273,7 @@ fn test_recreate_bucket() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region, AwsApnId::from("pc:test-apn-id"));
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -325,7 +350,7 @@ fn test_put_file() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region, AwsApnId::from("pc:test-apn-id"));
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());
@@ -388,7 +413,7 @@ fn test_get_file() {
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
         let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region, AwsApnId::from("pc:test-apn-id"));
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());

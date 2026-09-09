@@ -1,7 +1,7 @@
 use crate::{
     constants::AWS_APN_ID_TAG_KEY,
     infrastructure::models::{cloud_provider::io::AwsAlbLoadBalancerScheme, load_balancer::InteractWithLoadBalancer},
-    io_models::QoveryIdentifier,
+    io_models::{QoveryIdentifier, aws_apn_id::AwsApnId},
 };
 use ipnet::IpNet;
 use itertools::Itertools;
@@ -71,13 +71,12 @@ pub struct AwsAlbLoadBalancer {
     pub load_balancer_scheme: AwsAlbLoadBalancerScheme,
     // Pleco TTL tag for the gateway NLB. None preserves the absence of ttl when pleco.resources_ttl is -1.
     pub resource_ttl: Option<Duration>,
-    // AWS Partner Network identifier tagged on the gateway NLB for the AWS Marketplace listing (engine-global, from Context)
-    pub aws_apn_id: String,
+    pub aws_apn_id: AwsApnId,
 }
 
 impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
     fn annotations(&self) -> Option<HashMap<String, String>> {
-        let apn_id = self.aws_apn_id.as_str();
+        let apn_id = self.aws_apn_id.tag_value();
         let mut additional_resource_tags = vec![
             format!("OrganizationLongId={}", self.organization_id),
             format!("OrganizationId={}", self.organization_id.short()),
@@ -224,7 +223,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations();
@@ -243,7 +242,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -300,7 +299,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::Internal,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -322,7 +321,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: Some(Duration::from_secs(0)),
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -354,7 +353,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -381,7 +380,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -403,7 +402,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -426,7 +425,7 @@ mod tests {
             .unwrap(),
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let annotations = lb.annotations().unwrap();

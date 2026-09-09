@@ -18,6 +18,7 @@ use crate::infrastructure::models::container_registry::errors::ContainerRegistry
 use crate::infrastructure::models::container_registry::{InteractWithRegistry, RegistryTags, to_engine_error};
 use crate::io_models::Action;
 use crate::io_models::agentic_workflow::AgenticWorkflow;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{CloudProviderOptions, EnvironmentEngineRequest};
 use crate::log_file_writer::LogFileWriter;
@@ -46,7 +47,7 @@ pub struct DeploymentOption {
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
     engine_version: DeployedEngineVersion,
     docker: Arc<Docker>,
     request: EnvironmentEngineRequest,
@@ -65,7 +66,7 @@ impl EnvironmentTask {
         workspace_root_dir: String,
         engine_version: DeployedEngineVersion,
         lib_root_dir: String,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,

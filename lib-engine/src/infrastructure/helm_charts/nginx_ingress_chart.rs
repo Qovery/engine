@@ -19,6 +19,7 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::kubernetes::Kind::EksAnywhere;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use reqwest::StatusCode;
@@ -118,7 +119,7 @@ pub struct NginxIngressChart {
     organization_short_id: String,
     cluster_long_id: String,
     cluster_short_id: String,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
     kubernetes_kind: KubernetesKind,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     nginx_controller_default_replicas: u32,
@@ -188,7 +189,7 @@ impl NginxIngressChart {
         organization_short_id: String,
         cluster_long_id: String,
         cluster_short_id: String,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
         kubernetes_kind: KubernetesKind,
         created_cluster_date: DateTime<Utc>,
         options: NginxOptions,
@@ -479,7 +480,7 @@ defaultBackend:
             Kind::Aws => {
                 // there is no LB deployed for EC2
                 if self.kubernetes_kind == KubernetesKind::Eks {
-                    let apn_id = self.aws_apn_id.as_str();
+                    let apn_id = self.aws_apn_id.tag_value();
                     // common config
                     chart_set_values.push(ChartSetValue {
                         key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-healthcheck-interval"
@@ -687,6 +688,7 @@ mod tests {
     };
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+    use crate::io_models::aws_apn_id::AwsApnId;
     use crate::io_models::models::CustomerHelmChartsOverride;
     use chrono::TimeZone;
     use chrono::Utc;
@@ -723,7 +725,7 @@ mod tests {
             "z00000000".to_string(),
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
-            "not-set".to_string(),
+            AwsApnId::unset(),
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
@@ -788,7 +790,7 @@ mod tests {
             "z00000000".to_string(),
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
-            "not-set".to_string(),
+            AwsApnId::unset(),
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
@@ -855,7 +857,7 @@ mod tests {
                 "z00000000".to_string(),
                 "10000000-0000-4000-8000-000000000000".to_string(),
                 "z10000000".to_string(),
-                "not-set".to_string(),
+                AwsApnId::unset(),
                 KubernetesKind::Eks,
                 Utc::now(),
                 NginxOptions {
@@ -928,7 +930,7 @@ mod tests {
             "z00000000".to_string(),
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
-            "not-set".to_string(),
+            AwsApnId::unset(),
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {

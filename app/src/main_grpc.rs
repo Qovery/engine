@@ -54,6 +54,7 @@ use qovery_engine::events::{
 use qovery_engine::git_initialize_opts;
 use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::QoveryIdentifier;
+use qovery_engine::io_models::aws_apn_id::AwsApnId;
 use qovery_engine::io_models::engine_request::{
     BlueprintEngineRequest, ClusterAnalysisEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
 };
@@ -91,7 +92,7 @@ fn to_engine_task(
     msg: String,
     workspace_root_dir: &str,
     lib_root_dir: &str,
-    aws_apn_id: &str,
+    aws_apn_id: &AwsApnId,
     deployed_engine_version: &DeployedEngineVersion,
     mk_docker: Box<dyn Fn() -> Arc<Docker>>,
     task_selector: &TaskSelector,
@@ -112,7 +113,7 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    aws_apn_id.to_string(),
+                    aws_apn_id.clone(),
                     deployed_engine_version.clone(),
                     mk_docker(),
                     logger,
@@ -131,7 +132,7 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    aws_apn_id.to_string(),
+                    aws_apn_id.clone(),
                     deployed_engine_version.clone(),
                     // We need to clone docker to generate a new docker config for each task
                     mk_docker(),
@@ -152,7 +153,7 @@ fn to_engine_task(
                     workspace_root_dir.to_string(),
                     deployed_engine_version.clone(),
                     lib_root_dir.to_string(),
-                    aws_apn_id.to_string(),
+                    aws_apn_id.clone(),
                     // We need to clone docker to generate a new docker config for each task
                     mk_docker(),
                     logger,
@@ -171,7 +172,7 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    aws_apn_id.to_string(),
+                    aws_apn_id.clone(),
                     deployed_engine_version.clone(),
                     mk_docker(),
                     logger,
@@ -248,8 +249,8 @@ struct Cli {
     lib_root_dir: String,
 
     /// AWS Partner Network (APN) identifier tagged on every AWS resource for the AWS Marketplace listing
-    #[arg(long, default_value = "not-set", env = "QOVERY_AWS_APN_ID")]
-    aws_apn_id: String,
+    #[arg(long, env = "QOVERY_AWS_APN_ID")]
+    aws_apn_id: Option<String>,
 
     /// Cluster id (uuid) of the cluster where the engine is running
     #[arg(long, env = "CLUSTER_ID")]
@@ -280,6 +281,7 @@ pub fn main() -> io::Result<()> {
     // Load env variable from .env file
     dotenv().ok();
     let mut cli: Cli = Cli::parse();
+    let aws_apn_id = AwsApnId::new(cli.aws_apn_id.take());
     cli.grpc_server = if !cli.grpc_server.starts_with("http") {
         format!("https://{}", cli.grpc_server)
     } else {
@@ -348,6 +350,7 @@ pub fn main() -> io::Result<()> {
     );
     info!("lib root dir: {}/", cli.lib_root_dir.as_str());
     info!("workspace root dir: {}", cli.workspace_root_dir.as_str());
+    aws_apn_id.warn_if_unset();
 
     match check_libs_directory(cli.lib_root_dir.clone()) {
         Ok(_) => info!("Libs directory is not empty"),
@@ -462,7 +465,7 @@ pub fn main() -> io::Result<()> {
                 payload,
                 &cli.workspace_root_dir,
                 &cli.lib_root_dir,
-                &cli.aws_apn_id,
+                &aws_apn_id,
                 &deployed_engine_version,
                 {
                     let docker = docker.clone();

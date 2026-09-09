@@ -45,6 +45,7 @@ use crate::infrastructure::models::load_balancer::azure_load_balancer::{
     AzureLoadBalancer, AzureLoadBalancerIpAllocationId,
 };
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
@@ -306,7 +307,7 @@ pub(super) fn aks_helm_charts(
             chart_config_prerequisites.organization_id.clone(),
             chart_config_prerequisites.cluster_long_id.to_string(),
             chart_config_prerequisites.cluster_id.clone(),
-            "not-set".to_string(),
+            AwsApnId::unset(),
             KubernetesKind::Aks,
             chart_config_prerequisites.cluster_creation_date,
             NginxOptions {

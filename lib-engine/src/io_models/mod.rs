@@ -16,6 +16,7 @@ use uuid::Uuid;
 pub mod agentic_workflow;
 pub mod annotations_group;
 pub mod application;
+pub mod aws_apn_id;
 mod azure;
 pub mod blueprint;
 pub mod container;

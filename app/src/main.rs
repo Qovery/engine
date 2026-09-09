@@ -28,6 +28,7 @@ use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, S
 use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::infrastructure::task::InfrastructureTask;
+use qovery_engine::io_models::aws_apn_id::AwsApnId;
 use qovery_engine::io_models::engine_request::{
     BlueprintEngineRequest, ClusterAnalysisEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
 };
@@ -84,7 +85,7 @@ pub fn main() -> io::Result<()> {
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let test_cluster_env_var = env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
-    let aws_apn_id = env::var("QOVERY_AWS_APN_ID").unwrap_or_else(|_| "not-set".to_string());
+    let aws_apn_id = AwsApnId::new(env::var(AwsApnId::ENV_VAR).ok());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir =
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
@@ -100,6 +101,7 @@ pub fn main() -> io::Result<()> {
     );
     info!("lib root dir: {}/", lib_root_dir.as_str());
     info!("workspace root dir: {}", workspace_root_dir.as_str());
+    aws_apn_id.warn_if_unset();
 
     match check_libs_directory(lib_root_dir.clone()) {
         Ok(_) => info!("Libs directory is not empty"),
@@ -212,7 +214,7 @@ pub fn using_json_path_parameter(
     deploy_from_file: String,
     workspace_root_dir: String,
     lib_root_dir: String,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
     test_cluster: bool,
     deployment_type: TaskSelector,
     docker: Arc<Docker>,

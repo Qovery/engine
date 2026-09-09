@@ -14,6 +14,7 @@ use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::Action;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{BlueprintEngineRequest, CloudProviderOptions};
 use crate::log_file_writer::LogFileWriter;
@@ -30,7 +31,7 @@ use tokio::sync::broadcast;
 pub struct BlueprintTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
     engine_version: DeployedEngineVersion,
 
     docker: Arc<Docker>,
@@ -49,7 +50,7 @@ impl BlueprintTask {
         request: BlueprintEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
         engine_version: DeployedEngineVersion,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,

@@ -12,6 +12,7 @@ use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind};
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use crate::io_models::annotations_group::AnnotationsGroup;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::ExternalSecret;
@@ -71,7 +72,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) lib_root_directory: String,
     pub(crate) terraform_credentials: TerraformCredentials,
     pub(crate) external_secrets: Vec<ExternalSecretGroup>,
-    pub(crate) aws_apn_id: String,
+    pub(crate) aws_apn_id: AwsApnId,
 }
 
 impl<T: CloudProvider> TerraformService<T> {
@@ -151,7 +152,7 @@ impl<T: CloudProvider> TerraformService<T> {
             lib_root_directory: context.lib_root_dir().to_string(),
             terraform_credentials,
             external_secrets,
-            aws_apn_id: context.aws_apn_id().to_string(),
+            aws_apn_id: context.aws_apn_id().clone(),
         })
     }
 
@@ -216,7 +217,7 @@ impl<T: CloudProvider> TerraformService<T> {
 
         // aws-apn-id is AWS-specific (Marketplace measurement) — only inject on AWS.
         if target.cloud_provider.kind() == Kind::Aws {
-            environment_variables.push(qovery_tf_var("TF_VAR_qovery_aws_apn_id", &self.aws_apn_id));
+            environment_variables.push(qovery_tf_var("TF_VAR_qovery_aws_apn_id", self.aws_apn_id.tag_value()));
         }
 
         let (image_full, image_name, image_tag) = match &self.terraform_files_source {
