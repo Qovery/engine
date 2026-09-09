@@ -15,6 +15,7 @@ use rusoto_ecr::{
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use super::RegistryTags;
+use crate::constants::AWS_APN_ID_TAG_KEY;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
@@ -219,6 +220,12 @@ impl ECR {
                 value: Some(duration.as_secs().to_string()),
             })
         };
+        // AWS Partner Network identifier, required by AWS to measure Qovery-managed resources for the AWS
+        // Marketplace listing. ECR repositories are created through the SDK, they inherit no terraform tag.
+        tags.push(Tag {
+            key: Some(AWS_APN_ID_TAG_KEY.to_string()),
+            value: Some(self.context.aws_apn_id().tag_value().to_string()),
+        });
         let crr = CreateRepositoryRequest {
             repository_name: repository_name.to_string(),
             tags: Some(tags),
@@ -307,26 +314,7 @@ impl ECR {
                     }?;
 
                     if let Some(repository_arn) = &repos[0].repository_arn {
-                        let mut ecr_tags: Vec<Tag> = vec![];
-                        for (key, value) in &self.tags {
-                            ecr_tags.push(Tag {
-                                key: Some(key.to_string()),
-                                value: Some(value.to_string()),
-                            })
-                        }
-                        let trr = TagResourceRequest {
-                            resource_arn: repository_arn.to_string(),
-                            tags: ecr_tags,
-                        };
-
-                        match block_on_with_timeout(self.ecr_client().tag_resource(trr)) {
-                            Err(err) => Err(ContainerRegistryError::CannotSetRepositoryTags {
-                                registry_name: self.name.to_string(),
-                                repository_name: repository_name.to_string(),
-                                raw_error_message: err.to_string(),
-                            }),
-                            _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
-                        }?;
+                        self.tag_repository(repository_arn, repository_name)?;
                     }
 
                     // return the created repo via get
@@ -340,6 +328,62 @@ impl ECR {
         }
     }
 
+    /// The `Repository` returned by `get_repository` is registry-agnostic and carries no ARN, so fetch it here.
+    fn get_repository_arn(&self, repository_name: &str) -> Option<String> {
+        let drr = DescribeRepositoriesRequest {
+            repository_names: Some(vec![repository_name.to_string()]),
+            ..Default::default()
+        };
+
+        match block_on_with_timeout(self.ecr_client().describe_repositories(drr)) {
+            Ok(Ok(res)) => res
+                .repositories
+                .and_then(|repositories| repositories.into_iter().next())
+                .and_then(|repository| repository.repository_arn),
+            _ => None,
+        }
+    }
+
+    /// Applies the registry tags plus the mandatory `aws-apn-id` on a repository.
+    /// ECR rejects a TagResource request holding the same key twice, so a user-provided `aws-apn-id` is dropped
+    /// rather than sent alongside ours.
+    fn tag_repository(&self, repository_arn: &str, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        let mut ecr_tags: Vec<Tag> = self
+            .tags
+            .iter()
+            .filter(|(key, _)| key.as_str() != AWS_APN_ID_TAG_KEY)
+            .map(|(key, value)| Tag {
+                key: Some(key.to_string()),
+                value: Some(value.to_string()),
+            })
+            .collect();
+        // AWS Partner Network identifier, required by AWS to measure Qovery-managed resources for the AWS
+        // Marketplace listing. Added last so a user tag cannot override it.
+        ecr_tags.push(Tag {
+            key: Some(AWS_APN_ID_TAG_KEY.to_string()),
+            value: Some(self.context.aws_apn_id().tag_value().to_string()),
+        });
+
+        let trr = TagResourceRequest {
+            resource_arn: repository_arn.to_string(),
+            tags: ecr_tags,
+        };
+
+        // `block_on_with_timeout` nests the errors: the outer one is the timeout, the inner one is what AWS
+        // answered. Both have to be matched, a wildcard arm would report a rejected TagResource as a success.
+        let error_message = match block_on_with_timeout(self.ecr_client().tag_resource(trr)) {
+            Ok(Ok(_)) => return Ok(()),
+            Ok(Err(err)) => err.to_string(),
+            Err(err) => err.to_string(),
+        };
+
+        Err(ContainerRegistryError::CannotSetRepositoryTags {
+            registry_name: self.name.to_string(),
+            repository_name: repository_name.to_string(),
+            raw_error_message: error_message,
+        })
+    }
+
     fn get_or_create_repository(
         &self,
         repository_name: &str,
@@ -348,6 +392,19 @@ impl ECR {
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         // check if the repository already exists
         if let Ok(repository) = self.get_repository(repository_name) {
+            // An existing repository is never re-created, so this is the only place where its tags can be
+            // refreshed. Tagging failures are logged and not propagated: the repository is usable as is, and a
+            // missing tag must not break a deployment that would otherwise succeed.
+            match self.get_repository_arn(repository_name) {
+                Some(repository_arn) => {
+                    if let Err(e) = self.tag_repository(&repository_arn, repository_name) {
+                        warn!("Cannot refresh tags on the existing ECR repository {repository_name}: {e}");
+                    }
+                }
+                None => {
+                    warn!("Cannot get the ARN of the existing ECR repository {repository_name}, tags not refreshed")
+                }
+            }
             return Ok((repository, RepositoryInfo { created: false }));
         }
 

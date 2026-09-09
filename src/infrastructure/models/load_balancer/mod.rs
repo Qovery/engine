@@ -48,7 +48,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
         let lb = LoadBalancer::AwsAlb(aws_lb);
 
@@ -111,7 +111,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         };
 
         let trait_obj: &dyn InteractWithLoadBalancer = &aws_lb;
@@ -131,7 +131,7 @@ mod tests {
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             resource_ttl: None,
-            aws_apn_id: "pc:test-apn".to_string(),
+            aws_apn_id: "pc:test-apn".into(),
         });
         let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {
             load_balancer_ip_allocations: None,

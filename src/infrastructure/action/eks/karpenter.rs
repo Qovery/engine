@@ -777,6 +777,7 @@ impl Karpenter {
             )?,
             kubernetes.advanced_settings().pleco_resources_ttl,
             options.resource_tags.clone(),
+            kubernetes.context.aws_apn_id().clone(),
         )
         .to_common_helm_chart()
         .map_err(|el| {

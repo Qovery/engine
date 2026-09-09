@@ -1,3 +1,4 @@
+use crate::constants::AWS_APN_ID_TAG_KEY;
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::domain::ToHelmString;
 use crate::errors::CommandError;
@@ -15,6 +16,7 @@ use crate::infrastructure::models::kubernetes::karpenter::{
     KarpenterNodePoolDisruptionBudget, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
     KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
 };
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use itertools::Itertools;
 use kube::Client;
@@ -41,6 +43,7 @@ pub struct KarpenterConfigurationChart {
     aws_storage_type: AwsStorageType,
     pleco_resources_ttl: i32,
     resource_tags: HashMap<String, String>,
+    aws_apn_id: AwsApnId,
 }
 
 impl KarpenterConfigurationChart {
@@ -62,6 +65,7 @@ impl KarpenterConfigurationChart {
         aws_storage_type: AwsStorageType,
         pleco_resources_ttl: i32,
         resource_tags: HashMap<String, String>,
+        aws_apn_id: AwsApnId,
     ) -> Self {
         KarpenterConfigurationChart {
             chart_path: HelmChartPath::new(
@@ -133,6 +137,7 @@ impl KarpenterConfigurationChart {
             aws_storage_type,
             pleco_resources_ttl,
             resource_tags,
+            aws_apn_id,
         }
     }
 
@@ -349,6 +354,13 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             ChartSetValue {
                 key: "tags.Region".to_string(),
                 value: self.region.clone(),
+            },
+            // AWS Partner Network identifier, required by AWS to measure Qovery-managed resources for the AWS
+            // Marketplace listing. Karpenter propagates these tags to the EC2 instances, EBS volumes and ENIs it
+            // creates, which do not inherit the terraform `tags_common` of the cluster.
+            ChartSetValue {
+                key: format!("tags.{AWS_APN_ID_TAG_KEY}"),
+                value: self.aws_apn_id.tag_value().to_string(),
             },
         ]);
 
@@ -729,6 +741,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::cmd::helm::Helm;
+    use crate::constants::AWS_APN_ID_TAG_KEY;
     use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -745,6 +758,7 @@ mod tests {
         KarpenterRequirementOperator, KarpenterStableNodePoolOverride,
     };
     use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+    use crate::io_models::aws_apn_id::AwsApnId;
     use crate::io_models::models::CpuArchitecture::ARM64;
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode};
 
@@ -1311,6 +1325,45 @@ mod tests {
         metadata: Metadata,
     }
 
+    /// Makes sure the AWS APN id is tagged on the resources Karpenter provisions (EC2 instances, EBS volumes, ENIs),
+    /// which do not inherit the terraform `tags_common` of the cluster.
+    #[test]
+    fn karpenter_configuration_chart_aws_apn_id_tag_test() {
+        // setup:
+        let chart = create_chart(
+            KUBERNETES_VERSION,
+            true,
+            KarpenterNodePool {
+                requirements: vec![],
+                stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: None,
+                    budgets: vec![],
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                },
+                default_override: None,
+                gpu_override: None,
+                cronjob_override: None,
+                default_public_override: None,
+                default_private_override: None,
+            },
+        );
+
+        // execute:
+        let common_chart = chart
+            .to_common_helm_chart()
+            .expect("Karpenter configuration chart should be generated");
+
+        // verify:
+        let apn_tag = common_chart
+            .chart_info
+            .values
+            .iter()
+            .find(|v| v.key == format!("tags.{AWS_APN_ID_TAG_KEY}"))
+            .expect("`aws-apn-id` should be set in the karpenter configuration tags");
+        assert_eq!(apn_tag.value, "pc:test-apn-id");
+    }
+
     fn create_chart(
         kubernetes_version: KubernetesVersion,
         with_spot: bool,
@@ -1342,6 +1395,7 @@ mod tests {
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
+            AwsApnId::from("pc:test-apn-id"),
         )
     }
 
@@ -1561,6 +1615,7 @@ mod tests {
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
+            AwsApnId::from("pc:test-apn-id"),
         );
 
         // verify:
@@ -1656,6 +1711,7 @@ mod tests {
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
+            AwsApnId::from("pc:test-apn-id"),
         );
 
         // verify:
@@ -1752,6 +1808,7 @@ mod tests {
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
+            AwsApnId::from("pc:test-apn-id"),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -1966,6 +2023,7 @@ mod tests {
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
+            AwsApnId::from("pc:test-apn-id"),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");

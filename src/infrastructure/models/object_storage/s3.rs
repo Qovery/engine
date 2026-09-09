@@ -7,8 +7,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
+use crate::constants::AWS_APN_ID_TAG_KEY;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
+use crate::io_models::aws_apn_id::AwsApnId;
+use rusoto_core::{Client, HttpClient, Region as RusotoRegion, RusotoError};
 use rusoto_s3::{
     BucketLoggingStatus, CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest,
     DeleteObjectRequest, DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketLoggingRequest,
@@ -30,15 +32,69 @@ pub struct S3 {
     name: String,
     credentials: AwsCredentials,
     region: AwsRegion,
+    aws_apn_id: AwsApnId,
 }
 
 impl S3 {
-    pub fn new(id: String, name: String, credentials: AwsCredentials, region: AwsRegion) -> Self {
+    pub fn new(id: String, name: String, credentials: AwsCredentials, region: AwsRegion, aws_apn_id: AwsApnId) -> Self {
         S3 {
             id,
             name,
             credentials,
             region,
+            aws_apn_id,
+        }
+    }
+
+    /// Adds the mandatory `aws-apn-id` tag to a bucket that already exists.
+    ///
+    /// `PutBucketTagging` replaces the whole tag set instead of merging into it, so the current tags are read first
+    /// and the mandatory one is added to them. `get_bucket` cannot serve that read: it collapses every
+    /// `GetBucketTagging` error into `labels: None`, which does not tell an untagged bucket apart from one whose
+    /// tags could not be read. Writing over the second would wipe `CreationDate`, `Ttl` and any user tag.
+    ///
+    /// Failures are logged and not propagated: the bucket is usable as is, and a tag refresh must not break a
+    /// deployment that would otherwise succeed.
+    fn refresh_aws_apn_id_tag(&self, bucket_name: &str) {
+        let s3_client = self.get_s3_client();
+
+        let current_tags = match block_on(s3_client.get_bucket_tagging(GetBucketTaggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            Ok(tagging) => tagging.tag_set,
+            // A bucket carrying no tag at all answers NoSuchTagSet, which is an empty tag set, not a read failure.
+            // `GetBucketTaggingError` is an empty enum in rusoto, so it surfaces as an unparsed response.
+            Err(RusotoError::Unknown(response)) if response.body_as_str().contains("NoSuchTagSet") => vec![],
+            Err(e) => {
+                warn!("Cannot read the tags of bucket `{bucket_name}`, `{AWS_APN_ID_TAG_KEY}` was not refreshed: {e}");
+                return;
+            }
+        };
+
+        if current_tags
+            .iter()
+            .any(|tag| tag.key == AWS_APN_ID_TAG_KEY && tag.value == self.aws_apn_id.tag_value())
+        {
+            return;
+        }
+
+        let mut tag_set: Vec<Tag> = current_tags
+            .into_iter()
+            .filter(|tag| tag.key != AWS_APN_ID_TAG_KEY)
+            .collect();
+        tag_set.push(Tag {
+            key: AWS_APN_ID_TAG_KEY.to_string(),
+            value: self.aws_apn_id.tag_value().to_string(),
+        });
+
+        if let Err(e) = block_on(s3_client.put_bucket_tagging(PutBucketTaggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+            tagging: Tagging { tag_set },
+            ..Default::default()
+        })) {
+            warn!("Cannot refresh `{AWS_APN_ID_TAG_KEY}` on bucket `{bucket_name}`: {e}");
         }
     }
 
@@ -177,6 +233,9 @@ impl ObjectStorage for S3 {
 
         // check if bucket already exists, if so, no need to recreate it
         if let Ok(existing_bucket) = self.get_bucket(bucket_name) {
+            // A bucket is never re-created, so this is the only place where the tags of an existing one can be
+            // refreshed.
+            self.refresh_aws_apn_id_tag(bucket_name);
             return Ok(existing_bucket);
         }
 
@@ -206,6 +265,12 @@ impl ObjectStorage for S3 {
                     Tag {
                         key: "Ttl".to_string(),
                         value: format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+                    },
+                    // AWS Partner Network identifier, required by AWS to measure Qovery-managed resources for the
+                    // AWS Marketplace listing. Buckets are created through the SDK, they inherit no terraform tag.
+                    Tag {
+                        key: AWS_APN_ID_TAG_KEY.to_string(),
+                        value: self.aws_apn_id.tag_value().to_string(),
                     },
                 ],
             },

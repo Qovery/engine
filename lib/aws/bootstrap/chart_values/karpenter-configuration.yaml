@@ -22,6 +22,7 @@ tags:
   OrganizationId: set-by-engine-code
   OrganizationLongId: set-by-engine-code
   Region: set-by-engine-code
+  aws-apn-id: set-by-engine-code
 
 global_node_pools: {}
 

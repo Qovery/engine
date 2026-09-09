@@ -3,6 +3,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::events::{EventDetails, Transmitter};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::platform_components::{ExecutionMode, PlatformHelmUnit, PlatformPreflightRequest};
 use crate::utilities::to_short_id;
 use rand::Rng;
@@ -27,8 +28,8 @@ pub struct Context {
     metadata: Option<Metadata>,
     // skipReconcile: skip the pre-destroy reconcile/apply and be tolerant of already-absent resources.
     skip_reconcile: bool,
-    // AWS Partner Network identifier tagged on AWS resources for the AWS Marketplace listing (engine-global, read at startup).
-    aws_apn_id: String,
+    // Engine-global, read at startup.
+    aws_apn_id: AwsApnId,
     pub docker: Arc<Docker>,
     pub qovery_api: Arc<dyn QoveryApi>,
     event_details: EventDetails,
@@ -45,7 +46,7 @@ impl Context {
         test_cluster: bool,
         features: Vec<Features>,
         metadata: Option<Metadata>,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
         docker: Arc<Docker>,
         qovery_api: Arc<dyn QoveryApi>,
         event_details: EventDetails,
@@ -71,10 +72,8 @@ impl Context {
         }
     }
 
-    /// AWS Partner Network identifier tagged on every AWS resource for the AWS Marketplace listing.
-    /// Read once from the `QOVERY_AWS_APN_ID` env var at startup; "not-set" when the variable is absent.
-    pub fn aws_apn_id(&self) -> &str {
-        self.aws_apn_id.as_str()
+    pub fn aws_apn_id(&self) -> &AwsApnId {
+        &self.aws_apn_id
     }
 
     pub fn organization_short_id(&self) -> &str {

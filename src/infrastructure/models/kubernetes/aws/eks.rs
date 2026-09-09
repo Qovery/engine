@@ -79,7 +79,13 @@ impl EKS {
             .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
             .aws_credentials()
             .clone();
-        let s3 = S3::new("s3-temp-id".to_string(), "default-s3".to_string(), creds, region.clone());
+        let s3 = S3::new(
+            "s3-temp-id".to_string(),
+            "default-s3".to_string(),
+            creds,
+            region.clone(),
+            context.aws_apn_id().clone(),
+        );
 
         let cluster = EKS {
             context,

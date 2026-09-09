@@ -55,8 +55,7 @@ pub fn eks_tera_context(
     // Insert custom resource tags for AWS resources
     context.insert("resource_tags", &options.resource_tags);
 
-    // AWS APN id tagged on every AWS resource for the AWS Marketplace listing (engine-global, carried via Context)
-    context.insert("aws_apn_id", kubernetes.context().aws_apn_id());
+    context.insert("aws_apn_id", kubernetes.context().aws_apn_id().tag_value());
 
     context.insert("user_provided_network", &false);
     if let Some(user_network_cfg) = &options.user_provided_network {

@@ -212,6 +212,7 @@ fn install_karpenter_charts(
         aws_storage_type,
         kubernetes.advanced_settings.pleco_resources_ttl,
         kubernetes.options.resource_tags.clone(),
+        kubernetes.context.aws_apn_id().clone(),
     )
     .to_common_helm_chart()
     .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;

@@ -53,6 +53,7 @@ use qovery_engine::infrastructure::models::cloud_provider::aws::database_instanc
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::infrastructure::models::kubernetes::aws::AwsStorageType;
 use qovery_engine::io_models::QoveryIdentifier;
+use qovery_engine::io_models::aws_apn_id::AwsApnId;
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -150,7 +151,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         true,
         enabled_features,
         Option::from(metadata),
-        "not-set".to_string(),
+        AwsApnId::unset(),
         Arc::new(docker),
         Arc::new(StaticQoveryApi { versions }),
         EventDetails::new(

@@ -7,6 +7,7 @@ use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::platform_components::{deploy_platform_components, fail_unknown_execution_mode};
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::ExecutionMode;
@@ -21,7 +22,7 @@ use tokio::sync::broadcast;
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
     engine_version: DeployedEngineVersion,
     docker: Arc<Docker>,
     request: InfrastructureEngineRequest,
@@ -38,7 +39,7 @@ impl InfrastructureTask {
         request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
         engine_version: DeployedEngineVersion,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,

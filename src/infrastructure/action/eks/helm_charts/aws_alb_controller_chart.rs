@@ -7,6 +7,7 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartReplicaType, HelmChartResources,
     HelmChartResourcesConstraintType, HelmChartValuesFilePath, HelmChartVpaType, ToCommonHelmChart, ToHelmChartValue,
 };
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 pub struct AwsLoadBalancerControllerChart {
@@ -19,7 +20,7 @@ pub struct AwsLoadBalancerControllerChart {
     aws_alb_controller_role_arn: String,
     cluster_name: String,
     enable_mutator_webhook: bool,
-    aws_apn_id: String,
+    aws_apn_id: AwsApnId,
 }
 
 impl AwsLoadBalancerControllerChart {
@@ -32,7 +33,7 @@ impl AwsLoadBalancerControllerChart {
         chart_vpa: HelmChartVpaType,
         // https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.5/deploy/installation/
         enable_mutator_webhook: bool,
-        aws_apn_id: String,
+        aws_apn_id: AwsApnId,
     ) -> Self {
         Self {
             chart_path: HelmChartPath::new(
@@ -117,7 +118,7 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                     // AWS APN id tagged on every AWS resource provisioned by the controller (NLBs, target groups, security groups)
                     ChartSetValue {
                         key: "defaultTags.aws-apn-id".to_string(),
-                        value: self.aws_apn_id.clone(),
+                        value: self.aws_apn_id.to_string(),
                     },
                 ],
                 // Chart ships cert-manager CRs (enableCertManager: true): patching them requires the
@@ -209,7 +210,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
-            "not-set".to_string(),
+            AwsApnId::unset(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -244,7 +245,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
-            "not-set".to_string(),
+            AwsApnId::unset(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -280,7 +281,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
-            "not-set".to_string(),
+            AwsApnId::unset(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -318,7 +319,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
-            "not-set".to_string(),
+            AwsApnId::unset(),
         );
 
         // execute:

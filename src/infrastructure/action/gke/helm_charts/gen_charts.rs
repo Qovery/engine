@@ -46,6 +46,7 @@ use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::load_balancer::LoadBalancer;
 use crate::infrastructure::models::load_balancer::gcp_load_balancer::{GcpLoadBalancer, GcpLoadBalancerIpAllocation};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
@@ -337,7 +338,7 @@ pub(super) fn gke_helm_charts(
             chart_config_prerequisites.organization_id.clone(),
             chart_config_prerequisites.cluster_long_id.to_string(),
             chart_config_prerequisites.cluster_id.clone(),
-            "not-set".to_string(),
+            AwsApnId::unset(),
             KubernetesKind::Gke,
             chart_config_prerequisites.cluster_creation_date,
             NginxOptions {

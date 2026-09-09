@@ -47,6 +47,7 @@ use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::Qover
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::aws_apn_id::AwsApnId;
 // use crate::io_models::metrics::MetricsConfiguration;
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
@@ -386,7 +387,7 @@ pub fn kapsule_helm_charts(
             chart_config_prerequisites.organization_id.clone(),
             chart_config_prerequisites.cluster_long_id.to_string(),
             chart_config_prerequisites.cluster_id.clone(),
-            "not-set".to_string(),
+            AwsApnId::unset(),
             KubernetesKind::ScwKapsule,
             chart_config_prerequisites.cluster_creation_date,
             NginxOptions {

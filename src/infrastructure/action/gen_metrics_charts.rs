@@ -438,6 +438,7 @@ mod tests {
     use crate::infrastructure::models::kubernetes::aws::Options;
     use crate::infrastructure::models::kubernetes::gcp::VpcMode;
     use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
+    use crate::io_models::aws_apn_id::AwsApnId;
     use crate::io_models::engine_location::EngineLocation;
     use crate::io_models::models::{StorageClass, VpcQoveryNetworkMode};
     use maplit::hashmap;
@@ -631,7 +632,7 @@ mod tests {
             organization_long_id: Default::default(),
             cluster_id: String::new(),
             cluster_long_id: Default::default(),
-            aws_apn_id: "not-set".to_string(),
+            aws_apn_id: AwsApnId::unset(),
             cluster_creation_date: Default::default(),
             region: AwsRegion::UsEast1,
             kubernetes_version: KUBERNETES_VERSION,
