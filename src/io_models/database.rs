@@ -78,6 +78,11 @@ pub struct Database {
     // blueprint's terraform output; the engine stops/starts it on pause/resume.
     #[serde(default)]
     pub blueprint_db_identifier: Option<String>,
+    // The blueprint's terraform service publishes the ExternalName instead of this database service.
+    // One helm release, one owner: publishing from both races, and tearing it down here would delete
+    // connectivity the blueprint still owns.
+    #[serde(default)]
+    pub blueprint_owns_external_name: bool,
     #[serde(default)] // => false if not present in input
     pub apply_immediately: bool,
     #[serde(default)]
@@ -114,6 +119,7 @@ impl Database {
             provisioning_mode: self.provisioning_mode.clone(),
             blueprint_db_hostname: self.blueprint_db_hostname.clone(),
             blueprint_db_identifier: self.blueprint_db_identifier.clone(),
+            blueprint_owns_external_name: self.blueprint_owns_external_name,
         };
 
         let annotations_groups = self
@@ -988,4 +994,5 @@ pub struct DatabaseOptions {
     pub provisioning_mode: DatabaseProvisioningMode,
     pub blueprint_db_hostname: Option<String>,
     pub blueprint_db_identifier: Option<String>,
+    pub blueprint_owns_external_name: bool,
 }

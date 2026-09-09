@@ -346,6 +346,12 @@ where
         );
     }
 
+    // One helm release, one owner. Publishing from here too would race the blueprint's terraform
+    // service for the same release, and can overwrite a fresh endpoint with the payload's older one.
+    if db.options.blueprint_owns_external_name {
+        return Ok(());
+    }
+
     // Deploy the external service name
     let values = vec![
         ChartSetValue {
@@ -712,6 +718,11 @@ where
                 // the instance; only tear down the engine-owned connectivity (the ExternalName). The
                 // blueprint's own deletion drops the database.
                 if matches!(self.options.provisioning_mode, DatabaseProvisioningMode::BLUEPRINT) {
+                    // The blueprint publishes it and outlives this service, so uninstalling here would
+                    // strip connectivity from a database that is still running.
+                    if self.options.blueprint_owns_external_name {
+                        return Ok(());
+                    }
                     let workspace_dir = self.workspace_directory();
                     let chart = ChartInfo {
                         name: format!("{}-externalname", self.fqdn_id),

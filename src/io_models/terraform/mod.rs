@@ -212,6 +212,21 @@ pub struct TerraformService {
     /// Key is the environment variable name / k8s Secret key.
     #[serde(default)]
     pub external_secrets: BTreeMap<String, ExternalSecret>,
+    #[serde(default)]
+    pub managed_db_connectivity: Option<ManagedDbConnectivity>,
+}
+
+/// Set only for a blueprint that adopted a managed database, so its terraform service owns the
+/// ExternalName the database service used to publish. Carries the legacy identifiers: consumers
+/// resolve the old DNS name and selectors match on the old labels.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct ManagedDbConnectivity {
+    pub service_name: String,
+    pub target_hostname: String,
+    pub source_fqdn: String,
+    pub publicly_accessible: bool,
+    pub database_id: String,
+    pub database_long_id: Uuid,
 }
 
 impl TerraformService {
@@ -271,6 +286,7 @@ impl TerraformService {
         let terraform_credentials_domain = self.get_terraform_credentials_domain()?;
 
         let external_secrets = self.external_secrets;
+        let managed_db_connectivity = self.managed_db_connectivity;
 
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged | Kind::EksAnywhere => {
@@ -302,6 +318,7 @@ impl TerraformService {
                     labels_groups,
                     terraform_credentials_domain,
                     external_secrets.clone(),
+                    managed_db_connectivity.clone(),
                 )?)
             }
             Kind::ScwKapsule | Kind::ScwSelfManaged => {
@@ -333,6 +350,7 @@ impl TerraformService {
                     labels_groups,
                     terraform_credentials_domain,
                     external_secrets.clone(),
+                    managed_db_connectivity.clone(),
                 )?)
             }
             Kind::Gke | Kind::GkeSelfManaged => Box::new(models::terraform_service::TerraformService::<GCP>::new(
@@ -363,6 +381,7 @@ impl TerraformService {
                 labels_groups,
                 terraform_credentials_domain,
                 external_secrets.clone(),
+                managed_db_connectivity.clone(),
             )?),
             Kind::Aks | Kind::AksSelfManaged => Box::new(models::terraform_service::TerraformService::<Azure>::new(
                 context,
@@ -392,6 +411,7 @@ impl TerraformService {
                 labels_groups,
                 terraform_credentials_domain,
                 external_secrets.clone(),
+                managed_db_connectivity.clone(),
             )?),
             Kind::OnPremiseSelfManaged => Box::new(models::terraform_service::TerraformService::<OnPremise>::new(
                 context,
@@ -421,6 +441,7 @@ impl TerraformService {
                 labels_groups,
                 terraform_credentials_domain,
                 external_secrets.clone(),
+                managed_db_connectivity.clone(),
             )?),
         };
 
@@ -755,6 +776,7 @@ mod tests {
             timeout_sec: 600,
             environment_vars_with_infos: BTreeMap::new(),
             external_secrets: BTreeMap::new(),
+            managed_db_connectivity: None,
             advanced_settings: TerraformServiceAdvancedSettings::default(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),

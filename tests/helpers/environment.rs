@@ -318,6 +318,7 @@ pub fn environment_2_app_2_routers_1_psql(
             provisioning_mode: Default::default(),
             blueprint_db_hostname: None,
             blueprint_db_identifier: None,
+            blueprint_owns_external_name: false,
         }],
         applications: vec![
             Application {

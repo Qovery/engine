@@ -94,6 +94,7 @@ impl TerraformServiceTestBuilder {
             timeout_sec: 300,
             environment_vars_with_infos: self.environment_vars_with_infos.clone(),
             external_secrets: BTreeMap::new(),
+            managed_db_connectivity: None,
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
