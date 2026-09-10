@@ -1,0 +1,42 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+amends "backend.pkl"
+
+import "../contract.pkl"
+import "patterns.pkl"
+
+// AWS S3 through IRSA: the customer supplies the bucket and the IAM role Loki assumes; q-core
+// supplies the region when compiling.
+local awsRegion = "infra.awsRegion"
+
+local role: contract.LogicalInput = new {
+  key = "infra.lokiRoleArn"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "Loki IAM role ARN"
+  description = "IAM role assumed by Loki through IRSA."
+  constraints = new { pattern = "^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+$" }
+}
+
+option {
+  value = "s3"
+  provider = "AWS"
+  inputs = List(bucket, role)
+  compileInputs = List(awsRegion)
+}
+
+objectStoreId = "s3"
+
+bucket = new {
+  key = "infra.s3BucketName"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "S3 bucket name"
+  description = "Bucket used by Loki for chunks, ruler and admin data."
+  constraints = new { pattern = patterns.dnsCompatibleBucket }
+}
+
+storageConfig = (scope) -> Pair("s3", new Mapping { ["region"] = scope.inputs[awsRegion] })
+
+serviceAccount = (scope) -> new Mapping {
+  ["annotations"] = new Mapping { ["eks.amazonaws.com/role-arn"] = scope.inputs[role.key] }
+}

@@ -1,0 +1,20 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.highAvailability.dependencies
+
+import "../sdk/rules.pkl" as sdkRules
+import "../storage/setting.pkl" as storageSetting
+import "setting.pkl"
+
+// Simple-scalable mode shares chunks between writers and readers, which only object storage can
+// provide. The storage choice is read through its declaration: a backend that is not an object
+// store fails this rule whatever its name. An unknown choice is reported by storage itself.
+rules: List<sdkRules.Rule> = List(
+  new sdkRules.FieldRule {
+    code = "HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE"
+    fieldPath = "highAvailability"
+    message = "Loki high availability requires object storage"
+    violated = (scope) ->
+      let (backend = storageSetting.selectedBackend(scope))
+        setting.enabled(scope) && backend != null && !backend.isObjectStorage
+  },
+)

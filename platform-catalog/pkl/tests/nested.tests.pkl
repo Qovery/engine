@@ -1,0 +1,202 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/evaluate.pkl"
+import "../sdk/request.pkl"
+import "../sdk/settings.pkl"
+
+// Structured settings: an object member with a mode-dependent field, and a list of rows. Exercises
+// what the SDK derives from nested declarations: descriptors per row, defaults at every level,
+// indexed violations, unknown member names, and the active-value projection.
+
+local endpoint: settings.ObjectSetting = new {
+  key = "endpoint"
+  label = "Endpoint"
+  fields = List(
+    new settings.EnumSetting {
+      key = "mode"
+      label = "Mode"
+      default = "public"
+      options = List("public", "private").map((name) -> new settings.Option { value = name })
+    },
+    new settings.StringSetting {
+      key = "vpcId"
+      label = "VPC"
+      required = true
+      pattern = "vpc-[0-9a-f]+"
+      activeWhen = (scope) -> scope.config["mode"] == "private"
+    },
+  )
+}
+
+local firewallRules: settings.ArraySetting = new {
+  key = "rules"
+  label = "Rules"
+  maxItems = 2
+  items = new settings.ObjectSetting {
+    key = "rule"
+    label = "Rule"
+    fields = List(
+      new settings.StringSetting { key = "name"; label = "Name"; required = true; minLength = 1 },
+      new settings.IntSetting { key = "port"; label = "Port"; default = 80; min = 1; max = 65535 },
+    )
+  }
+}
+
+local tags: settings.ArraySetting = new {
+  key = "tags"
+  label = "Tags"
+  uniqueItems = true
+  items = new settings.StringSetting { key = "tag"; label = "Tag"; pattern = "[a-z]+" }
+}
+
+// Built outside the Feature body, where `settings` would resolve to the feature's own property.
+local projection = (scope) -> new Mapping {
+  ["endpoint"] = settings.activeValue(endpoint, scope.config["endpoint"], scope)
+  ["rules"] = settings.activeValue(firewallRules, scope.config["rules"], scope)
+}
+
+local component: evaluate.Component = new {
+  label = "Demo"
+  features = List(new evaluate.Feature {
+    settings = List(endpoint, firewallRules, tags)
+    rules = List()
+    fragment = projection
+  })
+}
+
+local function run(operation: contract.Operation, draft: Mapping): contract.EvaluationResult =
+  evaluate.evaluate(component, request.build(operation, draft, null, new Mapping {}, List()))
+
+local function codes(result: contract.EvaluationResult): List<String> = result.violations.map((violation) -> violation.code)
+local function paths(result: contract.EvaluationResult): List<String> = result.violations.map((violation) -> violation.fieldPath)
+
+local privateDraft = new Mapping {
+  ["endpoint"] = new Mapping { ["mode"] = "private"; ["vpcId"] = "vpc-123" }
+  ["rules"] = new Listing { new Mapping { ["name"] = "web" }; new Mapping { ["name"] = "api"; ["port"] = 8080 } }
+}
+
+local describeEmpty = run(contract.describeOperation, new Mapping {})
+local describePrivate = run(contract.describeOperation, privateDraft)
+
+facts {
+  ["an object member is described on its own values"] {
+    (describeEmpty.fields[0] as contract.ObjectField).fields.map((field) -> field.key) == List("mode")
+    (describePrivate.fields[0] as contract.ObjectField).fields.map((field) -> field.key) == List("mode", "vpcId")
+    (describePrivate.fields[0] as contract.ObjectField).fields[1].required
+  }
+
+  ["rows carry the prototype and one descriptor list per current row"] {
+    ((describeEmpty.fields[1] as contract.ArrayField).items as contract.ObjectItem).fields.map((field) -> field.key)
+      == List("name", "port")
+    (describeEmpty.fields[1] as contract.ArrayField).itemFields == List()
+    (describePrivate.fields[1] as contract.ArrayField).itemFields!!.length == 2
+    (describeEmpty.fields[1] as contract.ArrayField).constraints.maxItems == 2
+    ((describeEmpty.fields[2] as contract.ArrayField).items as contract.ScalarItem).constraints.pattern == "[a-z]+"
+    (describeEmpty.fields[2] as contract.ArrayField).itemFields == null
+  }
+
+  ["defaults apply at every level and inactive branches are dropped from the compiled projection"] {
+    run(contract.compileOperation, new Mapping {}).helmValues
+      == new Mapping { ["endpoint"] = new Mapping { ["mode"] = "public" }; ["rules"] = new Listing {} }
+    run(contract.compileOperation, privateDraft).helmValues
+      == new Mapping {
+        ["endpoint"] = new Mapping { ["mode"] = "private"; ["vpcId"] = "vpc-123" }
+        ["rules"] = new Listing {
+          new Mapping { ["name"] = "web"; ["port"] = 80 }
+          new Mapping { ["name"] = "api"; ["port"] = 8080 }
+        }
+      }
+    // The public mode keeps an unfinished private draft without validating or compiling it.
+    run(contract.compileOperation, new Mapping { ["endpoint"] = new Mapping { ["vpcId"] = 12 } }).violations.isEmpty
+  }
+
+  ["an optional member without a default stays absent from the projection"] {
+    let (
+      labelled =
+        (firewallRules) {
+          items = new settings.ObjectSetting {
+            key = "rule"
+            label = "Rule"
+            fields = List(
+              new settings.StringSetting { key = "name"; label = "Name"; required = true },
+              new settings.StringSetting { key = "team"; label = "Team" },
+            )
+          }
+        }
+    )
+    let (scope = settings.scope(settings.resolve(List(labelled), new Mapping { ["rules"] = new Listing { new Mapping { ["name"] = "web" } } }), null, new Mapping {}, List()))
+      settings.activeValue(labelled, scope.config["rules"], scope)
+        == new Listing { new Mapping { ["name"] = "web" } }
+  }
+
+  ["violations carry indexed paths and follow the declaration order"] {
+    let (
+      result =
+        run(contract.validateOperation, new Mapping {
+          ["endpoint"] = new Mapping { ["mode"] = "private"; ["vpcId"] = "bad"; ["typo"] = true }
+          ["rules"] = new Listing {
+            new Mapping { ["name"] = "" }
+            new Mapping { ["port"] = 70000 }
+            new Mapping { ["name"] = "extra" }
+          }
+          ["tags"] = new Listing { "ok"; "ok"; "NOT" }
+        })
+    )
+      paths(result)
+        == List(
+          "endpoint.typo",
+          "endpoint.vpcId",
+          "rules",
+          "rules[0].name",
+          "rules[1].name",
+          "rules[1].port",
+          "tags",
+          "tags[2]",
+        )
+        && codes(result)
+          == List(
+            "UNKNOWN_FIELD",
+            "INPUT_PATTERN_MISMATCH",
+            "LENGTH_OUT_OF_RANGE",
+            "LENGTH_OUT_OF_RANGE",
+            "REQUIRED_FIELD_MISSING",
+            "VALUE_OUT_OF_RANGE",
+            "DUPLICATE_ITEM",
+            "INPUT_PATTERN_MISMATCH",
+          )
+        && result.violations[0].message == "Demo does not define configuration field typo"
+        && result.violations[2].message == "Demo rules must contain at most 2 items"
+  }
+
+  ["a nested setting cannot carry what only the top level enforces"] {
+    module.catch(() ->
+      new settings.ObjectSetting {
+        key = "o"
+        label = "O"
+        fields = List(new settings.EnumSetting {
+          key = "mode"
+          label = "Mode"
+          options = List(new settings.Option { value = "a"; provider = "AWS" })
+          availability = List(new settings.Availability { accepts = (_, _) -> true; code = "X"; message = (_, _) -> "x" })
+        })
+      }.fields
+    ).contains("Nested setting mode cannot declare")
+    module.catch(() ->
+      new settings.ArraySetting { key = "a"; label = "A"; items = new settings.StringSetting { key = "s"; label = "S"; sensitive = true } }.items
+    ).contains("Nested setting s cannot declare")
+  }
+
+  ["an explicit null or a wrong shape is a type violation, an absent object gets its defaults"] {
+    codes(run(contract.validateOperation, new Mapping { ["endpoint"] = null })) == List("INVALID_TYPE")
+    codes(run(contract.validateOperation, new Mapping { ["rules"] = "none" })) == List("INVALID_TYPE")
+    paths(run(contract.validateOperation, new Mapping { ["rules"] = new Listing { 1 } })) == List("rules[0]")
+    run(contract.validateOperation, new Mapping {}).violations.isEmpty
+  }
+
+  ["a required member of a present private endpoint is reported when saving only"] {
+    codes(run(contract.validateOperation, new Mapping { ["endpoint"] = new Mapping { ["mode"] = "private" } }))
+      == List("REQUIRED_FIELD_MISSING")
+    run(contract.resolveRequirementsOperation, new Mapping { ["endpoint"] = new Mapping { ["mode"] = "private" } }).violations.isEmpty
+  }
+}

@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.retentionWeeks.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
+
+// Loki expects a duration; the product deliberately exposes easier-to-understand weeks.
+fragment: sdkHelm.Fragment = (scope) ->
+  let (weeks = setting.setting.value(scope) as Int)
+    new Mapping {
+      ["loki"] = new Mapping {
+        ["limits_config"] = new Mapping { ["retention_period"] = "\(weeks * 168)h" }
+      }
+    }

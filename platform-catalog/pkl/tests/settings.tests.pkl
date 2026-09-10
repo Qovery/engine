@@ -1,0 +1,125 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/settings.pkl"
+
+local retention: settings.IntSetting = new {
+  key = "retentionWeeks"
+  label = "Retention"
+  default = 12
+  min = 1
+  max = 52
+}
+
+local seeded: settings.IntSetting = new {
+  key = "cpuMilli"
+  label = "CPU"
+  suggested = 300
+  min = 1
+  max = 64000
+  requiredWhen = (scope) -> scope.config["mode"] == "CUSTOM"
+  requiredCode = "REQUIRED_RESOURCE_REQUEST_MISSING"
+  requiredMessage = "cpuMilli is required in CUSTOM mode"
+}
+
+local flag: settings.BoolSetting = new { key = "flag"; label = "Flag"; default = false }
+
+local mode: settings.EnumSetting = new {
+  key = "mode"
+  label = "Mode"
+  default = "pvc"
+  options = List(
+    new settings.Option { value = "pvc" },
+    new settings.Option { value = "s3"; provider = "AWS" },
+    new settings.Option { value = "gcs"; provider = "GCP" },
+  )
+  availability = List(new settings.Availability {
+    accepts = (option, scope) -> option.provider == null || option.provider == scope.cluster.provider
+    code = "PROVIDER_MISMATCH"
+    message = (option, scope) -> "\(option.value) needs \(option.provider), got \(scope.cluster.provider)"
+  })
+}
+
+local all = List(retention, seeded, flag, mode)
+local function scopeOf(config: Mapping, clusterContext: Mapping?): settings.Scope =
+  settings.scope(config, clusterContext, new Mapping {}, List())
+local noContext = scopeOf(new Mapping {}, null)
+local aws = scopeOf(new Mapping {}, new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" })
+local custom = scopeOf(new Mapping { ["mode"] = "CUSTOM" }, null)
+local pvc = scopeOf(new Mapping { ["mode"] = "pvc" }, null)
+
+facts {
+  ["resolve applies defaults, keeps well-typed values and nulls ill-typed ones"] {
+    settings.resolve(all, new Mapping {})
+      == new Mapping { ["retentionWeeks"] = 12; ["cpuMilli"] = null; ["flag"] = false; ["mode"] = "pvc" }
+    settings.resolve(all, new Mapping { ["retentionWeeks"] = 4; ["flag"] = true })["retentionWeeks"] == 4
+    settings.resolve(all, new Mapping { ["retentionWeeks"] = "4" })["retentionWeeks"] == null
+    settings.resolve(all, new Mapping { ["retentionWeeks"] = 4.5 })["retentionWeeks"] == null
+  }
+
+  ["a suggested value is rendered as the default but never applied"] {
+    settings.field(seeded, contract.describeOperation, noContext).defaultValue == "300"
+    settings.resolve(List(seeded), new Mapping {})["cpuMilli"] == null
+  }
+
+  ["the descriptor is derived from the declaration"] {
+    settings.field(retention, contract.describeOperation, noContext)
+      == new contract.Field {
+        key = "retentionWeeks"
+        type = contract.numberFieldType
+        required = false
+        defaultValue = "12"
+        label = "Retention"
+        constraints = new { min = 1; max = 52 }
+      }
+    settings.field(flag, contract.describeOperation, noContext).defaultValue == "false"
+  }
+
+  ["an enum lists every value without context and the available ones with a context"] {
+    settings.field(mode, contract.describeOperation, noContext).constraints.allowedValues
+      == List("pvc", "s3", "gcs")
+    settings.field(mode, contract.describeOperation, aws).constraints.allowedValues
+      == List("pvc", "s3")
+  }
+
+  ["a contextual description replaces the static one outside DESCRIBE"] {
+    let (described = (flag) { description = "static"; contextualDescription = (scope) -> "on \(scope.cluster.provider)" })
+      settings.field(described, contract.describeOperation, aws).description == "static"
+        && settings.field(described, contract.validateOperation, aws).description == "on AWS"
+  }
+
+  ["a setting reports exactly one of: required, ill-typed, out of bounds"] {
+    settings.violations(retention, contract.validateOperation, new Mapping {}, noContext, "Loki", "") == List()
+    settings.violations(retention, contract.validateOperation, new Mapping { ["retentionWeeks"] = "x" }, noContext, "Loki", "")
+      .map((violation) -> violation.code) == List("INVALID_TYPE")
+    settings.violations(retention, contract.validateOperation, new Mapping { ["retentionWeeks"] = "x" }, noContext, "Loki", "")
+      .first.message == "Loki configuration field retentionWeeks must be a whole number"
+    settings.violations(retention, contract.validateOperation, new Mapping { ["retentionWeeks"] = 0 }, noContext, "Loki", "")
+      .first.message == "Loki retentionWeeks must be between 1 and 52"
+    settings.violations(mode, contract.validateOperation, new Mapping { ["mode"] = "nfs" }, noContext, "Loki", "")
+      .first.code == "VALUE_NOT_ALLOWED"
+  }
+
+  ["a conditionally required setting is reported only when saving or compiling"] {
+    settings.violations(seeded, contract.validateOperation, new Mapping {}, custom, "Loki", "")
+      == List(new contract.Violation {
+        code = "REQUIRED_RESOURCE_REQUEST_MISSING"
+        fieldPath = "cpuMilli"
+        message = "cpuMilli is required in CUSTOM mode"
+      })
+    settings.violations(seeded, contract.resolveRequirementsOperation, new Mapping {}, custom, "Loki", "") == List()
+    settings.violations(seeded, contract.compileOperation, new Mapping {}, pvc, "Loki", "") == List()
+  }
+
+  ["availability narrows, gates and reports the selected option"] {
+    mode.available(mode.option("s3") as settings.Option, aws)
+    !mode.available(mode.option("gcs") as settings.Option, aws)
+    mode.availabilityViolations(mode.option("gcs") as settings.Option, aws)
+      == List(new contract.Violation {
+        code = "PROVIDER_MISMATCH"
+        fieldPath = "mode"
+        message = "gcs needs GCP, got AWS"
+      })
+    mode.option("nfs") == null
+  }
+}

@@ -1,0 +1,156 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/evaluate.pkl"
+import "../sdk/helm.pkl"
+import "../sdk/request.pkl"
+import "../sdk/rules.pkl"
+import "../sdk/settings.pkl"
+
+// A two-setting component exercising every engine responsibility: defaults, activity, option
+// availability and inputs, dependency rules, fragment merge, and the fail-closed gate.
+
+local bucket: contract.LogicalInput = new {
+  key = "infra.bucket"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "Bucket"
+  constraints = new { pattern = "^[a-z-]+$" }
+}
+
+local storage: settings.EnumSetting = new {
+  key = "storage"
+  label = "Storage"
+  default = "pvc"
+  options = List(
+    new settings.Option { value = "pvc" },
+    new settings.Option { value = "s3"; provider = "AWS"; inputs = List(bucket); compileInputs = List("infra.region") },
+  )
+  availability = List(new settings.Availability {
+    accepts = (option, scope) -> option.provider == null || option.provider == scope.cluster.provider
+    code = "PROVIDER_MISMATCH"
+    message = (option, scope) -> "\(option.value) is not available on \(scope.cluster.provider)"
+  })
+}
+
+local replicas: settings.IntSetting = new {
+  key = "replicas"
+  label = "Replicas"
+  suggested = 3
+  min = 1
+  max = 9
+  activeWhen = (scope) -> scope.config["storage"] == "s3"
+  requiredWhen = (scope) -> scope.config["storage"] == "s3"
+}
+
+local component: evaluate.Component = new {
+  label = "Demo"
+  features = List(
+    new evaluate.Feature {
+      settings = List(storage, replicas)
+      rules = List(new rules.FieldRule {
+        code = "TOO_MANY_REPLICAS_FOR_ONE_BUCKET"
+        fieldPath = "replicas"
+        message = "more than 5 replicas need several buckets"
+        violated = (scope) -> scope.config["replicas"] is Int && scope.config["replicas"] > 5
+      })
+      fragment = (scope) -> new Mapping { ["storage"] = scope.config["storage"]; ["replicas"] = scope.config.getOrNull("replicas") ?? 1 }
+    },
+    new evaluate.Feature {
+      settings = List()
+      rules = List()
+      fragment = (scope) -> new Mapping { ["bucket"] = scope.inputs.getOrNull("infra.bucket") }
+    },
+  )
+}
+
+local aws: Mapping = new { ["provider"] = "AWS" }
+local gcp: Mapping = new { ["provider"] = "GCP" }
+
+local function run(operation: contract.Operation, profileConfig: Mapping, clusterContext: Mapping?, clusterInputs: Mapping): contract.EvaluationResult =
+  evaluate.evaluate(component, request.build(operation, profileConfig, clusterContext, clusterInputs, List()))
+
+local function codes(result: contract.EvaluationResult): List<String> = result.violations.map((violation) -> violation.code)
+local function scopeOf(config: Mapping): settings.Scope = settings.scope(config, null, new Mapping {}, List())
+
+local describe = run(contract.describeOperation, new Mapping { ["storage"] = "s3"; ["replicas"] = "x"; ["typo"] = 1 }, null, new Mapping {})
+local pvcDraft = run(contract.resolveRequirementsOperation, new Mapping {}, aws, new Mapping {})
+local s3Draft = run(contract.resolveRequirementsOperation, new Mapping { ["storage"] = "s3" }, aws, new Mapping {})
+local s3OnGcp = run(contract.validateOperation, new Mapping { ["storage"] = "s3" }, gcp, new Mapping {})
+local everythingWrong =
+  run(
+    contract.validateOperation,
+    new Mapping { ["typo"] = true; ["storage"] = "s3"; ["replicas"] = 7 },
+    aws,
+    new Mapping { ["infra.bucket"] = "Bad Bucket" },
+  )
+local validCompile =
+  run(
+    contract.compileOperation,
+    new Mapping { ["storage"] = "s3"; ["replicas"] = 2 },
+    aws,
+    new Mapping { ["infra.bucket"] = "logs"; ["infra.region"] = "eu-west-3" },
+  )
+
+facts {
+  ["a feature must spell out its three members"] {
+    module.catch(() -> new evaluate.Feature { rules = List(); fragment = helm.none }.settings).contains("undefined")
+    module.catch(() -> new evaluate.Feature { settings = List(); fragment = helm.none }.rules).contains("undefined")
+    module.catch(() -> new evaluate.Feature { settings = List(); rules = List() }.fragment).contains("undefined")
+    new evaluate.Feature { settings = List(); rules = List(); fragment = helm.none }.fragment.apply(scopeOf(new Mapping {})) == new Mapping {}
+  }
+
+  ["a rule must spell out its predicate or its paths"] {
+    module.catch(() -> new rules.FieldRule { code = "X"; message = "x"; fieldPath = "a" }.violated).contains("undefined")
+    module.catch(() -> new rules.RowRule { code = "X"; message = "x" }.paths).contains("undefined")
+  }
+
+  ["DESCRIBE lists every setting and reports nothing else"] {
+    describe.fields.map((field) -> field.key) == List("storage", "replicas")
+    describe.requiredInputs.isEmpty
+    describe.violations.isEmpty
+    describe.helmValues == null
+  }
+
+  ["contextual operations render only the active settings and their activated inputs"] {
+    pvcDraft.fields.map((field) -> field.key) == List("storage")
+    pvcDraft.requiredInputs.isEmpty
+    s3Draft.fields.map((field) -> field.key) == List("storage", "replicas")
+    s3Draft.requiredInputs.map((input) -> input.key) == List("infra.bucket")
+    // RESOLVE_REQUIREMENTS accepts an incomplete draft: the required replicas are not reported yet.
+    s3Draft.violations.isEmpty
+  }
+
+  ["an unavailable option is reported and activates no input; dependent settings still apply"] {
+    codes(s3OnGcp) == List("PROVIDER_MISMATCH", "REQUIRED_FIELD_MISSING")
+    s3OnGcp.violations.first.message == "s3 is not available on GCP"
+    s3OnGcp.requiredInputs.isEmpty
+    s3OnGcp.fields.map((field) -> field.key) == List("storage", "replicas")
+  }
+
+  ["violations follow a documented order: unknown fields, settings in order, then rules"] {
+    codes(everythingWrong) == List("UNKNOWN_FIELD", "INPUT_PATTERN_MISMATCH", "TOO_MANY_REPLICAS_FOR_ONE_BUCKET")
+    everythingWrong.violations.map((violation) -> violation.fieldPath)
+      == List("typo", "clusterInputs.infra.bucket", "replicas")
+    everythingWrong.helmValues == null
+  }
+
+  ["a missing conditionally required value is reported when saving, with the generic code"] {
+    codes(run(contract.validateOperation, new Mapping { ["storage"] = "s3" }, aws, new Mapping { ["infra.bucket"] = "logs" }))
+      == List("REQUIRED_FIELD_MISSING")
+  }
+
+  ["compile-only inputs are checked only while compiling"] {
+    codes(run(contract.validateOperation, new Mapping { ["storage"] = "s3"; ["replicas"] = 2 }, aws, new Mapping { ["infra.bucket"] = "logs" }))
+      == List()
+    codes(run(contract.compileOperation, new Mapping { ["storage"] = "s3"; ["replicas"] = 2 }, aws, new Mapping { ["infra.bucket"] = "logs" }))
+      == List("REQUIRED_INPUT_MISSING")
+  }
+
+  ["a valid COMPILE merges the fragments over the resolved configuration"] {
+    validCompile.violations.isEmpty
+    validCompile.helmValues == new Mapping { ["storage"] = "s3"; ["replicas"] = 2; ["bucket"] = "logs" }
+    evaluate.unvalidatedHelmValues(component, new Mapping {}, new Mapping {})
+      == new Mapping { ["storage"] = "pvc"; ["replicas"] = 1; ["bucket"] = null }
+  }
+}

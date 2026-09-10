@@ -1,0 +1,7 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+amends "backend.pkl"
+
+// Provider-neutral default: the chart's persistent volumes, on any cluster, without any input.
+option {
+  value = "pvc"
+}

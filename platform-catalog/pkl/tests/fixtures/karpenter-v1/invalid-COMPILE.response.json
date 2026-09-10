@@ -1,0 +1,648 @@
+{
+  "fields": [
+    {
+      "key": "nodePools",
+      "required": true,
+      "label": "NodePools",
+      "sensitive": false,
+      "type": "array",
+      "constraints": {
+        "minItems": 1,
+        "uniqueItems": false
+      },
+      "items": {
+        "type": "object",
+        "fields": [
+          {
+            "key": "name",
+            "type": "string",
+            "required": true,
+            "label": "Pool name",
+            "sensitive": false,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 56,
+              "pattern": "[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?"
+            }
+          },
+          {
+            "key": "instanceTypes",
+            "required": true,
+            "label": "instanceTypes",
+            "sensitive": false,
+            "type": "array",
+            "constraints": {
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "items": {
+              "type": "string",
+              "constraints": {
+                "pattern": "[a-z0-9]+(-[a-z0-9]+)*[.][a-z0-9]+(-[a-z0-9]+)*"
+              }
+            }
+          },
+          {
+            "key": "spotEnabled",
+            "type": "bool",
+            "required": false,
+            "defaultValue": "false",
+            "label": "Allow Spot with On-Demand fallback",
+            "sensitive": false,
+            "constraints": {}
+          },
+          {
+            "key": "consolidation",
+            "required": false,
+            "label": "consolidation",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "policy",
+                "type": "string",
+                "required": false,
+                "defaultValue": "WhenEmptyOrUnderutilized",
+                "label": "policy",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "WhenEmpty",
+                    "WhenEmptyOrUnderutilized"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "key": "taints",
+            "required": false,
+            "label": "Taints",
+            "sensitive": false,
+            "type": "array",
+            "constraints": {
+              "uniqueItems": false
+            },
+            "items": {
+              "type": "object",
+              "fields": [
+                {
+                  "key": "key",
+                  "type": "string",
+                  "required": true,
+                  "label": "Taint key",
+                  "sensitive": false,
+                  "constraints": {
+                    "minLength": 1
+                  }
+                },
+                {
+                  "key": "value",
+                  "type": "string",
+                  "required": true,
+                  "label": "value",
+                  "sensitive": false,
+                  "constraints": {}
+                },
+                {
+                  "key": "effect",
+                  "type": "string",
+                  "required": true,
+                  "label": "Effect",
+                  "sensitive": false,
+                  "constraints": {
+                    "allowedValues": [
+                      "NoSchedule",
+                      "PreferNoSchedule",
+                      "NoExecute"
+                    ]
+                  }
+                }
+              ]
+            },
+            "itemFields": []
+          },
+          {
+            "key": "ami",
+            "required": false,
+            "label": "ami",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "mode",
+                "type": "string",
+                "required": false,
+                "defaultValue": "default",
+                "label": "mode",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "default",
+                    "custom"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "key": "subnets",
+            "required": false,
+            "label": "subnets",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "mode",
+                "type": "string",
+                "required": false,
+                "defaultValue": "auto",
+                "label": "mode",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "auto",
+                    "custom"
+                  ]
+                }
+              },
+              {
+                "key": "tag",
+                "required": false,
+                "label": "tag",
+                "sensitive": false,
+                "type": "object",
+                "fields": [
+                  {
+                    "key": "key",
+                    "type": "string",
+                    "required": false,
+                    "defaultValue": "karpenter.sh/discovery",
+                    "label": "Discovery tag key",
+                    "sensitive": false,
+                    "constraints": {
+                      "minLength": 1
+                    }
+                  },
+                  {
+                    "key": "value",
+                    "type": "string",
+                    "required": false,
+                    "defaultValue": "demo-eks",
+                    "label": "Discovery tag value",
+                    "sensitive": false,
+                    "constraints": {
+                      "minLength": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "itemFields": [
+        [
+          {
+            "key": "name",
+            "type": "string",
+            "required": true,
+            "label": "Pool name",
+            "sensitive": false,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 56,
+              "pattern": "[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?"
+            }
+          },
+          {
+            "key": "instanceTypes",
+            "required": true,
+            "label": "instanceTypes",
+            "sensitive": false,
+            "type": "array",
+            "constraints": {
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "items": {
+              "type": "string",
+              "constraints": {
+                "pattern": "[a-z0-9]+(-[a-z0-9]+)*[.][a-z0-9]+(-[a-z0-9]+)*"
+              }
+            }
+          },
+          {
+            "key": "spotEnabled",
+            "type": "bool",
+            "required": false,
+            "defaultValue": "false",
+            "label": "Allow Spot with On-Demand fallback",
+            "sensitive": false,
+            "constraints": {}
+          },
+          {
+            "key": "consolidation",
+            "required": false,
+            "label": "consolidation",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "policy",
+                "type": "string",
+                "required": false,
+                "defaultValue": "WhenEmptyOrUnderutilized",
+                "label": "policy",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "WhenEmpty",
+                    "WhenEmptyOrUnderutilized"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "key": "taints",
+            "required": false,
+            "label": "Taints",
+            "sensitive": false,
+            "type": "array",
+            "constraints": {
+              "uniqueItems": false
+            },
+            "items": {
+              "type": "object",
+              "fields": [
+                {
+                  "key": "key",
+                  "type": "string",
+                  "required": true,
+                  "label": "Taint key",
+                  "sensitive": false,
+                  "constraints": {
+                    "minLength": 1
+                  }
+                },
+                {
+                  "key": "value",
+                  "type": "string",
+                  "required": true,
+                  "label": "value",
+                  "sensitive": false,
+                  "constraints": {}
+                },
+                {
+                  "key": "effect",
+                  "type": "string",
+                  "required": true,
+                  "label": "Effect",
+                  "sensitive": false,
+                  "constraints": {
+                    "allowedValues": [
+                      "NoSchedule",
+                      "PreferNoSchedule",
+                      "NoExecute"
+                    ]
+                  }
+                }
+              ]
+            },
+            "itemFields": []
+          },
+          {
+            "key": "ami",
+            "required": false,
+            "label": "ami",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "mode",
+                "type": "string",
+                "required": false,
+                "defaultValue": "default",
+                "label": "mode",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "default",
+                    "custom"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "key": "subnets",
+            "required": false,
+            "label": "subnets",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "mode",
+                "type": "string",
+                "required": false,
+                "defaultValue": "auto",
+                "label": "mode",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "auto",
+                    "custom"
+                  ]
+                }
+              },
+              {
+                "key": "tag",
+                "required": false,
+                "label": "tag",
+                "sensitive": false,
+                "type": "object",
+                "fields": [
+                  {
+                    "key": "key",
+                    "type": "string",
+                    "required": false,
+                    "defaultValue": "karpenter.sh/discovery",
+                    "label": "Discovery tag key",
+                    "sensitive": false,
+                    "constraints": {
+                      "minLength": 1
+                    }
+                  },
+                  {
+                    "key": "value",
+                    "type": "string",
+                    "required": false,
+                    "defaultValue": "demo-eks",
+                    "label": "Discovery tag value",
+                    "sensitive": false,
+                    "constraints": {
+                      "minLength": 1
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        [
+          {
+            "key": "name",
+            "type": "string",
+            "required": true,
+            "label": "Pool name",
+            "sensitive": false,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 56,
+              "pattern": "[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?"
+            }
+          },
+          {
+            "key": "instanceTypes",
+            "required": true,
+            "label": "instanceTypes",
+            "sensitive": false,
+            "type": "array",
+            "constraints": {
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "items": {
+              "type": "string",
+              "constraints": {
+                "pattern": "[a-z0-9]+(-[a-z0-9]+)*[.][a-z0-9]+(-[a-z0-9]+)*"
+              }
+            }
+          },
+          {
+            "key": "spotEnabled",
+            "type": "bool",
+            "required": false,
+            "defaultValue": "false",
+            "label": "Allow Spot with On-Demand fallback",
+            "sensitive": false,
+            "constraints": {}
+          },
+          {
+            "key": "consolidation",
+            "required": false,
+            "label": "consolidation",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "policy",
+                "type": "string",
+                "required": false,
+                "defaultValue": "WhenEmptyOrUnderutilized",
+                "label": "policy",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "WhenEmpty",
+                    "WhenEmptyOrUnderutilized"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "key": "taints",
+            "required": false,
+            "label": "Taints",
+            "sensitive": false,
+            "type": "array",
+            "constraints": {
+              "uniqueItems": false
+            },
+            "items": {
+              "type": "object",
+              "fields": [
+                {
+                  "key": "key",
+                  "type": "string",
+                  "required": true,
+                  "label": "Taint key",
+                  "sensitive": false,
+                  "constraints": {
+                    "minLength": 1
+                  }
+                },
+                {
+                  "key": "value",
+                  "type": "string",
+                  "required": true,
+                  "label": "value",
+                  "sensitive": false,
+                  "constraints": {}
+                },
+                {
+                  "key": "effect",
+                  "type": "string",
+                  "required": true,
+                  "label": "Effect",
+                  "sensitive": false,
+                  "constraints": {
+                    "allowedValues": [
+                      "NoSchedule",
+                      "PreferNoSchedule",
+                      "NoExecute"
+                    ]
+                  }
+                }
+              ]
+            },
+            "itemFields": [
+              [
+                {
+                  "key": "key",
+                  "type": "string",
+                  "required": true,
+                  "label": "Taint key",
+                  "sensitive": false,
+                  "constraints": {
+                    "minLength": 1
+                  }
+                },
+                {
+                  "key": "value",
+                  "type": "string",
+                  "required": true,
+                  "label": "value",
+                  "sensitive": false,
+                  "constraints": {}
+                },
+                {
+                  "key": "effect",
+                  "type": "string",
+                  "required": true,
+                  "label": "Effect",
+                  "sensitive": false,
+                  "constraints": {
+                    "allowedValues": [
+                      "NoSchedule",
+                      "PreferNoSchedule",
+                      "NoExecute"
+                    ]
+                  }
+                }
+              ]
+            ]
+          },
+          {
+            "key": "ami",
+            "required": false,
+            "label": "ami",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "mode",
+                "type": "string",
+                "required": false,
+                "defaultValue": "default",
+                "label": "mode",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "default",
+                    "custom"
+                  ]
+                }
+              },
+              {
+                "key": "id",
+                "type": "string",
+                "required": true,
+                "label": "AMI ID",
+                "sensitive": false,
+                "constraints": {
+                  "pattern": "ami-([0-9a-f]{8}|[0-9a-f]{17})"
+                }
+              },
+              {
+                "key": "family",
+                "type": "string",
+                "required": false,
+                "defaultValue": "AL2023",
+                "label": "family",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "AL2023",
+                    "AL2",
+                    "Bottlerocket"
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "key": "subnets",
+            "required": false,
+            "label": "subnets",
+            "sensitive": false,
+            "type": "object",
+            "fields": [
+              {
+                "key": "mode",
+                "type": "string",
+                "required": false,
+                "defaultValue": "auto",
+                "label": "mode",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "auto",
+                    "custom"
+                  ]
+                }
+              },
+              {
+                "key": "ids",
+                "required": true,
+                "label": "ids",
+                "sensitive": false,
+                "type": "array",
+                "constraints": {
+                  "minItems": 1,
+                  "uniqueItems": true
+                },
+                "items": {
+                  "type": "string",
+                  "constraints": {
+                    "pattern": "subnet-([0-9a-f]{8}|[0-9a-f]{17})"
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      ]
+    }
+  ],
+  "requiredInputs": [],
+  "violations": [
+    {
+      "code": "VALUE_NOT_ALLOWED",
+      "fieldPath": "nodePools[1].taints[0].effect",
+      "message": "Karpenter effect must be one of NoSchedule, PreferNoSchedule, NoExecute"
+    },
+    {
+      "code": "INPUT_PATTERN_MISMATCH",
+      "fieldPath": "nodePools[1].ami.id",
+      "message": "Karpenter id does not match the expected format"
+    },
+    {
+      "code": "INPUT_PATTERN_MISMATCH",
+      "fieldPath": "nodePools[1].subnets.ids[0]",
+      "message": "Karpenter subnet ID does not match the expected format"
+    }
+  ]
+}

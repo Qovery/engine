@@ -1,41 +1,88 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.tests.fixtures
 
-import "../config/runtime-values/context.pkl"
-import "../config/runtime-values/storage/backends.pkl" as storageBackends
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/settings.pkl"
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+import "../config/runtime-values/sdk/settings.pkl" as sdkSettings
 
-awsCustomer: Mapping = new Mapping {
-  ["mode"] = context.customerManagedMode
-  ["provider"] = context.awsProvider
-}
+// Shared contexts, drafts and readers for the Loki suites. Every suite goes through the same
+// evaluator as model.pkl, with requests built the way q-core sends them.
 
-awsManaged: Mapping = new Mapping {
-  ["mode"] = context.qoveryManagedMode
-  ["provider"] = context.awsProvider
-}
+awsCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" }
+awsManaged: Mapping = new { ["mode"] = "QOVERY_MANAGED"; ["provider"] = "AWS" }
+gcpCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "GCP" }
+azureCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AZURE" }
+scalewayCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "SCW" }
 
-gcpCustomer: Mapping = new Mapping {
-  ["mode"] = context.customerManagedMode
-  ["provider"] = context.gcpProvider
-}
-
-pvcProfile: Mapping = new Mapping {
+pvcProfile: Mapping = new {
   ["retentionWeeks"] = 12
   ["highAvailability"] = false
-  ["storage"] = storageBackends.pvc.key
+  ["storage"] = "pvc"
 }
 
-s3Profile: Mapping = new Mapping {
+s3Profile: Mapping = new {
   ["retentionWeeks"] = 12
   ["highAvailability"] = false
-  ["storage"] = storageBackends.s3.key
+  ["storage"] = "s3"
 }
 
-s3CustomerInputs: Mapping = new Mapping {
+s3CustomerInputs: Mapping = new {
   ["infra.s3BucketName"] = "qovery-loki"
   ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
 }
 
-s3Inputs: Mapping = (s3CustomerInputs) {
-  ["infra.awsRegion"] = "eu-west-3"
-}
+// The q-core compile-only input on top of the customer inputs.
+s3Inputs: Mapping = (s3CustomerInputs) { ["infra.awsRegion"] = "eu-west-3" }
+
+function evaluate(
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  clusterContext: Mapping?,
+  clusterInputs: Mapping,
+): contract.EvaluationResult =
+  sdkEvaluate.evaluate(
+    settings.component,
+    sdkRequest.build(operation, profileConfig, clusterContext, clusterInputs, List()),
+  )
+
+function describe(clusterContext: Mapping?): contract.EvaluationResult =
+  evaluate(contract.describeOperation, new Mapping {}, clusterContext, new Mapping {})
+
+function resolveRequirements(profileConfig: Mapping, clusterContext: Mapping?): contract.EvaluationResult =
+  evaluate(contract.resolveRequirementsOperation, profileConfig, clusterContext, new Mapping {})
+
+function validate(profileConfig: Mapping, clusterContext: Mapping?, clusterInputs: Mapping): contract.EvaluationResult =
+  evaluate(contract.validateOperation, profileConfig, clusterContext, clusterInputs)
+
+function compile(profileConfig: Mapping, clusterContext: Mapping?, clusterInputs: Mapping): contract.EvaluationResult =
+  evaluate(contract.compileOperation, profileConfig, clusterContext, clusterInputs)
+
+// The Helm values of an already validated configuration, as the golden tests read them.
+function helmValues(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
+  sdkEvaluate.unvalidatedHelmValues(settings.component, profileConfig, clusterInputs)
+
+// A scope over a draft, for facts that exercise a folder's helpers directly.
+function scopeOf(profileConfig: Mapping): sdkSettings.Scope =
+  sdkSettings.scope(sdkSettings.resolve(settings.component.settings, profileConfig), null, new Mapping {}, List())
+
+function codes(result: contract.EvaluationResult): List<String> =
+  result.violations.map((violation) -> violation.code)
+
+function paths(result: contract.EvaluationResult): List<String> =
+  result.violations.map((violation) -> violation.fieldPath)
+
+function fieldKeys(result: contract.EvaluationResult): List<String> =
+  result.fields.map((field) -> field.key)
+
+function field(result: contract.EvaluationResult, key: String): contract.Field =
+  result.fields.find((candidate) -> candidate.key == key) as contract.Field
+
+function allowedStorage(result: contract.EvaluationResult): List<String>? =
+  field(result, "storage").constraints.allowedValues
+
+function inputKeys(result: contract.EvaluationResult): List<String> =
+  result.requiredInputs.map((input) -> input.key)
+
+function target(helm: Mapping, key: String): Mapping = helm[key] as Mapping

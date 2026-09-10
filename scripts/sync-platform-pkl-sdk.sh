@@ -9,6 +9,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CANONICAL_CONTRACT="$ROOT_DIR/platform-catalog/pkl/contract.pkl"
 CANONICAL_SDK_DIR="$ROOT_DIR/platform-catalog/pkl/sdk"
 COMPONENTS_DIR="$ROOT_DIR/platform-catalog/components"
+# Unpublished exchange fixtures exercise the same autonomous bundle layout and vendoring rules.
+FIXTURES_DIR="$ROOT_DIR/platform-catalog/pkl/tests/fixtures"
 MODE="${1:---write}"
 
 if [[ "$MODE" != "--write" && "$MODE" != "--check" ]]; then
@@ -30,7 +32,10 @@ status=0
 while IFS= read -r model; do
   runtime_values_dir="$(dirname "$model")"
   component="$(basename "$(dirname "$(dirname "$runtime_values_dir")")")"
-  model_count=$((model_count + 1))
+  # Test fixtures must not satisfy the publisher's "at least one executable component" guard.
+  if [[ "$model" == "$COMPONENTS_DIR/"* ]]; then
+    model_count=$((model_count + 1))
+  fi
 
   if [[ "$MODE" == "--write" ]]; then
     cp "$CANONICAL_CONTRACT" "$runtime_values_dir/contract.pkl"
@@ -50,7 +55,7 @@ while IFS= read -r model; do
     echo "ERROR: $component vendored sdk/ differs from platform-catalog/pkl/sdk" >&2
     status=1
   fi
-done < <(find "$COMPONENTS_DIR" -path '*/config/runtime-values/model.pkl' -type f | sort)
+done < <(find "$COMPONENTS_DIR" "$FIXTURES_DIR" -path '*/config/runtime-values/model.pkl' -type f | sort)
 
 if [[ "$model_count" -eq 0 ]]; then
   echo "ERROR: no executable platform configuration model was found" >&2

@@ -1,0 +1,19 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.cpuArchitectures.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+// Demo clusters carry the QOVERY_DEMO capability; the Operator then needs the native architecture
+// of the local builder, which q-core keeps explicit rather than deriving it per cluster.
+demoCapability: String = "QOVERY_DEMO"
+
+function isDemo(scope: sdkSettings.Scope): Boolean = scope.cluster.capabilities.contains(demoCapability)
+
+setting: sdkSettings.EnumSetting = new {
+  key = "cpuArchitectures"
+  label = "CPU architectures"
+  description = "Native CPU architecture used by the local demo builder."
+  options = List("AMD64", "ARM64").map((name) -> new sdkSettings.Option { value = name })
+  requiredWhen = (scope) -> isDemo(scope)
+  requiredMessage = "Qovery Operator cpuArchitectures is required for QOVERY_DEMO"
+}

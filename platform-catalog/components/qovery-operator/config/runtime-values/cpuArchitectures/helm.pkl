@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.cpuArchitectures.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
+
+// Only demo clusters receive the architecture; elsewhere the environment block stays empty.
+fragment: sdkHelm.Fragment = (scope) -> new Mapping {
+  ["environmentVariables"] = new Mapping {
+    when (setting.isDemo(scope)) {
+      ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = setting.setting.selectedValue(scope) as String
+    }
+  }
+}

@@ -1,0 +1,33 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.backend
+
+import "../contract.pkl"
+import "../sdk/settings.pkl" as sdkSettings
+
+// Template of one storage choice. Each backend is one file amending this module: it declares the
+// option offered to the customer (with the cluster inputs that choosing it requires), and how the
+// Loki chart is configured for it. helm.pkl assembles the storage fragment from these hooks.
+
+// The Console choice and what it requires from the cluster. An object store must ask the customer
+// for its bucket: the input carrying it is one of the choice's inputs.
+option: sdkSettings.Option(objectStoreId == null || (bucket != null && this.inputs.contains(bucket)))
+
+// Object storage only. `objectStoreId` is the Loki storage type (s3, gcs, azure); null means the
+// chart's persistent volumes are kept and no object-storage configuration is emitted. An object
+// store always names the input carrying its bucket.
+objectStoreId: String?
+bucket: contract.LogicalInput?(objectStoreId == null || this != null)
+
+// Provider-specific entries of `loki.storage`, keyed by the chart's provider block name.
+storageConfig: ((sdkSettings.Scope) -> Pair<String, Mapping>?) = (_) -> null
+
+// The chart's serviceAccount block, when the backend authenticates through the pod identity.
+serviceAccount: ((sdkSettings.Scope) -> Mapping?) = (_) -> null
+
+// Labels every Loki pod must carry, when the identity mechanism selects pods by label.
+podLabels: Mapping?
+
+// Extra values applied to every workload target (singleBinary, read, write, backend).
+decorateTarget: ((Mapping, sdkSettings.Scope) -> Mapping) = (target, _) -> target
+
+isObjectStorage: Boolean = objectStoreId != null

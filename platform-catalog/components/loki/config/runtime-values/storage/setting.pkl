@@ -1,0 +1,51 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.setting
+
+import "../contract.pkl"
+import "../sdk/settings.pkl" as sdkSettings
+import "backend.pkl"
+import "pvc.pkl"
+import "s3.pkl"
+import "gcs.pkl"
+import "azureBlob.pkl"
+import "s3Compatible.pkl"
+
+// One file per storage choice; adding a backend is adding a file here.
+backends: List<backend> = List(pvc, s3, gcs, azureBlob, s3Compatible)
+
+setting: sdkSettings.EnumSetting = new {
+  key = "storage"
+  label = "Storage"
+  description = "Storage backend used by Loki."
+  default = "pvc"
+  options = backends.map((entry) -> entry.option)
+
+  // A choice is offered on a cluster only when every rule below accepts it. The Console list is
+  // narrowed accordingly, the choice's inputs are activated only when it is available, and a
+  // selected choice that fails a rule reports that rule's violation.
+  availability = List(
+    new sdkSettings.Availability {
+      accepts = (option, scope) -> option.provider == null || option.provider == scope.cluster.provider
+      code = "STORAGE_PROVIDER_MISMATCH"
+      message = (option, scope) ->
+        "Loki storage \(option.value) requires provider \(option.provider); this cluster uses \(scope.cluster.provider)"
+    },
+    // Object storage on Qovery-managed clusters waits for Terraform outputs to be available before
+    // Helm compilation; until then only the provider-neutral choice is offered there.
+    new sdkSettings.Availability {
+      accepts = (option, scope) -> option.provider == null || scope.cluster.mode != contract.qoveryManagedMode
+      code = "MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE"
+      message = (_, _) ->
+        "Loki object storage on Qovery-managed clusters requires the Terraform output execution barrier"
+    },
+  )
+}
+
+// The backend selected by a validated configuration.
+function selected(scope: sdkSettings.Scope): backend =
+  backends.find((entry) -> entry.option.value == setting.selectedValue(scope))
+
+// The backend a draft points at, or null while the value is unknown or ill-typed. Other folders
+// read the storage choice through this function, never through the key.
+function selectedBackend(scope: sdkSettings.Scope): backend? =
+  backends.findOrNull((entry) -> entry.option.value == setting.selectedValue(scope))

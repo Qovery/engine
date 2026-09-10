@@ -1,0 +1,58 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/request.pkl"
+import "../sdk/validate.pkl"
+
+facts {
+  ["JSON container views retain absence, false and empty arrays without coercion"] {
+    let (draft = request.decode(#"{"rows":[{"enabled":false,"values":[]}]}"#))
+      request.arrayValue(draft["rows"])!![0]["enabled"] == false
+        && request.arrayValue(draft["rows"])!![0]["values"] == new Listing {}
+        && request.objectValue(draft["rows"]) == null
+        && request.arrayValue(false) == null
+        && request.objectValue(null) == null
+        && request.objectValue(draft) == draft
+  }
+  ["paths compose objects and array indices without leading dots"] {
+    validate.fieldPath("", "rows") == "rows"
+    validate.fieldPath(validate.indexPath("nodePools", 1), "ami") == "nodePools[1].ami"
+    validate.indexPath("nodePools[1].taints", 0) == "nodePools[1].taints[0]"
+    let (
+      prefixed =
+        validate.atPath("nodePools[1]", List(validate.invalidType("ami.id", "Expected string")))
+    )
+      prefixed[0].fieldPath == "nodePools[1].ami.id"
+        && prefixed[0].code == "INVALID_TYPE"
+        && prefixed[0].message == "Expected string"
+  }
+  ["collection size limits are inclusive and independently optional"] {
+    validate.collectionSize("rows", 0, new contract.CollectionConstraints {}, "size") == null
+    validate.collectionSize(
+      "rows",
+      1,
+      new contract.CollectionConstraints { minItems = 1; maxItems = 2 },
+      "size",
+    ) == null
+    validate.collectionSize(
+      "rows",
+      2,
+      new contract.CollectionConstraints { minItems = 1; maxItems = 2 },
+      "size",
+    ) == null
+    validate.collectionSize("rows", 0, new contract.CollectionConstraints { minItems = 1 }, "size")!!
+      .code == "LENGTH_OUT_OF_RANGE"
+    validate.collectionSize("rows", 3, new contract.CollectionConstraints { maxItems = 2 }, "size")!!
+      .fieldPath == "rows"
+  }
+  ["duplicate checks include scalar and object equality and accept empty arrays"] {
+    validate.uniqueItems("rows", List(), "duplicate") == null
+    validate.uniqueItems("rows", List(false, true), "duplicate") == null
+    validate.uniqueItems("rows", List("a", "a"), "duplicate")!!.code == "DUPLICATE_ITEM"
+    validate.uniqueItems(
+      "rows",
+      List(new Mapping { ["x"] = 1 }, new Mapping { ["x"] = 1 }),
+      "duplicate",
+    ) != null
+  }
+}

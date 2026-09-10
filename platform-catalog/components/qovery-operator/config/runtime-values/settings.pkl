@@ -1,0 +1,19 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "cpuArchitectures/setting.pkl" as cpuArchitecturesSetting
+import "cpuArchitectures/helm.pkl" as cpuArchitecturesHelm
+
+// The Operator's per-cluster wiring comes from managed-values.yaml. Its only product setting is the
+// CPU architecture the local demo builder needs.
+component: sdkEvaluate.Component = new {
+  label = "Qovery Operator"
+  features = List(
+    new sdkEvaluate.Feature {
+      settings = List(cpuArchitecturesSetting.setting)
+      rules = List()
+      fragment = cpuArchitecturesHelm.fragment
+    },
+  )
+}

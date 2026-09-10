@@ -16,6 +16,34 @@ valueNotAllowedCode: String = "VALUE_NOT_ALLOWED"
 valueOutOfRangeCode: String = "VALUE_OUT_OF_RANGE"
 lengthOutOfRangeCode: String = "LENGTH_OUT_OF_RANGE"
 inputPatternMismatchCode: String = "INPUT_PATTERN_MISMATCH"
+duplicateItemCode: String = "DUPLICATE_ITEM"
+
+// Child names are relative object keys; callers use contract.NestedField's key grammar.
+function fieldPath(parent: String, key: String): String =
+  if (parent.isEmpty) key else "\(parent).\(key)"
+
+function indexPath(parent: String, index: Int(this >= 0)): String = "\(parent)[\(index)]"
+
+// Prefix an existing local validator's diagnostics without changing its codes or messages.
+function atPath(parent: String, violations: List<contract.Violation>): List<contract.Violation> =
+  violations.map((entry) -> (entry) { fieldPath = module.fieldPath(parent, entry.fieldPath) })
+
+function collectionSize(
+  fieldPath: String,
+  size: Int(this >= 0),
+  constraints: contract.CollectionConstraints,
+  message: String,
+): contract.Violation? =
+  if (
+    (constraints.minItems != null && size < constraints.minItems)
+      || (constraints.maxItems != null && size > constraints.maxItems)
+  )
+    violation(lengthOutOfRangeCode, fieldPath, message)
+  else
+    null
+
+function uniqueItems(fieldPath: String, values: List, message: String): contract.Violation? =
+  if (!values.isDistinct) violation(duplicateItemCode, fieldPath, message) else null
 
 // The `violation` prefix avoids shadowing the Violation properties inside the object body, where
 // an unqualified `code = code` would be self-referential — same convention as result.envelope.

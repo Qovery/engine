@@ -9,9 +9,9 @@ evaluator derives only `environmentVariables.LOKI_URL` from the effective compon
 - when `loki` is disabled, it emits the legacy-compatible empty string.
 
 `runtime-values/contract.pkl` and `runtime-values/sdk/` are vendored copies of the canonical
-evaluator contract and authoring SDK under `platform-catalog/pkl/`; the model uses the shared
-operation vocabulary, the SDK request readers, and the SDK result envelope. Both copies are
-machine-synced by `./scripts/sync-platform-pkl-sdk.sh`, never edited here.
+evaluator contract and authoring SDK under `platform-catalog/pkl/`; the model declares one Helm
+fragment (`runtime-values/logging/helm.pkl`) and the SDK evaluator implements the four operations.
+Both copies are machine-synced by `./scripts/sync-platform-pkl-sdk.sh`, never edited here.
 
 The root template declares `after loki`: q-core installs Loki first when `log-infra` is enabled, but
 the ordering edge does not force that optional layer to be selected. This keeps the cluster agent

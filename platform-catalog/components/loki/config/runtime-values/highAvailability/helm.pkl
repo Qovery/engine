@@ -1,0 +1,25 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.highAvailability.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
+
+// The Loki topology. Single binary runs one workload; high availability switches to the
+// simple-scalable deployment: three replicas of read, write, backend and gateway, and the data
+// replicated three times.
+fragment: sdkHelm.Fragment = (scope) ->
+  let (enabled = setting.enabled(scope))
+  let (scalableReplicas = if (enabled) 3 else 0)
+    new Mapping {
+      ["deploymentMode"] = if (enabled) "SimpleScalable" else "SingleBinary"
+      ["loki"] = new Mapping {
+        ["commonConfig"] = new Mapping { ["replication_factor"] = if (enabled) scalableReplicas else 1 }
+      }
+      ["singleBinary"] = new Mapping { ["replicas"] = if (enabled) 0 else 1 }
+      ["write"] = new Mapping { ["replicas"] = scalableReplicas }
+      ["read"] = new Mapping { ["replicas"] = scalableReplicas }
+      ["backend"] = new Mapping { ["replicas"] = scalableReplicas }
+      when (enabled) {
+        ["gateway"] = new Mapping { ["replicas"] = scalableReplicas }
+      }
+    }

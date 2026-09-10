@@ -1,21 +1,26 @@
 amends "pkl:test"
 
-import "../config/runtime-values/compile.pkl"
 import "../config/runtime-values/contract.pkl"
-import "../config/runtime-values/evaluation.pkl"
+import "../config/runtime-values/settings.pkl"
+import "../config/runtime-values/logging/helm.pkl" as loggingHelm
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
 import "../config/runtime-values/sdk/request.pkl" as sdkRequest
 
 local function evaluate(
   operation: contract.Operation,
   enabledComponents: List<String>,
 ): contract.EvaluationResult =
-  evaluation.evaluate(
+  sdkEvaluate.evaluate(
+    settings.component,
     sdkRequest.build(operation, new Mapping {}, null, new Mapping {}, enabledComponents),
   )
 
+local function lokiUrl(result: contract.EvaluationResult): Any? =
+  ((result.helmValues as Mapping)["environmentVariables"] as Mapping)["LOKI_URL"]
+
 facts {
   ["DESCRIBE returns an empty configuration envelope even for a partial request"] {
-    let (result = evaluation.evaluate(new Mapping { ["operation"] = contract.describeOperation }))
+    let (result = sdkEvaluate.evaluate(settings.component, new Mapping { ["operation"] = contract.describeOperation }))
       result.fields.isEmpty
         && result.requiredInputs.isEmpty
         && result.violations.isEmpty
@@ -23,14 +28,11 @@ facts {
   }
 
   ["COMPILE configures Loki when the component is enabled"] {
-    let (result = evaluate(contract.compileOperation, List("loki")))
-      result.violations.isEmpty
-        && (result.helmValues as Mapping)["environmentVariables"]["LOKI_URL"] == compile.lokiUrl
+    evaluate(contract.compileOperation, List("loki")).violations.isEmpty
+    lokiUrl(evaluate(contract.compileOperation, List("loki"))) == loggingHelm.lokiUrl
   }
 
   ["COMPILE clears Loki when the component is disabled"] {
-    let (result = evaluate(contract.compileOperation, List()))
-      result.violations.isEmpty
-        && (result.helmValues as Mapping)["environmentVariables"]["LOKI_URL"] == ""
+    lokiUrl(evaluate(contract.compileOperation, List())) == ""
   }
 }

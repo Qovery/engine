@@ -1,0 +1,15 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.clusterAgent.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "logging/helm.pkl" as loggingHelm
+
+// The cluster agent exposes no customer-facing setting. Its per-cluster wiring comes from
+// managed-values.yaml; the evaluator only derives the logging endpoint from the components enabled
+// on the cluster.
+component: sdkEvaluate.Component = new {
+  label = "Cluster agent"
+  features = List(
+    new sdkEvaluate.Feature { settings = List(); rules = List(); fragment = loggingHelm.fragment },
+  )
+}

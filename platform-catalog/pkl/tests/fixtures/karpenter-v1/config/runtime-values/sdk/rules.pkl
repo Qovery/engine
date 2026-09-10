@@ -1,0 +1,52 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.rules
+
+import "../contract.pkl"
+import "settings.pkl"
+import "validate.pkl"
+
+// A dependency between settings, or between a setting and the cluster: a plain predicate over the
+// evaluation scope plus the violation it reports. Rules live next to the setting that is blamed
+// (the violation's fieldPath), which is what makes "high availability requires object storage"
+// belong to highAvailability, not to storage.
+
+abstract class Rule {
+  code: String
+  message: settings.Message
+  // RESOLVE_REQUIREMENTS accepts an incomplete draft, yet cross-setting rules still hold there;
+  // a rule that only makes sense once a value is entered restricts this list.
+  operations: List<contract.Operation> =
+    List(contract.resolveRequirementsOperation, contract.validateOperation, contract.compileOperation)
+}
+
+// The common case: one blamed path, reported when the predicate holds. Neither member has an
+// implicit default, so neither can be forgotten.
+class FieldRule extends Rule {
+  fieldPath: String
+  violated: settings.Predicate
+}
+
+// The indexed case (rows of an array): every path returned is blamed, none means the rule holds.
+class RowRule extends Rule {
+  paths: (settings.Scope) -> List<String>
+}
+
+function violations(
+  rules: List<Rule>,
+  operation: contract.Operation,
+  scope: settings.Scope,
+  componentLabel: String,
+): List<contract.Violation> =
+  rules
+    .filter((rule) -> rule.operations.contains(operation))
+    .flatMap((rule) ->
+      blamed(rule, scope).map((path) -> validate.violation(rule.code, path, settings.render(rule.message, componentLabel)))
+    )
+
+local function blamed(rule: Rule, scope: settings.Scope): List<String> =
+  if (rule is RowRule)
+    rule.paths.apply(scope)
+  else if (rule is FieldRule)
+    if (rule.violated.apply(scope)) List(rule.fieldPath) else List()
+  else
+    throw("Unsupported rule \(rule.code)")

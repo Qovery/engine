@@ -1,0 +1,21 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.tests.karpenter.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "nodePools/setting.pkl" as nodePoolsSetting
+import "nodePools/dependencies.pkl" as nodePoolsDependencies
+import "nodePools/helm.pkl" as nodePoolsHelm
+
+// Unpublished A1 fixture: one structured setting, the list of node pools. Everything the fixture
+// says about a pool is declared in nodePools/setting.pkl; the SDK derives the prototype row, the
+// per-row descriptors, the indexed violations and the compiled projection.
+component: sdkEvaluate.Component = new {
+  label = "Karpenter"
+  features = List(
+    new sdkEvaluate.Feature {
+      settings = List(nodePoolsSetting.setting)
+      rules = nodePoolsDependencies.rules
+      fragment = nodePoolsHelm.fragment
+    },
+  )
+}

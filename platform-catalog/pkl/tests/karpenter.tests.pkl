@@ -1,0 +1,262 @@
+amends "pkl:test"
+
+import "fixtures/karpenter-v1/config/runtime-values/contract.pkl"
+import "fixtures/karpenter-v1/config/runtime-values/settings.pkl"
+import "fixtures/karpenter-v1/config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "fixtures/karpenter-v1/config/runtime-values/sdk/request.pkl" as sdkRequest
+
+local draft = sdkRequest.decode(read("fixtures/karpenter-v1/two-pools.profile.json"))
+
+local function evaluate(config: Mapping, operation: contract.Operation): contract.EvaluationResult =
+  sdkEvaluate.evaluate(settings.component, sdkRequest.build(operation, config, null, new Mapping {}, List()))
+
+local function changePool(config: Mapping, index: Int, change: (Mapping) -> Mapping): Mapping = (
+  config
+) {
+  ["nodePools"] =
+    (config["nodePools"] as Listing)
+      .toList()
+      .mapIndexed((i, pool) -> if (i == index) change.apply(pool as Mapping) else pool)
+      .toListing()
+}
+
+local function field(
+  fields: List<contract.ConfigurationField>,
+  key: String,
+): contract.ConfigurationField = fields.filter((field) -> field.key == key).first
+
+local function children(
+  fields: List<contract.ConfigurationField>,
+  key: String,
+): contract.ObjectFields = (field(fields, key) as contract.ObjectField).fields
+
+local function rowFields(result: contract.EvaluationResult, index: Int): contract.ObjectFields =
+  (result.fields[0] as contract.ArrayField).itemFields!![index]
+
+local function rejects(config: Mapping, path: String, code: String): Boolean =
+  let (validated = evaluate(config, "VALIDATE"))
+  let (compiled = evaluate(config, "COMPILE"))
+    validated.violations.any((entry) -> entry.fieldPath == path && entry.code == code)
+      && compiled.violations == validated.violations
+      && compiled.helmValues == null
+
+local invalidAmi =
+  changePool(draft, 1, (pool) -> (pool) {
+    ["ami"] = (pool["ami"] as Mapping) { ["id"] = "ami-invalid" }
+  })
+local inactive =
+  changePool(
+    changePool(draft, 0, (pool) -> (pool) {
+      ["ami"] = (pool["ami"] as Mapping) { ["id"] = "unfinished"; ["family"] = "unfinished" }
+      ["subnets"] = (pool["subnets"] as Mapping) { ["ids"] = new Listing {} }
+    }),
+    1,
+    (pool) -> (pool) {
+      ["subnets"] = (pool["subnets"] as Mapping) { ["tag"] = "unfinished" }
+    },
+  )
+local reordered = (invalidAmi) {
+  ["nodePools"] = (invalidAmi["nodePools"] as Listing).toList().reverse().toListing()
+}
+
+facts {
+  ["A1-R1-P2-1 accepts hyphenated instance families and sizes without changing values"] {
+    for (instanceType in List("c7i-flex.large", "c7i.metal-24xl")) {
+      for (operation in List("VALIDATE", "COMPILE")) {
+        let (
+          config =
+            changePool(draft, 0, (pool) -> (pool) {
+              ["instanceTypes"] = new Listing { instanceType }
+            })
+        )
+        let (result = evaluate(config, operation))
+          result.violations.isEmpty
+            && (
+              if (operation == "COMPILE") result.helmValues == config else result.helmValues == null
+            )
+      }
+    }
+  }
+  ["instance type format still rejects malformed family and size segments"] {
+    for (
+      instanceType in
+        List(
+          "",
+          "c7ilarge",
+          "c7i..large",
+          ".large",
+          "c7i.",
+          "c7i large",
+          "-c7i.large",
+          "c7i-.large",
+          "c7i--flex.large",
+          "c7i.-large",
+          "c7i.large-",
+          "c7i.metal--24xl",
+          "c7i_flex.large",
+          "C7i.large",
+          "c7i.large/extra",
+        )
+    ) {
+      rejects(
+        changePool(draft, 0, (pool) -> (pool) { ["instanceTypes"] = new Listing { instanceType } }),
+        "nodePools[0].instanceTypes[0]",
+        "INPUT_PATTERN_MISMATCH",
+      )
+    }
+  }
+  ["all four operations preserve the D11 envelope and compilation projection"] {
+    for (operation in List("DESCRIBE", "RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE")) {
+      let (result = evaluate(draft, operation))
+        result.violations.isEmpty
+          && result.requiredInputs.isEmpty
+          && (result.fields[0] as contract.ArrayField).itemFields!!.length == 2
+          && (if (operation == "COMPILE") result.helmValues == draft else result.helmValues == null)
+    }
+  }
+  ["new-row prototype and current rows carry independent AMI and subnet modes"] {
+    let (result = evaluate(draft, "DESCRIBE"))
+    let (array = result.fields[0] as contract.ArrayField)
+      !(array.items as contract.ObjectItem).fields.isEmpty
+        && children(rowFields(result, 0), "ami").map((field) -> field.key) == List("mode")
+        && field(children(rowFields(result, 1), "ami"), "id").required
+        && children(rowFields(result, 0), "subnets").map((field) -> field.key)
+          == List("mode", "tag")
+        && children(rowFields(result, 1), "subnets").map((field) -> field.key)
+          == List("mode", "ids")
+    let (result = evaluate(new Mapping {}, "DESCRIBE"))
+      (result.fields[0] as contract.ArrayField).itemFields == List()
+  }
+  ["false, empty optional arrays and unfinished inactive branches survive decoding without influencing compile"] {
+    let (roundTrip = sdkRequest.decode((new JsonRenderer {}).renderDocument(inactive)))
+      roundTrip == inactive && evaluate(roundTrip, "COMPILE").helmValues == draft
+    (inactive["nodePools"] as Listing)[1]["spotEnabled"] == false
+    (inactive["nodePools"] as Listing)[0]["taints"] == new Listing {}
+  }
+  ["reordering moves descriptions and error paths with the current draft"] {
+    rejects(reordered, "nodePools[0].ami.id", "INPUT_PATTERN_MISMATCH")
+    let (result = evaluate(reordered, "VALIDATE"))
+      field(children(rowFields(result, 0), "ami"), "id").required
+        && children(rowFields(result, 1), "ami").map((field) -> field.key) == List("mode")
+        && !result.violations.any((entry) -> entry.fieldPath == "nodePools[1].ami.id")
+    evaluate(draft, "COMPILE").violations.isEmpty
+  }
+  ["AMI and subnet modes are independent even within a row"] {
+    let (
+      crossed =
+        changePool(draft, 1, (pool) -> (pool) {
+          ["ami"] = new Mapping { ["mode"] = "default"; ["id"] = "unfinished" }
+        })
+    )
+    let (result = evaluate(crossed, "COMPILE"))
+      result.violations.isEmpty
+        && children(rowFields(result, 1), "ami").map((field) -> field.key) == List("mode")
+        && field(children(rowFields(result, 1), "subnets"), "ids").required
+        && result.helmValues!!["nodePools"][1]["subnets"] == draft["nodePools"][1]["subnets"]
+  }
+  ["missing values get defaults without resetting explicit false or empty lists"] {
+    let (
+      minimal = new Mapping {
+        ["nodePools"] = new Listing {
+          new Mapping { ["name"] = "minimal"; ["instanceTypes"] = new Listing { "m7i.large" } }
+        }
+      }
+    )
+    let (result = evaluate(minimal, "COMPILE"))
+      result.violations.isEmpty
+        && result.helmValues!!["nodePools"][0]["spotEnabled"] == false
+        && result.helmValues!!["nodePools"][0]["taints"] == new Listing {}
+        && result.helmValues!!["nodePools"][0]["consolidation"]["policy"]
+          == "WhenEmptyOrUnderutilized"
+  }
+  ["nested malformed values return precise violations and never compile"] {
+    rejects(invalidAmi, "nodePools[1].ami.id", "INPUT_PATTERN_MISMATCH")
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["ami"] = new Mapping { ["mode"] = "custom" } }),
+      "nodePools[1].ami.id",
+      "REQUIRED_FIELD_MISSING",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["ami"] = null }),
+      "nodePools[1].ami",
+      "INVALID_TYPE",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["spotEnabled"] = "false" }),
+      "nodePools[1].spotEnabled",
+      "INVALID_TYPE",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) {
+        ["consolidation"] = new Mapping { ["policy"] = "Balanced" }
+      }),
+      "nodePools[1].consolidation.policy",
+      "VALUE_NOT_ALLOWED",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) {
+        ["subnets"] = new Mapping { ["mode"] = "custom"; ["ids"] = new Listing { "bad-subnet" } }
+      }),
+      "nodePools[1].subnets.ids[0]",
+      "INPUT_PATTERN_MISMATCH",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) {
+        ["taints"] = new Listing {
+          new Mapping { ["key"] = "dedicated"; ["value"] = "demo"; ["effect"] = "invalid" }
+        }
+      }),
+      "nodePools[1].taints[0].effect",
+      "VALUE_NOT_ALLOWED",
+    )
+  }
+  ["a required value is due when saving or compiling, not while the draft is being edited"] {
+    evaluate(new Mapping {}, "RESOLVE_REQUIREMENTS").violations.isEmpty
+    evaluate(new Mapping {}, "VALIDATE").violations.map((entry) -> entry.code) == List("REQUIRED_FIELD_MISSING")
+    evaluate(changePool(draft, 1, (pool) -> (pool) { ["ami"] = new Mapping { ["mode"] = "custom" } }), "RESOLVE_REQUIREMENTS")
+      .violations
+      .isEmpty
+  }
+  ["explicit null on an active scalar is invalid instead of receiving a default"] {
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["spotEnabled"] = null }),
+      "nodePools[1].spotEnabled",
+      "INVALID_TYPE",
+    )
+  }
+  ["collection constraints, malformed rows and misspelled fields cannot be silently accepted"] {
+    rejects(new Mapping {}, "nodePools", "REQUIRED_FIELD_MISSING")
+    rejects(new Mapping { ["nodePools"] = new Listing {} }, "nodePools", "LENGTH_OUT_OF_RANGE")
+    rejects(new Mapping { ["nodePools"] = "pools" }, "nodePools", "INVALID_TYPE")
+    rejects(new Mapping { ["nodePools"] = new Listing { false } }, "nodePools[0]", "INVALID_TYPE")
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["name"] = "general" }),
+      "nodePools[1].name",
+      "DUPLICATE_ITEM",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["instanceTypes"] = new Listing {} }),
+      "nodePools[1].instanceTypes",
+      "LENGTH_OUT_OF_RANGE",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) {
+        ["instanceTypes"] = new Listing { "m7i.large"; "m7i.large" }
+      }),
+      "nodePools[1].instanceTypes",
+      "DUPLICATE_ITEM",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) { ["instanceTypes"] = new Listing { false } }),
+      "nodePools[1].instanceTypes[0]",
+      "INVALID_TYPE",
+    )
+    rejects(
+      changePool(draft, 1, (pool) -> (pool) {
+        ["ami"] = new Mapping { ["mode"] = "default"; ["idd"] = "typo" }
+      }),
+      "nodePools[1].ami.idd",
+      "UNKNOWN_FIELD",
+    )
+  }
+}

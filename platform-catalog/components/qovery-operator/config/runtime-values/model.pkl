@@ -1,10 +1,12 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.qoveryOperator.model
 
-import "evaluation.pkl"
+import "settings.pkl"
+import "sdk/evaluate.pkl" as sdkEvaluate
 import "sdk/request.pkl" as sdkRequest
 
+// The only entrypoint known by q-core: decode the request, evaluate the component, render JSON.
 output {
-  value = evaluation.evaluate(sdkRequest.decode(read("prop:request")))
+  value = sdkEvaluate.evaluate(settings.component, sdkRequest.decode(read("prop:request")))
   renderer = new JsonRenderer {}
 }

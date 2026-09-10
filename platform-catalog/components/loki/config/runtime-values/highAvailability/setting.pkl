@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.highAvailability.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+setting: sdkSettings.BoolSetting = new {
+  key = "highAvailability"
+  label = "High availability"
+  description = "Uses Loki simple-scalable mode and requires object storage."
+  default = false
+}
+
+// How every folder reads this setting: through its declaration, never through the key.
+function enabled(scope: sdkSettings.Scope): Boolean = setting.isOn(scope)

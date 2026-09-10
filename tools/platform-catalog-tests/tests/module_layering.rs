@@ -1,23 +1,21 @@
-//! Enforces the module layering of the published Pkl configuration bundles.
+//! Enforces module layering for published Pkl bundles and unpublished exchange fixtures.
 //!
 //! The decomposition documented in each component's `config/README.md` is only real if it survives
 //! the next contributor:
 //!
 //! ```text
-//! L0  contract.pkl, context.pkl   vocabulary, no dependencies
-//! L0  sdk/                        vendored authoring SDK: request access, validators, envelope
-//! L1  profile.pkl                 typed reads of the stored draft
-//! L2  <feature>/                  self-contained domain packages (storage, resources, ...)
-//! L3  describe/requirements/      one module per contract operation, composition only
-//!     validate/compile
-//! L4  evaluation.pkl              builds the EvaluationResult envelope
-//! L5  model.pkl                   decodes prop:request, renders JSON
+//! contract.pkl, sdk/     vocabulary and the shared evaluator (vendored, machine-synced)
+//! <setting>/             one folder per setting: setting.pkl (what it is),
+//!                        dependencies.pkl (what it needs), helm.pkl (the Helm it owns)
+//! settings.pkl           table of contents: one Feature per folder
+//! model.pkl              decodes prop:request, hands the component to the SDK, renders JSON
 //! ```
 //!
-//! The rule that matters most is FEATURE -> ROOT: a feature package may only reach up to the
-//! modules in [`ROOT_IMPORTS_ALLOWED_FROM_FEATURES`]. Without it, a default parked in `describe.pkl`
-//! silently turns every feature package into a dependant of the presentation layer — which is the
-//! regression this check exists to prevent.
+//! The rule that matters most is FOLDER -> ROOT: a setting folder may only reach up to the modules
+//! in [`ROOT_IMPORTS_ALLOWED_FROM_FEATURES`]. Without it, a default parked in a root module silently
+//! turns every folder into a dependant of it — which is the regression this check exists to prevent.
+//! Folders also stay independent of each other: a folder reads other settings through the resolved
+//! configuration (`scope.config`), never through their modules.
 //!
 //! `sdk/` is not a feature package: it is the vendored copy of the component-agnostic authoring
 //! SDK (`platform-catalog/pkl/sdk`), synced by `sync-platform-pkl-sdk.sh`. Every module may import
@@ -28,22 +26,24 @@
 //! bottom of this file prove each rule actually fires instead of asserting the checker merely runs.
 
 use platform_catalog_tests::repository_path;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Root modules a feature package may import. Shrinking this list is the ratchet: each entry
-/// removed is one less way for a feature package to depend on the root. Only the two vocabulary
-/// modules are left — a feature package receives every draft value as a parameter.
-const ROOT_IMPORTS_ALLOWED_FROM_FEATURES: &[&str] = &["contract.pkl", "context.pkl"];
+/// Root modules a setting folder may import. Shrinking this list is the ratchet: each entry removed
+/// is one less way for a folder to depend on the root. Only the vendored contract is left — a folder
+/// receives every draft value through the evaluation scope.
+const ROOT_IMPORTS_ALLOWED_FROM_FEATURES: &[&str] = &["contract.pkl"];
 
 /// The vendored SDK package. Any module may import it; it may import only the vendored contract,
 /// so the same bytes stay valid in every component bundle.
 const SDK_PACKAGE: &str = "sdk";
 const SDK_ROOT_IMPORTS_ALLOWED: &[&str] = &["contract.pkl"];
 
-/// The entrypoint stays an I/O shim so the native Pkl tests exercise the same code path q-core does.
-const MODEL_IMPORTS_ALLOWED: &[&str] = &["sdk/request.pkl", "evaluation.pkl"];
+/// The entrypoint stays an I/O shim so the native Pkl tests exercise the same code path q-core does:
+/// it decodes the request with the SDK and hands its `settings.pkl` component to the SDK evaluator.
+const MODEL_IMPORTS_ALLOWED: &[&str] = &["sdk/request.pkl", "sdk/evaluate.pkl", "settings.pkl"];
 
 const BUNDLE_DIR: &str = "config/runtime-values";
 
@@ -197,10 +197,13 @@ fn check(modules: &[Module]) -> Vec<String> {
                                  contract.pkl and other sdk modules",
                                 import.resolved
                             ));
+                        } else if import.resolved.ends_with("/setting.pkl") {
+                            // A folder reads a sibling setting through its declaration, and only
+                            // through it; cycles are rejected below.
                         } else {
                             violations.push(format!(
-                                "{at}: imports '{}' from feature package '{target}'; feature \
-                                 packages must stay independent",
+                                "{at}: imports '{}' from feature package '{target}'; a folder may \
+                                 only import a sibling's setting.pkl",
                                 import.resolved
                             ));
                         }
@@ -232,15 +235,69 @@ fn check(modules: &[Module]) -> Vec<String> {
         }
     }
 
+    violations.extend(setting_import_cycles(modules));
+    violations
+}
+
+/// Typed cross-setting reads go through a sibling's `setting.pkl`. Per bundle they form a graph
+/// that must stay acyclic: two folders defining each other would have no readable order.
+fn setting_import_cycles(modules: &[Module]) -> Vec<String> {
+    let mut edges: BTreeMap<(&str, &str), BTreeSet<&str>> = BTreeMap::new();
+    for module in modules {
+        let Some(package) = module.package() else { continue };
+        if package == SDK_PACKAGE {
+            continue;
+        }
+        for import in &module.imports {
+            if let Some(target) = package_of(&import.resolved)
+                && target != package
+                && target != SDK_PACKAGE
+                && import.resolved.ends_with("/setting.pkl")
+            {
+                edges
+                    .entry((module.component.as_str(), package))
+                    .or_default()
+                    .insert(target);
+            }
+        }
+    }
+
+    let mut violations = Vec::new();
+    for (component, start) in edges.keys() {
+        let mut stack: Vec<(&str, Vec<&str>)> = vec![(start, vec![start])];
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        while let Some((node, path)) = stack.pop() {
+            for target in edges.get(&(component, node)).into_iter().flatten() {
+                if target == start {
+                    // Report each cycle once, from its alphabetically first folder.
+                    if path.iter().all(|folder| start <= folder) {
+                        violations.push(format!(
+                            "{component}: setting folders import each other in a cycle: {} -> {target}",
+                            path.join(" -> ")
+                        ));
+                    }
+                } else if seen.insert(target) {
+                    let mut next = path.clone();
+                    next.push(target);
+                    stack.push((target, next));
+                }
+            }
+        }
+    }
     violations
 }
 
 fn load_modules() -> Vec<Module> {
-    let components = repository_path("platform-catalog/components");
+    let mut modules = load_modules_from(&repository_path("platform-catalog/components"));
+    modules.extend(load_modules_from(&repository_path("platform-catalog/pkl/tests/fixtures")));
+    modules
+}
+
+fn load_modules_from(components: &Path) -> Vec<Module> {
     let mut modules = Vec::new();
 
-    let mut entries: Vec<PathBuf> = fs::read_dir(&components)
-        .expect("platform-catalog/components must be readable")
+    let mut entries: Vec<PathBuf> = fs::read_dir(components)
+        .unwrap_or_else(|error| panic!("cannot read bundle inventory {components:?}: {error}"))
         .map(|entry| entry.expect("component directory entry must be readable").path())
         .collect();
     entries.sort();
@@ -314,6 +371,10 @@ fn every_evaluator_bundle_declares_an_entrypoint() {
         components.contains(&"loki") && components.contains(&"cluster-agent"),
         "expected loki and cluster-agent to expose runtime-values/model.pkl, found {components:?}"
     );
+    assert!(
+        components.contains(&"karpenter-v1"),
+        "the unpublished structured-field fixture must be covered by the same layering rules"
+    );
 }
 
 fn report(violations: &[String]) -> String {
@@ -357,11 +418,14 @@ fn a_feature_package_may_not_import_the_presentation_layer() {
 
 #[test]
 fn a_feature_package_may_import_the_vocabulary_modules() {
-    let violations = check(&[module(
-        "storage/types.pkl",
-        &[("../context.pkl", None), ("../contract.pkl", None)],
-    )]);
+    let violations = check(&[module("storage/types.pkl", &[("../contract.pkl", None)])]);
     assert!(violations.is_empty(), "{violations:?}");
+
+    // context.pkl left the allow-list with the layered layout: the cluster context now reaches a
+    // folder through the evaluation scope.
+    let context = check(&[module("storage/types.pkl", &[("../context.pkl", None)])]);
+    assert_eq!(context.len(), 1, "{context:?}");
+    assert!(context[0].contains("feature package imports root module 'context.pkl'"));
 }
 
 #[test]
@@ -372,6 +436,50 @@ fn feature_packages_may_not_import_each_other() {
     )]);
     assert_eq!(violations.len(), 1, "{violations:?}");
     assert!(violations[0].contains("from feature package 'storage'"));
+}
+
+#[test]
+fn a_folder_may_read_a_sibling_setting_through_its_declaration_only() {
+    let allowed = check(&[module(
+        "highAvailability/dependencies.pkl",
+        &[("../storage/setting.pkl", Some("storageSetting"))],
+    )]);
+    assert!(allowed.is_empty(), "{allowed:?}");
+
+    let helm = check(&[module(
+        "highAvailability/dependencies.pkl",
+        &[("../storage/helm.pkl", Some("storageHelm"))],
+    )]);
+    assert_eq!(helm.len(), 1, "{helm:?}");
+    assert!(helm[0].contains("only import a sibling's setting.pkl"));
+}
+
+#[test]
+fn sibling_setting_imports_may_not_form_a_cycle() {
+    let violations = check(&[
+        module(
+            "highAvailability/dependencies.pkl",
+            &[("../storage/setting.pkl", Some("storageSetting"))],
+        ),
+        module(
+            "storage/setting.pkl",
+            &[("../highAvailability/setting.pkl", Some("highAvailabilitySetting"))],
+        ),
+    ]);
+    assert_eq!(violations.len(), 1, "{violations:?}");
+    assert!(violations[0].contains("cycle"), "{violations:?}");
+
+    let chain = check(&[
+        module(
+            "resources/setting.pkl",
+            &[("../highAvailability/setting.pkl", Some("highAvailabilitySetting"))],
+        ),
+        module(
+            "highAvailability/dependencies.pkl",
+            &[("../storage/setting.pkl", Some("storageSetting"))],
+        ),
+    ]);
+    assert!(chain.is_empty(), "{chain:?}");
 }
 
 #[test]
@@ -403,13 +511,21 @@ fn the_entrypoint_may_not_bypass_the_evaluation_envelope() {
     assert!(violations[0].contains("entrypoint imports 'compile.pkl'"));
 
     // Request decoding lives in the vendored SDK, so the entrypoint no longer parses JSON itself.
-    let json = check(&[module("model.pkl", &[("pkl:json", None), ("evaluation.pkl", None)])]);
+    let json = check(&[module("model.pkl", &[("pkl:json", None), ("settings.pkl", None)])]);
     assert_eq!(json.len(), 1, "{json:?}");
     assert!(json[0].contains("entrypoint imports 'pkl:json'"));
 
+    // A component-local orchestration module is the layered layout: the SDK evaluator owns it now.
+    let layered = check(&[module("model.pkl", &[("evaluation.pkl", None)])]);
+    assert_eq!(layered.len(), 1, "{layered:?}");
+
     let correct = check(&[module(
         "model.pkl",
-        &[("sdk/request.pkl", Some("sdkRequest")), ("evaluation.pkl", None)],
+        &[
+            ("settings.pkl", None),
+            ("sdk/evaluate.pkl", Some("sdkEvaluate")),
+            ("sdk/request.pkl", Some("sdkRequest")),
+        ],
     )]);
     assert!(correct.is_empty(), "{correct:?}");
 }

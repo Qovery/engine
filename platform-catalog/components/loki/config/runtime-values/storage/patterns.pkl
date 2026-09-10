@@ -1,0 +1,6 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.patterns
+
+// Input formats shared by several backends.
+dnsCompatibleBucket: String =
+  "^(?!(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$)(?=[a-z0-9.-]{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"

@@ -1,0 +1,181 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/resources/setting.pkl" as resourcesSetting
+import "../config/runtime-values/sdk/resources.pkl" as sdkResources
+import "fixtures.pkl"
+
+local profiles = resourcesSetting.profiles
+
+// Requirement list for Slice 4.7 resource profiles (q-core docs-v2/slice-4-7-source3-resource-profiles.md).
+
+local function withProfile(base: Mapping, profileName: String): Mapping =
+  (base) { ["resources.profile"] = profileName }
+
+local function customSingleBinary(cpuMilli: Any, memoryMi: Any): Mapping =
+  (withProfile(fixtures.pvcProfile, "CUSTOM")) {
+    ["resources.singleBinary.requests.cpuMilli"] = cpuMilli
+    ["resources.singleBinary.requests.memoryMi"] = memoryMi
+  }
+
+local function validationCodes(profileConfig: Mapping): List<String> =
+  fixtures.codes(fixtures.validate(profileConfig, fixtures.awsCustomer, new Mapping {}))
+
+local function validationPaths(profileConfig: Mapping): List<String> =
+  fixtures.paths(fixtures.validate(profileConfig, fixtures.awsCustomer, new Mapping {}))
+
+local function resourcesOf(profileConfig: Mapping, targetKey: String): Mapping? =
+  fixtures.target(fixtures.helmValues(profileConfig, new Mapping {}), targetKey).getOrNull("resources") as Mapping?
+
+local mediumBudget: Mapping = new {
+  ["requests"] = new Mapping { ["cpu"] = "300m"; ["memory"] = "1024Mi" }
+  ["limits"] = new Mapping { ["memory"] = "2048Mi" }
+}
+
+local contextFreeDescribe = fixtures.describe(null)
+local customHighAvailability =
+  fixtures.validate(
+    withProfile((fixtures.s3Profile) { ["highAvailability"] = true }, "CUSTOM"),
+    fixtures.awsCustomer,
+    fixtures.s3CustomerInputs,
+  )
+local smallDraft = fixtures.resolveRequirements(withProfile(fixtures.pvcProfile, "SMALL"), fixtures.awsCustomer)
+local customDraft = fixtures.resolveRequirements(withProfile(fixtures.pvcProfile, "CUSTOM"), fixtures.awsCustomer)
+
+facts {
+  ["Loki declares three presets over its five workloads, recommending MEDIUM"] {
+    profiles.presets.keys.toList() == List("SMALL", "MEDIUM", "LARGE")
+    profiles.targets.map((target) -> target.key) == List("singleBinary", "read", "write", "backend", "gateway")
+    profiles.recommended == "MEDIUM"
+    profiles.profileNames == List("CHART_DEFAULT", "SMALL", "MEDIUM", "LARGE", "CUSTOM")
+  }
+
+  ["presets set no CPU limit and keep the memory limit above the request"] {
+    profiles.presets.keys.every((profileName) ->
+      profiles.targets.every((target) ->
+        let (budget = profiles.budgetFor(profileName, target))
+          budget.cpuMilliLimit == null
+            && budget.memoryMiLimit != null
+            && (budget.memoryMiLimit as Int) >= budget.memoryMiRequest
+      )
+    )
+  }
+
+  ["the topology follows the high-availability flag"] {
+    profiles.activeTargets(fixtures.scopeOf(fixtures.pvcProfile)).map((target) -> target.key) == List("singleBinary")
+    profiles.activeTargets(fixtures.scopeOf((fixtures.s3Profile) { ["highAvailability"] = true })).map((target) -> target.key)
+      == List("read", "write", "backend", "gateway")
+  }
+
+  ["a configuration stored before slice 4.7 compiles without any resource block"] {
+    List("singleBinary", "read", "write", "backend")
+      .every((targetKey) -> resourcesOf(fixtures.pvcProfile, targetKey) == null)
+  }
+
+  ["an explicit CHART_DEFAULT also compiles without any resource block"] {
+    resourcesOf(withProfile(fixtures.pvcProfile, "CHART_DEFAULT"), "singleBinary") == null
+  }
+
+  ["a preset compiles its versioned budgets for the active topology only"] {
+    // MEDIUM budgets are the engine v1 fleet defaults (300m/1024Mi, memory limit 2048Mi).
+    resourcesOf(withProfile(fixtures.pvcProfile, "MEDIUM"), "singleBinary") == mediumBudget
+    List("read", "write", "backend")
+      .every((targetKey) -> resourcesOf(withProfile(fixtures.pvcProfile, "MEDIUM"), targetKey) == null)
+  }
+
+  ["a high-availability preset configures the four scalable targets, not the single binary"] {
+    let (
+      helm =
+        fixtures.helmValues(
+          withProfile((fixtures.s3Profile) { ["highAvailability"] = true }, "SMALL"),
+          fixtures.s3Inputs,
+        )
+    )
+      List("read", "write", "backend", "gateway")
+        .every((targetKey) -> fixtures.target(helm, targetKey).containsKey("resources"))
+        && !fixtures.target(helm, "singleBinary").containsKey("resources")
+  }
+
+  ["CUSTOM converts integer units to Kubernetes quantities and omits absent limits"] {
+    resourcesOf((customSingleBinary(500, 512)) { ["resources.singleBinary.limits.cpuMilli"] = 700 }, "singleBinary")
+      == new Mapping {
+        ["requests"] = new Mapping { ["cpu"] = "500m"; ["memory"] = "512Mi" }
+        ["limits"] = new Mapping { ["cpu"] = "700m" }
+      }
+  }
+
+  ["CUSTOM requires CPU and memory requests for every active target at save and deploy time"] {
+    validationPaths(withProfile(fixtures.pvcProfile, "CUSTOM"))
+      == List("resources.singleBinary.requests.cpuMilli", "resources.singleBinary.requests.memoryMi")
+    validationCodes(withProfile(fixtures.pvcProfile, "CUSTOM"))
+      == List("REQUIRED_RESOURCE_REQUEST_MISSING", "REQUIRED_RESOURCE_REQUEST_MISSING")
+    // A draft being edited is not spammed with missing-request violations.
+    customDraft.violations.isEmpty
+  }
+
+  ["custom values hidden by a preset are preserved, ignored and never compiled"] {
+    let (
+      config =
+        (withProfile(fixtures.pvcProfile, "MEDIUM")) {
+          ["resources.singleBinary.requests.cpuMilli"] = "not-a-number"
+        }
+    )
+      validationCodes(config).isEmpty && resourcesOf(config, "singleBinary") == mediumBudget
+  }
+
+  ["custom values for inactive topology targets are ignored and never compiled"] {
+    let (config = (customSingleBinary(500, 512)) { ["resources.read.requests.cpuMilli"] = -5 })
+      validationCodes(config).isEmpty && resourcesOf(config, "read") == null
+  }
+
+  ["zero, negative, oversized and non-integer custom values are rejected on stable paths"] {
+    validationCodes(customSingleBinary(0, 512)) == List("VALUE_OUT_OF_RANGE")
+    validationCodes(customSingleBinary(-100, 512)) == List("VALUE_OUT_OF_RANGE")
+    validationCodes(customSingleBinary(500, 999999999)) == List("VALUE_OUT_OF_RANGE")
+    validationCodes(customSingleBinary(0.5, 512)) == List("INVALID_TYPE")
+    validationPaths(customSingleBinary(0.5, 512)) == List("resources.singleBinary.requests.cpuMilli")
+  }
+
+  ["a limit below its request is rejected independently for CPU and memory"] {
+    validationCodes(
+      (customSingleBinary(500, 512)) {
+        ["resources.singleBinary.limits.cpuMilli"] = 300
+        ["resources.singleBinary.limits.memoryMi"] = 256
+      },
+    ) == List("LIMIT_BELOW_REQUEST", "LIMIT_BELOW_REQUEST")
+  }
+
+  ["an unknown resources.profile value is rejected"] {
+    validationCodes(withProfile(fixtures.pvcProfile, "TURBO")) == List("VALUE_NOT_ALLOWED")
+  }
+
+  ["context-free DESCRIBE exposes the selector and every custom key of every topology"] {
+    fixtures.fieldKeys(contextFreeDescribe).filter((key) -> key.startsWith("resources.")).length
+      == 1 + profiles.targets.length * 4
+    fixtures.field(contextFreeDescribe, "resources.profile").constraints.allowedValues == profiles.profileNames
+  }
+
+  ["contextual operations narrow the custom fields to the active topology"] {
+    fixtures.fieldKeys(customHighAvailability).contains("resources.read.requests.cpuMilli")
+    !fixtures.fieldKeys(customHighAvailability).contains("resources.singleBinary.requests.cpuMilli")
+  }
+
+  ["a non-CUSTOM profile exposes no editable custom field and publishes the budgets instead"] {
+    // Without read-only rendering in the contract, an exposed field would be editable yet
+    // ignored. The selector's description carries the preset budgets for the active topology.
+    !fixtures.fieldKeys(smallDraft).any((key) -> key.startsWith("resources.") && key != "resources.profile")
+    (fixtures.field(smallDraft, "resources.profile").description as String)
+      .contains("SMALL: singleBinary 100m/512Mi (limit 1024Mi)")
+  }
+
+  ["CUSTOM exposes the active topology fields seeded with the MEDIUM recommendation"] {
+    fixtures.field(customDraft, "resources.singleBinary.requests.cpuMilli").defaultValue == "300"
+    fixtures.field(customDraft, "resources.singleBinary.limits.cpuMilli").defaultValue == null
+    fixtures.field(customDraft, "resources.singleBinary.limits.memoryMi").defaultValue == "2048"
+  }
+
+  ["every custom field is a number with the unit bounds"] {
+    fixtures.field(contextFreeDescribe, "resources.gateway.requests.cpuMilli").type == contract.numberFieldType
+    fixtures.field(contextFreeDescribe, "resources.gateway.requests.cpuMilli").constraints.max == sdkResources.cpuMilliMax
+  }
+}

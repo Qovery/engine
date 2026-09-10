@@ -60,62 +60,58 @@ mapping owns independent direct leaves and the evaluator adds a disjoint conditi
 document that boundary in the component README. Evaluator values win on overlap, which should stay
 a migration mechanism rather than the normal design.
 
-## Structure a Pkl evaluator by user action
+## Structure a Pkl evaluator by setting
 
 q-core invokes only the `runtime-values/model.pkl` entrypoint declared by `configRef.evaluator`.
-Keep that file as a router for the four language-neutral operations:
+Keep that file as an I/O shim: decode the request with `sdk/request.pkl`, hand the component to
+`sdk/evaluate.pkl`, render JSON. The four operations (`DESCRIBE`, `RESOLVE_REQUIREMENTS`,
+`VALIDATE`, `COMPILE`) are implemented once in the SDK; the component only declares data.
 
-| Operation | User/system action | Recommended module |
-| --- | --- | --- |
-| `DESCRIBE` | Render editable Console fields | `describe.pkl` |
-| `RESOLVE_REQUIREMENTS` | Refresh conditional inputs for the current draft | `requirements.pkl` |
-| `VALIDATE` | Check the draft before saving | `validate.pkl` |
-| `COMPILE` | Produce derived Helm values before deployment | `compile.pkl` |
-
-Shared product concepts may use a domain subdirectory. For example Loki keeps storage types,
-logical inputs and backend instances in `storage/types.pkl`, `storage/inputs.pkl`, and
-`storage/backends.pkl`. Prefer a domain name over generic directories such as `constraints/` or
-`utils/`: a logical input's key, type, label, description and constraint should stay together.
-
-Recommended evaluator tree:
+Organise that data **by setting**, not by operation. A reader looking for one customer-facing
+setting must find everything about it in one folder, in files that always carry the same names:
 
 ```text
 runtime-values/
-  model.pkl                    # request decoding, operation routing, JSON output only
+  model.pkl                    # request decoding, SDK evaluation, JSON output only
+  settings.pkl                 # table of contents: one Feature { settings; rules; fragment } per folder
+  <setting>/
+    setting.pkl                # WHAT it is: typed declaration (type, default, bounds, label, activity)
+    dependencies.pkl           # WHAT IT REQUIRES from other settings or the cluster (rules)
+    helm.pkl                   # WHICH chart values it owns (a fragment, merged with the others)
+  <enum setting>/
+    setting.pkl                # the choices and the availability rules (provider, mode)
+    <choice>.pkl               # one file per choice: its inputs and its Helm hooks
+    helm.pkl                   # assembles the fragment from the selected choice
   contract.pkl                 # vendored copy of the canonical q-core/Pkl contract
   sdk/                         # vendored copy of the shared authoring SDK
-    request.pkl                # request decoding, typed readers, test request builder
-    validate.pkl               # canonical violation codes and generic validators
-    result.pkl                 # EvaluationResult envelope with the fail-closed COMPILE gate
-  describe.pkl                 # fields, defaults and field-level constraints
-  requirements.pkl             # conditional logical inputs
-  validate.pkl                 # types, cross-field rules and stable violation codes
-  compile.pkl                  # readable high-level Helm topology
-  profile.pkl                  # defaults and safe profile type narrowing
-  <domain>/
-    types.pkl                  # domain types
-    inputs.pkl                 # logical inputs with their constraints
-    backends.pkl               # supported instances/capability registry
-    helm.pkl                   # domain-specific adaptation to chart values, when needed
 ```
 
-The canonical contract and authoring SDK live in `platform-catalog/pkl/` (see its
-[README](../pkl/README.md)). Every executable component keeps a local copy because q-core resolves
-imports only within that component's digest-pinned bundle. Run `./scripts/sync-platform-pkl-sdk.sh`
-after changing a canonical file; CI rejects missing, stale, or extraneous copies, and publication
-fails on out-of-sync copies and injects the canonical files into the staged bundle.
-Component-specific types must stay outside `contract.pkl` and `sdk/`.
+Conventions that keep this readable:
 
-Use the SDK instead of re-implementing its concerns: `model.pkl` decodes the request with
-`sdk/request.pkl`, evaluation reads the request through its typed accessors and builds the response
-with `sdk/result.pkl` — whose envelope owns the "no helmValues while violations exist" gate — and
-validators reuse the canonical violation codes and generic checks in `sdk/validate.pkl`. The
-layering check enforces the boundary in both directions: any module may import `sdk/` (aliased
-`sdk<Module>`), while SDK modules may import only `contract.pkl`.
+- `setting.pkl` is declarative. Type, default, bounds, allowed values: the SDK derives `DESCRIBE`,
+  the applied default and the type/bound violations. Never re-implement a type check by hand.
+- A file that would be empty is not created. A setting without rule has no `dependencies.pkl`.
+- A dependency lives in the folder of the setting that is **blamed**, the `fieldPath` of its
+  violation. A folder reads another setting through that setting's declaration, by importing the
+  sibling's `setting.pkl` and nothing else (`storageSetting.selectedBackend(scope)`), never through
+  a string key: renaming or retyping a setting then breaks evaluation instead of silently disabling
+  a rule. The layering check refuses any other cross-folder import and any import cycle.
+- What a choice requires from the cluster (its inputs, compile-only inputs, provider) is declared
+  on that choice, in its own file when the enum has several substantial choices.
+- Each `helm.pkl` writes only the chart keys its setting owns. Fragments are deep-merged in the
+  feature order of `settings.pkl`, which is also the Console order and the key order of
+  `values.final.yaml`; two settings writing the same leaf fail evaluation.
+- Predicates and fragments receive one `Scope`: `scope.config` (resolved draft), `scope.cluster`,
+  `scope.inputs`, `scope.enabledComponents`. Nothing else is in reach, by design.
+- Use the SDK's composite declarations for concepts every chart shares. Resource budgets are one:
+  `resources/setting.pkl` names the workloads and their preset budgets, and `sdk/resources.pkl`
+  derives the selector, the CUSTOM fields, their rules and the `<target>.resources` values.
 
-Split chart-specific low-level adaptation from product intent when it becomes substantial. Loki's
-`storage/helm.pkl` is such an adapter; `compile.pkl` remains readable without knowing every Loki
-chart key.
+Loki is the reference bundle; its [README](loki/config/README.md) walks through each folder.
+cluster-agent (one Helm fragment, no setting) and qovery-operator (one enum required under a
+capability) show the minimal form. A structured draft (objects, lists of rows) uses the same
+declarations one level down with `ObjectSetting` and `ArraySetting`; the karpenter fixture under
+`platform-catalog/pkl/tests/fixtures/` is the reference for it.
 
 ## Evaluator invariants
 
@@ -128,8 +124,8 @@ chart key.
 - `VALIDATE` and `COMPILE` apply the same product rules. `COMPILE` additionally checks trusted
   system inputs needed only while producing values.
 - Invalid input must never produce partial Helm values. Compilation fails closed.
-- Keep constraints beside the field or logical input they constrain. Keep cross-field rules in
-  `validate.pkl`.
+- Keep constraints on the setting or logical input they constrain (`setting.pkl`, a backend file).
+  Keep cross-setting rules in the `dependencies.pkl` of the setting that is blamed.
 - Pkl imports are static. More files improve navigation, not lazy execution.
 - Imports must stay within the same digest-pinned bundle; filesystem, environment, packages and
   network access are unavailable.

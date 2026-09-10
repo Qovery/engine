@@ -17,7 +17,7 @@ while IFS= read -r suite; do
   suite_count=$((suite_count + 1))
 done < <(
   find "$ROOT_DIR/platform-catalog/components" "$ROOT_DIR/platform-catalog/pkl" -type f \
-    \( -name '*.test.pkl' -o -name '*.tests.pkl' \) \
+    -name '*.tests.pkl' \
     | sort
 )
 

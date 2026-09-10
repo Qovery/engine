@@ -1,0 +1,13 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.retentionWeeks.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+setting: sdkSettings.IntSetting = new {
+  key = "retentionWeeks"
+  label = "Retention period"
+  description = "Whole number of weeks to retain Loki logs."
+  default = 12
+  min = 1
+  max = 52
+}

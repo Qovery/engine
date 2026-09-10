@@ -1,0 +1,75 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+amends "backend.pkl"
+
+import "../contract.pkl"
+import "patterns.pkl"
+
+// S3-compatible object store (Scaleway) with static credentials. The credentials stay in a
+// Secret the customer creates in the Loki namespace; only its name is an input, and Loki reads
+// them through environment expansion so they never enter values.final.yaml.
+local endpoint: contract.LogicalInput = new {
+  key = "infra.s3CompatibleEndpoint"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "S3-compatible endpoint"
+  description = "HTTPS endpoint of the S3-compatible object store, without credentials."
+  constraints = new {
+    pattern = "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?/?$"
+  }
+}
+
+local region: contract.LogicalInput = new {
+  key = "infra.s3CompatibleRegion"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "S3-compatible region"
+  description = "Region expected by the S3-compatible object store."
+  constraints = new { pattern = "^[a-z0-9][a-z0-9-]{1,62}$" }
+}
+
+local credentialsSecret: contract.LogicalInput = new {
+  key = "infra.s3CompatibleCredentialsSecretName"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "S3-compatible credentials Secret"
+  description =
+    "Name of a Secret in the Loki namespace containing S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY. The credentials never enter q-core."
+  constraints = new {
+    pattern =
+      "^(?=.{1,253}$)[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$"
+  }
+}
+
+option {
+  value = "s3Compatible"
+  provider = "SCW"
+  inputs = List(bucket, endpoint, region, credentialsSecret)
+}
+
+objectStoreId = "s3"
+
+bucket = new {
+  key = "infra.s3CompatibleBucketName"
+  type = contract.stringFieldType
+  scope = contract.clusterScope
+  label = "S3-compatible bucket name"
+  description = "S3-compatible bucket used by Loki for chunks, ruler and admin data."
+  constraints = new { pattern = patterns.dnsCompatibleBucket }
+}
+
+storageConfig = (scope) -> Pair("s3", new Mapping {
+  ["endpoint"] = scope.inputs[endpoint.key]
+  ["region"] = scope.inputs[region.key]
+  ["accessKeyId"] = "${S3_ACCESS_KEY_ID}"
+  ["secretAccessKey"] = "${S3_SECRET_ACCESS_KEY}"
+  ["signatureVersion"] = "v4"
+  ["s3ForcePathStyle"] = true
+  ["insecure"] = false
+})
+
+decorateTarget = (target, scope) -> (target) {
+  ["extraArgs"] = List("-config.expand-env=true")
+  ["extraEnvFrom"] = List(new Mapping {
+    ["secretRef"] = new Mapping { ["name"] = scope.inputs[credentialsSecret.key] }
+  })
+}

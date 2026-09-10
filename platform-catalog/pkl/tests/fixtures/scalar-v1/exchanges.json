@@ -1,0 +1,1605 @@
+[
+  {
+    "request": {
+      "operation": "DESCRIBE",
+      "componentKey": "cluster-agent",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "RESOLVE_REQUIREMENTS",
+      "componentKey": "cluster-agent",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "VALIDATE",
+      "componentKey": "cluster-agent",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "COMPILE",
+      "componentKey": "cluster-agent",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [],
+      "requiredInputs": [],
+      "violations": [],
+      "helmValues": {
+        "environmentVariables": {
+          "LOKI_URL": "http://loki-gateway.qovery.svc"
+        }
+      }
+    }
+  },
+  {
+    "request": {
+      "operation": "DESCRIBE",
+      "componentKey": "qovery-operator",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "cpuArchitectures",
+          "type": "string",
+          "required": false,
+          "label": "CPU architectures",
+          "description": "Native CPU architecture used by the local demo builder.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "AMD64",
+              "ARM64"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "RESOLVE_REQUIREMENTS",
+      "componentKey": "qovery-operator",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "cpuArchitectures",
+          "type": "string",
+          "required": false,
+          "label": "CPU architectures",
+          "description": "Native CPU architecture used by the local demo builder.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "AMD64",
+              "ARM64"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "VALIDATE",
+      "componentKey": "qovery-operator",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "cpuArchitectures",
+          "type": "string",
+          "required": false,
+          "label": "CPU architectures",
+          "description": "Native CPU architecture used by the local demo builder.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "AMD64",
+              "ARM64"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "COMPILE",
+      "componentKey": "qovery-operator",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "cpuArchitectures",
+          "type": "string",
+          "required": false,
+          "label": "CPU architectures",
+          "description": "Native CPU architecture used by the local demo builder.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "AMD64",
+              "ARM64"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": [],
+      "helmValues": {
+        "environmentVariables": {}
+      }
+    }
+  },
+  {
+    "request": {
+      "operation": "DESCRIBE",
+      "componentKey": "loki",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Single binary CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Single binary memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Single binary memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.read.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Read CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.read.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Read CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.read.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Read memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.read.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Read memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.write.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Write CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.write.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Write CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.write.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Write memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.write.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Write memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.backend.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Backend CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.backend.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Backend CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.backend.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Backend memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.backend.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Backend memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.gateway.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "100",
+          "label": "Gateway CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.gateway.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Gateway CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.gateway.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "128",
+          "label": "Gateway memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.gateway.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "256",
+          "label": "Gateway memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "RESOLVE_REQUIREMENTS",
+      "componentKey": "loki",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "VALIDATE",
+      "componentKey": "loki",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "COMPILE",
+      "componentKey": "loki",
+      "profileConfig": {},
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {},
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": [],
+      "helmValues": {
+        "deploymentMode": "SingleBinary",
+        "loki": {
+          "commonConfig": {
+            "replication_factor": 1
+          },
+          "limits_config": {
+            "retention_period": "2016h"
+          }
+        },
+        "singleBinary": {
+          "replicas": 1
+        },
+        "write": {
+          "replicas": 0
+        },
+        "read": {
+          "replicas": 0
+        },
+        "backend": {
+          "replicas": 0
+        }
+      }
+    }
+  },
+  {
+    "request": {
+      "operation": "DESCRIBE",
+      "componentKey": "loki",
+      "profileConfig": {
+        "storage": "s3",
+        "retentionWeeks": 12,
+        "highAvailability": false
+      },
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {
+        "infra.s3BucketName": "qovery-loki",
+        "infra.lokiRoleArn": "arn:aws:iam::123456789012:role/loki",
+        "infra.awsRegion": "eu-west-3"
+      },
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Single binary CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Single binary memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Single binary memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.read.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Read CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.read.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Read CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.read.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Read memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.read.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Read memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.write.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Write CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.write.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Write CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.write.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Write memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.write.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Write memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.backend.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "300",
+          "label": "Backend CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.backend.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Backend CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.backend.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "1024",
+          "label": "Backend memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.backend.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "2048",
+          "label": "Backend memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.gateway.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "defaultValue": "100",
+          "label": "Gateway CPU request (millicores)",
+          "description": "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.gateway.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Gateway CPU limit (millicores)",
+          "description": "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.gateway.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "128",
+          "label": "Gateway memory request (MiB)",
+          "description": "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.gateway.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "defaultValue": "256",
+          "label": "Gateway memory limit (MiB)",
+          "description": "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "RESOLVE_REQUIREMENTS",
+      "componentKey": "loki",
+      "profileConfig": {
+        "storage": "s3",
+        "retentionWeeks": 12,
+        "highAvailability": false
+      },
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {
+        "infra.s3BucketName": "qovery-loki",
+        "infra.lokiRoleArn": "arn:aws:iam::123456789012:role/loki",
+        "infra.awsRegion": "eu-west-3"
+      },
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [
+        {
+          "key": "infra.s3BucketName",
+          "type": "string",
+          "scope": "CLUSTER",
+          "label": "S3 bucket name",
+          "description": "Bucket used by Loki for chunks, ruler and admin data.",
+          "sensitive": false,
+          "constraints": {
+            "pattern": "^(?!(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$)(?=[a-z0-9.-]{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"
+          }
+        },
+        {
+          "key": "infra.lokiRoleArn",
+          "type": "string",
+          "scope": "CLUSTER",
+          "label": "Loki IAM role ARN",
+          "description": "IAM role assumed by Loki through IRSA.",
+          "sensitive": false,
+          "constraints": {
+            "pattern": "^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+$"
+          }
+        }
+      ],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "VALIDATE",
+      "componentKey": "loki",
+      "profileConfig": {
+        "storage": "s3",
+        "retentionWeeks": 12,
+        "highAvailability": false
+      },
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {
+        "infra.s3BucketName": "qovery-loki",
+        "infra.lokiRoleArn": "arn:aws:iam::123456789012:role/loki",
+        "infra.awsRegion": "eu-west-3"
+      },
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [
+        {
+          "key": "infra.s3BucketName",
+          "type": "string",
+          "scope": "CLUSTER",
+          "label": "S3 bucket name",
+          "description": "Bucket used by Loki for chunks, ruler and admin data.",
+          "sensitive": false,
+          "constraints": {
+            "pattern": "^(?!(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$)(?=[a-z0-9.-]{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"
+          }
+        },
+        {
+          "key": "infra.lokiRoleArn",
+          "type": "string",
+          "scope": "CLUSTER",
+          "label": "Loki IAM role ARN",
+          "description": "IAM role assumed by Loki through IRSA.",
+          "sensitive": false,
+          "constraints": {
+            "pattern": "^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+$"
+          }
+        }
+      ],
+      "violations": []
+    }
+  },
+  {
+    "request": {
+      "operation": "COMPILE",
+      "componentKey": "loki",
+      "profileConfig": {
+        "storage": "s3",
+        "retentionWeeks": 12,
+        "highAvailability": false
+      },
+      "clusterContext": {
+        "mode": "CUSTOMER_MANAGED",
+        "provider": "AWS"
+      },
+      "clusterInputs": {
+        "infra.s3BucketName": "qovery-loki",
+        "infra.lokiRoleArn": "arn:aws:iam::123456789012:role/loki",
+        "infra.awsRegion": "eu-west-3"
+      },
+      "componentOutputs": {},
+      "enabledComponents": [
+        "loki",
+        "cluster-agent",
+        "qovery-operator"
+      ]
+    },
+    "response": {
+      "fields": [
+        {
+          "key": "retentionWeeks",
+          "type": "number",
+          "required": false,
+          "defaultValue": "12",
+          "label": "Retention period",
+          "description": "Whole number of weeks to retain Loki logs.",
+          "sensitive": false,
+          "constraints": {
+            "min": 1,
+            "max": 52
+          }
+        },
+        {
+          "key": "highAvailability",
+          "type": "bool",
+          "required": false,
+          "defaultValue": "false",
+          "label": "High availability",
+          "description": "Uses Loki simple-scalable mode and requires object storage.",
+          "sensitive": false,
+          "constraints": {}
+        },
+        {
+          "key": "resources.profile",
+          "type": "string",
+          "required": false,
+          "defaultValue": "CHART_DEFAULT",
+          "label": "Resource profile",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "CHART_DEFAULT",
+              "SMALL",
+              "MEDIUM",
+              "LARGE",
+              "CUSTOM"
+            ]
+          }
+        },
+        {
+          "key": "storage",
+          "type": "string",
+          "required": false,
+          "defaultValue": "pvc",
+          "label": "Storage",
+          "description": "Storage backend used by Loki.",
+          "sensitive": false,
+          "constraints": {
+            "allowedValues": [
+              "pvc",
+              "s3"
+            ]
+          }
+        }
+      ],
+      "requiredInputs": [
+        {
+          "key": "infra.s3BucketName",
+          "type": "string",
+          "scope": "CLUSTER",
+          "label": "S3 bucket name",
+          "description": "Bucket used by Loki for chunks, ruler and admin data.",
+          "sensitive": false,
+          "constraints": {
+            "pattern": "^(?!(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$)(?=[a-z0-9.-]{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"
+          }
+        },
+        {
+          "key": "infra.lokiRoleArn",
+          "type": "string",
+          "scope": "CLUSTER",
+          "label": "Loki IAM role ARN",
+          "description": "IAM role assumed by Loki through IRSA.",
+          "sensitive": false,
+          "constraints": {
+            "pattern": "^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+$"
+          }
+        }
+      ],
+      "violations": [],
+      "helmValues": {
+        "deploymentMode": "SingleBinary",
+        "loki": {
+          "commonConfig": {
+            "replication_factor": 1
+          },
+          "limits_config": {
+            "retention_period": "2016h"
+          },
+          "storage": {
+            "type": "s3",
+            "bucketNames": {
+              "chunks": "qovery-loki",
+              "ruler": "qovery-loki",
+              "admin": "qovery-loki"
+            },
+            "s3": {
+              "region": "eu-west-3"
+            }
+          },
+          "schemaConfig": {
+            "configs": [
+              {
+                "from": "2024-04-01",
+                "store": "tsdb",
+                "object_store": "s3",
+                "schema": "v13",
+                "index": {
+                  "prefix": "index_",
+                  "period": "24h"
+                }
+              }
+            ]
+          },
+          "compactor": {
+            "delete_request_store": "s3"
+          }
+        },
+        "singleBinary": {
+          "replicas": 1,
+          "persistence": {
+            "enabled": false
+          },
+          "extraVolumes": [
+            {
+              "name": "storage",
+              "emptyDir": {}
+            }
+          ],
+          "extraVolumeMounts": [
+            {
+              "name": "storage",
+              "mountPath": "/var/loki"
+            }
+          ]
+        },
+        "write": {
+          "replicas": 0,
+          "persistence": {
+            "volumeClaimsEnabled": false
+          }
+        },
+        "read": {
+          "replicas": 0
+        },
+        "backend": {
+          "replicas": 0,
+          "persistence": {
+            "volumeClaimsEnabled": false
+          }
+        },
+        "serviceAccount": {
+          "annotations": {
+            "eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/loki"
+          }
+        }
+      }
+    }
+  }
+]

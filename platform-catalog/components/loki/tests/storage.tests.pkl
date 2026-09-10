@@ -1,0 +1,168 @@
+amends "pkl:test"
+
+import "../config/runtime-values/storage/setting.pkl" as storageSetting
+import "../config/runtime-values/storage/pvc.pkl" as storagePvc
+import "../config/runtime-values/storage/s3.pkl" as storageS3
+import "fixtures.pkl"
+
+local function storage(value: String): Mapping = new { ["storage"] = value }
+
+local ovhCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "OVH" }
+
+local s3CompatibleInputs: Mapping = new {
+  ["infra.s3CompatibleBucketName"] = "qovery-loki-scw"
+  ["infra.s3CompatibleEndpoint"] = "https://s3.fr-par.scw.cloud"
+  ["infra.s3CompatibleRegion"] = "fr-par"
+  ["infra.s3CompatibleCredentialsSecretName"] = "loki-object-storage"
+}
+
+local azureInputs: Mapping = new {
+  ["infra.azureStorageAccountName"] = "qoveryloki"
+  ["infra.azureContainerName"] = "loki-data"
+  ["infra.azureManagedIdentityClientId"] = "12345678-1234-1234-1234-123456789abc"
+}
+
+facts {
+  ["every backend is one file declaring a distinct choice"] {
+    storageSetting.backends.map((backend) -> backend.option.value).isDistinct
+    storageSetting.backends.map((backend) -> backend.option.value)
+      == List("pvc", "s3", "gcs", "azureBlob", "s3Compatible")
+  }
+
+  ["an object-storage backend declares its bucket and a provider; pvc declares neither"] {
+    storageSetting.backends
+      .filter((backend) -> backend.isObjectStorage)
+      .every((backend) -> backend.bucket != null && backend.option.provider != null)
+    !storagePvc.isObjectStorage
+    storagePvc.option.provider == null
+    storagePvc.option.inputs.isEmpty
+  }
+
+  ["an object store must ask the customer for its bucket"] {
+    module.catch(() -> ((storageS3) { option = (storageS3.option) { inputs = List() } }).option).contains("Type constraint")
+  }
+
+  ["pvc requires no cluster input"] {
+    fixtures.resolveRequirements(storage("pvc"), fixtures.awsCustomer).requiredInputs.isEmpty
+  }
+
+  ["s3 on a customer-managed AWS cluster requires the bucket and the IAM role"] {
+    fixtures.inputKeys(fixtures.resolveRequirements(storage("s3"), fixtures.awsCustomer))
+      == List("infra.s3BucketName", "infra.lokiRoleArn")
+  }
+
+  ["a choice is offered only on its provider"] {
+    fixtures.allowedStorage(fixtures.describe(fixtures.gcpCustomer)) == List("pvc", "gcs")
+    fixtures.allowedStorage(fixtures.describe(fixtures.azureCustomer)) == List("pvc", "azureBlob")
+    fixtures.allowedStorage(fixtures.describe(fixtures.scalewayCustomer)) == List("pvc", "s3Compatible")
+  }
+
+  ["Qovery-managed clusters only offer pvc"] {
+    fixtures.allowedStorage(fixtures.describe(fixtures.awsManaged)) == List("pvc")
+  }
+
+  ["a provider without object storage still gets the pvc choice"] {
+    // CloudVendor is an open set: a cluster on OVH, DO, ... must still get the pvc-only catalog.
+    fixtures.allowedStorage(fixtures.describe(ovhCustomer)) == List("pvc")
+    fixtures.resolveRequirements(storage("s3"), ovhCustomer).requiredInputs.isEmpty
+    fixtures.codes(fixtures.validate(storage("s3"), ovhCustomer, new Mapping {}))
+      == List("STORAGE_PROVIDER_MISMATCH")
+  }
+
+  ["selecting a choice from another provider is a mismatch and activates no input"] {
+    fixtures.codes(fixtures.validate(storage("s3"), fixtures.gcpCustomer, new Mapping {}))
+      == List("STORAGE_PROVIDER_MISMATCH")
+    fixtures.codes(fixtures.compile(fixtures.s3Profile, fixtures.gcpCustomer, new Mapping {}))
+      == List("STORAGE_PROVIDER_MISMATCH")
+  }
+
+  ["object storage on Qovery-managed clusters is blocked until the Terraform barrier exists"] {
+    fixtures.codes(fixtures.validate(storage("s3"), fixtures.awsManaged, new Mapping {}))
+      == List("MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE")
+    // An unavailable choice activates no input, whatever the reason. The previous layout still
+    // asked for the S3 inputs here while reporting the violation; this is deliberate.
+    fixtures.inputKeys(fixtures.resolveRequirements(storage("s3"), fixtures.awsManaged)) == List()
+    fixtures.codes(fixtures.resolveRequirements(storage("s3"), fixtures.awsManaged))
+      == List("MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE")
+  }
+
+  ["an unknown choice is rejected as a value, never as a provider mismatch"] {
+    fixtures.codes(fixtures.validate(storage("nfs"), fixtures.awsCustomer, new Mapping {}))
+      == List("VALUE_NOT_ALLOWED")
+    fixtures.codes(fixtures.validate(new Mapping { ["storage"] = 3 }, fixtures.awsCustomer, new Mapping {}))
+      == List("INVALID_TYPE")
+  }
+
+  ["a malformed IAM role ARN is rejected by its pattern"] {
+    fixtures.codes(
+      fixtures.validate(
+        storage("s3"),
+        fixtures.awsCustomer,
+        new Mapping { ["infra.s3BucketName"] = "my-logs"; ["infra.lokiRoleArn"] = "not-an-arn" },
+      ),
+    ) == List("INPUT_PATTERN_MISMATCH")
+  }
+
+  ["a complete valid s3 configuration produces no violation"] {
+    fixtures.validate(storage("s3"), fixtures.awsCustomer, fixtures.s3CustomerInputs).violations.isEmpty
+  }
+
+  ["the customer requirements exclude the q-core compile inputs, which COMPILE still checks"] {
+    fixtures.inputKeys(fixtures.resolveRequirements(fixtures.s3Profile, fixtures.awsCustomer))
+      == List("infra.s3BucketName", "infra.lokiRoleArn")
+    fixtures.validate(fixtures.s3Profile, fixtures.awsCustomer, fixtures.s3CustomerInputs).violations.isEmpty
+    fixtures.paths(fixtures.compile(fixtures.s3Profile, fixtures.awsCustomer, fixtures.s3CustomerInputs))
+      == List("clusterInputs.infra.awsRegion")
+  }
+
+  ["an endpoint with credentials or a newline is rejected"] {
+    fixtures.paths(
+      fixtures.validate(
+        storage("s3Compatible"),
+        fixtures.scalewayCustomer,
+        (s3CompatibleInputs) { ["infra.s3CompatibleEndpoint"] = "https://user:pass@s3.fr-par.scw.cloud" },
+      ),
+    ) == List("clusterInputs.infra.s3CompatibleEndpoint")
+    fixtures.paths(
+      fixtures.validate(
+        storage("s3Compatible"),
+        fixtures.scalewayCustomer,
+        (s3CompatibleInputs) { ["infra.s3CompatibleEndpoint"] = "https://s3.fr-par.scw.cloud\n.evil" },
+      ),
+    ) == List("clusterInputs.infra.s3CompatibleEndpoint")
+  }
+
+  ["a too short Azure container name is rejected"] {
+    fixtures.paths(
+      fixtures.validate(
+        storage("azureBlob"),
+        fixtures.azureCustomer,
+        (azureInputs) { ["infra.azureContainerName"] = "ab" },
+      ),
+    ) == List("clusterInputs.infra.azureContainerName")
+  }
+
+  ["object storage disables the chart volumes and keeps ephemeral state on emptyDir"] {
+    let (helm = fixtures.helmValues(fixtures.s3Profile, fixtures.s3Inputs))
+      fixtures.target(helm, "singleBinary")["persistence"] == new Mapping { ["enabled"] = false }
+        && fixtures.target(helm, "write")["persistence"] == new Mapping { ["volumeClaimsEnabled"] = false }
+        && fixtures.target(helm, "backend")["persistence"] == new Mapping { ["volumeClaimsEnabled"] = false }
+        && !fixtures.target(helm, "read").containsKey("persistence")
+        && (helm["loki"] as Mapping).containsKey("schemaConfig")
+  }
+
+  ["pvc leaves the chart storage untouched"] {
+    let (helm = fixtures.helmValues(fixtures.pvcProfile, new Mapping {}))
+      !fixtures.target(helm, "singleBinary").containsKey("persistence")
+        && !(helm["loki"] as Mapping).containsKey("storage")
+        && !helm.containsKey("serviceAccount")
+  }
+
+  ["only the credentials Secret name reaches the Helm values of an S3-compatible store"] {
+    let (helm = fixtures.helmValues(storage("s3Compatible"), s3CompatibleInputs))
+    let (storageValues = (helm["loki"] as Mapping)["storage"] as Mapping)
+      (storageValues["s3"] as Mapping)["accessKeyId"] == "${S3_ACCESS_KEY_ID}"
+        && fixtures.target(helm, "read")["extraEnvFrom"]
+          == List(new Mapping { ["secretRef"] = new Mapping { ["name"] = "loki-object-storage" } })
+  }
+}

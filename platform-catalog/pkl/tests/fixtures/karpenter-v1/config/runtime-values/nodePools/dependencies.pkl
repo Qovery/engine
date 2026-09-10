@@ -1,0 +1,27 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.tests.karpenter.nodePools.dependencies
+
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/settings.pkl" as sdkSettings
+import "../sdk/validate.pkl" as sdkValidate
+import "setting.pkl"
+
+// Pool names identify pools across the collection: every row repeating an earlier name is blamed.
+// The rows and their names are read through the declarations, never through string keys.
+rules: List<sdkRules.Rule> = List(
+  new sdkRules.RowRule {
+    code = sdkValidate.duplicateItemCode
+    message = "Pool names must be unique"
+    paths = (scope) ->
+      let (rows = ((setting.setting.valueIn(scope) as Listing?) ?? new Listing {}).toList())
+      let (names = rows.map((row) -> if (row is Mapping) setting.poolName.value(sdkSettings.nested(scope, row)) else null))
+        names
+          .mapIndexed((index, name) ->
+            if (name != null && names.take(index).contains(name))
+              sdkValidate.fieldPath(sdkValidate.indexPath(setting.setting.key, index), setting.poolName.key)
+            else
+              null
+          )
+          .filterNonNull()
+  },
+)

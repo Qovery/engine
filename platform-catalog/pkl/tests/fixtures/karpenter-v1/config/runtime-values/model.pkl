@@ -1,0 +1,12 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.tests.karpenter.model
+
+import "settings.pkl"
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "sdk/request.pkl" as sdkRequest
+
+// Existing-style JSON entrypoint: decode prop:request, evaluate the declared component, render.
+output {
+  value = sdkEvaluate.evaluate(settings.component, sdkRequest.decode(read("prop:request")))
+  renderer = new JsonRenderer {}
+}

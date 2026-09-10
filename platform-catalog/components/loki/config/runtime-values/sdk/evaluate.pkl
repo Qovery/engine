@@ -1,0 +1,150 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.evaluate
+
+import "../contract.pkl"
+import "helm.pkl"
+import "request.pkl"
+import "result.pkl"
+import "rules.pkl"
+import "settings.pkl"
+import "validate.pkl"
+
+// The generic evaluator behind the four contract operations. A component is data: an ordered list
+// of features, each contributing settings, dependency rules and a Helm fragment. Everything an
+// operation needs is derived here, in one place, so a component bundle contains only what is
+// specific to the component.
+//
+// Violation order is stable and documented: unknown fields first, then each setting in Console
+// order (its own value and, recursively, its members and items; then the inputs its selected
+// option activates), then the dependency rules.
+
+// Pkl gives List and nullable properties an implicit default, which would let an author forget a
+// member without noticing. A property of this type has none: it must be written, even as `List()`.
+typealias Explicit<Value> = Value | nothing
+
+// What one setting folder contributes. The three members are always spelled out: a folder with no
+// rule writes `rules = List()`, a folder with no Helm values writes `fragment = sdkHelm.none`, so
+// nothing can be left out of the component silently.
+class Feature {
+  settings: Explicit<List<settings.Setting>>
+  rules: Explicit<List<rules.Rule>>
+  fragment: helm.Fragment
+}
+
+class Component {
+  // Used in every generic message: "<label> configuration field x must be a whole number".
+  label: String
+  // Console order, and therefore also the merge order (hence the key order) of the Helm values.
+  features: List<Feature>
+
+  fixed settings: List<settings.Setting> = features.flatMap((feature) -> feature.settings)
+  fixed rules: List<rules.Rule> = features.flatMap((feature) -> feature.rules)
+  fixed fragments: List<helm.Fragment> = features.map((feature) -> feature.fragment)
+}
+
+function evaluate(component: Component, evaluationRequest: Mapping): contract.EvaluationResult =
+  let (operation = request.operation(evaluationRequest))
+  let (profileConfig = request.profileConfig(evaluationRequest))
+  let (
+    scope =
+      settings.scope(
+        settings.resolve(component.settings, profileConfig),
+        request.clusterContext(evaluationRequest),
+        request.clusterInputs(evaluationRequest),
+        request.enabledComponents(evaluationRequest),
+      )
+  )
+  let (isDescribe = operation == contract.describeOperation)
+  let (active = if (isDescribe) component.settings else activeSettings(component, scope))
+    result.envelope(
+      operation,
+      settings.fields(component.settings, operation, scope, isDescribe),
+      if (isDescribe) List() else requiredInputs(active, scope),
+      if (isDescribe) List() else violations(component, active, operation, profileConfig, scope),
+      () -> compile(component, scope),
+    )
+
+// The Helm values of a validated draft: the fragments of the features that are in play (no setting,
+// or at least one active setting), over the active configuration only (see settings.activeConfig).
+local function compile(component: Component, scope: settings.Scope): Mapping =
+  helm.compile(activeFragments(component, scope), (scope) { config = settings.activeConfig(component.settings, scope) })
+
+local function activeFragments(component: Component, scope: settings.Scope): List<helm.Fragment> =
+  component.features
+    .filter((feature) -> feature.settings.isEmpty || feature.settings.any((setting) -> setting.activeWhen.apply(scope)))
+    .map((feature) -> feature.fragment)
+
+// COMPILE on an already validated configuration, without the envelope or the validation gate:
+// the golden tests read it. Never a production path.
+function unvalidatedHelmValues(component: Component, profileConfig: Mapping, clusterInputs: Mapping): Mapping =
+  compile(component, settings.scope(settings.resolve(component.settings, profileConfig), null, clusterInputs, List()))
+
+function activeSettings(component: Component, scope: settings.Scope): List<settings.Setting> =
+  component.settings.filter((setting) -> setting.activeWhen.apply(scope))
+
+// The inputs activated by the selected, available option of every active enum setting.
+function requiredInputs(active: List<settings.Setting>, scope: settings.Scope): List<contract.LogicalInput> =
+  active.flatMap((setting) ->
+    let (option = selectedAvailableOption(setting, scope))
+      if (option == null) List() else option.inputs
+  )
+
+local function selectedAvailableOption(setting: settings.Setting, scope: settings.Scope): settings.Option? =
+  if (setting is settings.EnumSetting)
+    let (option = setting.selected(scope))
+      if (option != null && setting.available(option, scope)) option else null
+  else
+    null
+
+local function violations(
+  component: Component,
+  active: List<settings.Setting>,
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  scope: settings.Scope,
+): List<contract.Violation> =
+  validate.unknownFields(profileConfig, component.settings.map((setting) -> setting.key).toSet(), component.label)
+    + active.flatMap((setting) -> settingViolations(component, setting, operation, profileConfig, scope))
+    + rules.violations(component.rules, operation, scope, component.label)
+
+// One setting's own violations, then the availability of its selected option, then the inputs
+// that option activates. An unavailable option activates nothing: the Console must not ask for
+// inputs that cannot make the selection valid on this cluster.
+local function settingViolations(
+  component: Component,
+  setting: settings.Setting,
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  scope: settings.Scope,
+): List<contract.Violation> =
+  settings.violations(setting, operation, profileConfig, scope, component.label, "")
+    + (
+      if (setting is settings.EnumSetting)
+        let (option = setting.selected(scope))
+          if (option == null)
+            List()
+          else if (!setting.available(option, scope))
+            setting.availabilityViolations(option, scope)
+          else
+            inputViolations(option, operation, scope.inputs)
+      else
+        List()
+    )
+
+// A missing customer input is the customer's action to take before its format matters, so the two
+// checks chain. Compile-only inputs are supplied by q-core and checked only while compiling.
+local function inputViolations(option: settings.Option, operation: contract.Operation, clusterInputs: Mapping): List<contract.Violation> =
+  if (operation != contract.validateOperation && operation != contract.compileOperation)
+    List()
+  else
+    validate.collect(
+      option.inputs.map((input) ->
+        validate.requiredInput(clusterInputs, input.key) ?? validate.inputPattern(clusterInputs, input)
+      )
+        + (
+          if (operation == contract.compileOperation)
+            option.compileInputs.map((key) -> validate.requiredInput(clusterInputs, key))
+          else
+            List()
+        ),
+    )

@@ -1,0 +1,47 @@
+amends "pkl:test"
+
+import "fixtures.pkl"
+
+local haOnPvc: Mapping = (fixtures.pvcProfile) { ["highAvailability"] = true }
+local haOnS3: Mapping = (fixtures.s3Profile) { ["highAvailability"] = true }
+
+local singleBinary = fixtures.helmValues(fixtures.pvcProfile, new Mapping {})
+local simpleScalable = fixtures.helmValues(haOnS3, fixtures.s3Inputs)
+
+facts {
+  ["high availability requires object storage"] {
+    fixtures.codes(fixtures.validate(haOnPvc, fixtures.awsCustomer, new Mapping {}))
+      == List("HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE")
+    fixtures.paths(fixtures.validate(haOnPvc, fixtures.awsCustomer, new Mapping {}))
+      == List("highAvailability")
+  }
+
+  ["the rule already applies while the draft is being edited"] {
+    fixtures.codes(fixtures.resolveRequirements(haOnPvc, fixtures.awsCustomer))
+      == List("HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE")
+  }
+
+  ["an ill-typed flag is a type error and does not trigger the rule"] {
+    fixtures.codes(
+      fixtures.validate((fixtures.pvcProfile) { ["highAvailability"] = "yes" }, fixtures.awsCustomer, new Mapping {}),
+    ) == List("INVALID_TYPE")
+  }
+
+  ["single binary runs one workload and no gateway"] {
+    singleBinary["deploymentMode"] == "SingleBinary"
+    fixtures.target(singleBinary, "singleBinary")["replicas"] == 1
+    fixtures.target(singleBinary, "read")["replicas"] == 0
+    fixtures.target(singleBinary, "write")["replicas"] == 0
+    fixtures.target(singleBinary, "backend")["replicas"] == 0
+    !singleBinary.containsKey("gateway")
+    (singleBinary["loki"] as Mapping)["commonConfig"] == new Mapping { ["replication_factor"] = 1 }
+  }
+
+  ["high availability switches to simple scalable with three replicas of every target"] {
+    simpleScalable["deploymentMode"] == "SimpleScalable"
+    fixtures.target(simpleScalable, "singleBinary")["replicas"] == 0
+    List("read", "write", "backend", "gateway")
+      .every((key) -> fixtures.target(simpleScalable, key)["replicas"] == 3)
+    (simpleScalable["loki"] as Mapping)["commonConfig"] == new Mapping { ["replication_factor"] = 3 }
+  }
+}

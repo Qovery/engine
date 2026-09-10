@@ -1,152 +1,56 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.storage.helm
 
-import "backends.pkl"
-import "inputs.pkl"
-import "types.pkl"
+import "../contract.pkl"
+import "../sdk/helm.pkl" as sdkHelm
+import "../sdk/settings.pkl" as sdkSettings
+import "backend.pkl"
+import "setting.pkl"
 
-// Chart-specific behavior stays separate from the product backend declarations. Every backend,
-// including no-op backends, must have one adapter so a new product capability cannot compile with
-// silently incomplete Helm values.
-class HelmAdapter {
-  serviceAccountValues: (Mapping) -> Mapping? = (_) -> null
-  decorateTarget: (Mapping, Mapping) -> Mapping = (targetValues, _) -> targetValues
-  lokiPodLabels: Mapping? = null
-  objectStorageConfig: (Mapping) -> Pair<String, Mapping>? = (_) -> null
-}
-
-adapters: Mapping<String, HelmAdapter> = new {
-  [backends.pvc.key] = new HelmAdapter {}
-
-  [backends.s3.key] = new HelmAdapter {
-    serviceAccountValues = (clusterInputs) -> new Mapping {
-      ["annotations"] = new Mapping {
-        ["eks.amazonaws.com/role-arn"] = clusterInputs[inputs.s3Role.key]
+// The chart values owned by the storage choice: the `loki.storage` block and its schema, the
+// identity wiring, and the persistence of each workload. Object storage is durable, so local
+// volumes only hold ephemeral state: the chart's PVCs are disabled and the single binary mounts
+// an explicit emptyDir because the container root filesystem is read-only.
+fragment: sdkHelm.Fragment = (scope) ->
+  let (selected = setting.selected(scope))
+  let (serviceAccount = selected.serviceAccount.apply(scope))
+    new Mapping {
+      ["loki"] = lokiValues(selected, scope)
+      ["singleBinary"] = selected.decorateTarget.apply(singleBinaryValues(selected), scope)
+      ["write"] = selected.decorateTarget.apply(statefulValues(selected), scope)
+      ["read"] = selected.decorateTarget.apply(new Mapping {}, scope)
+      ["backend"] = selected.decorateTarget.apply(statefulValues(selected), scope)
+      when (serviceAccount != null) {
+        ["serviceAccount"] = serviceAccount
       }
     }
-    objectStorageConfig = (clusterInputs) ->
-      Pair("s3", new Mapping {
-        ["region"] = clusterInputs[backends.s3.compileOnlyInputs["region"].key]
-      })
-  }
 
-  [backends.gcs.key] = new HelmAdapter {
-    serviceAccountValues = (clusterInputs) -> new Mapping {
-      ["annotations"] = new Mapping {
-        ["iam.gke.io/gcp-service-account"] = clusterInputs[inputs.gcpServiceAccount.key]
-      }
-    }
-    objectStorageConfig = (_) ->
-      Pair("gcs", new Mapping {
-        ["chunkBufferSize"] = 0
-        ["requestTimeout"] = "0s"
-        ["enableHttp2"] = true
-      })
+local function lokiValues(selected: backend, scope: sdkSettings.Scope): Mapping = new Mapping {
+  when (selected.podLabels != null) {
+    ["podLabels"] = selected.podLabels
   }
-
-  [backends.azureBlob.key] = new HelmAdapter {
-    serviceAccountValues = (clusterInputs) -> new Mapping {
-      ["name"] = "qovery-storage"
-      ["labels"] = new Mapping { ["azure.workload.identity/use"] = "true" }
-      ["annotations"] = new Mapping {
-        ["azure.workload.identity/client-id"] =
-          clusterInputs[inputs.azureManagedIdentity.key]
-      }
-    }
-    lokiPodLabels = new Mapping { ["azure.workload.identity/use"] = "true" }
-    objectStorageConfig = (clusterInputs) ->
-      Pair("azure", new Mapping {
-        ["accountName"] = clusterInputs[inputs.azureStorageAccount.key]
-        ["useManagedIdentity"] = false
-        ["useFederatedToken"] = true
+  when (selected.isObjectStorage) {
+    ["storage"] = objectStorageValues(selected, scope)
+    ["schemaConfig"] = new Mapping {
+      // Initial schema for fresh Engine v2 installations. Changing storage on an existing Loki
+      // requires appending a future-dated period instead of rewriting this one.
+      ["configs"] = List(new Mapping {
+        ["from"] = "2024-04-01"
+        ["store"] = "tsdb"
+        ["object_store"] = selected.objectStoreId
+        ["schema"] = "v13"
+        ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
       })
-  }
-
-  [backends.s3Compatible.key] = new HelmAdapter {
-    decorateTarget = (targetValues, clusterInputs) -> (targetValues) {
-      ["extraArgs"] = List("-config.expand-env=true")
-      ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
     }
-    objectStorageConfig = (clusterInputs) ->
-      Pair("s3", new Mapping {
-        ["endpoint"] = clusterInputs[inputs.s3CompatibleEndpoint.key]
-        ["region"] = clusterInputs[inputs.s3CompatibleRegion.key]
-        ["accessKeyId"] = "${S3_ACCESS_KEY_ID}"
-        ["secretAccessKey"] = "${S3_SECRET_ACCESS_KEY}"
-        ["signatureVersion"] = "v4"
-        ["s3ForcePathStyle"] = true
-        ["insecure"] = false
-      })
+    ["compactor"] = new Mapping { ["delete_request_store"] = selected.objectStoreId }
   }
 }
 
-function adapterFor(backend: types.StorageBackend): HelmAdapter = adapters[backend.key]
-
-function serviceAccountValues(backend: types.StorageBackend, clusterInputs: Mapping): Mapping? =
-  adapterFor(backend).serviceAccountValues.apply(clusterInputs)
-
-function decorateTarget(
-  targetValues: Mapping,
-  backend: types.StorageBackend,
-  clusterInputs: Mapping,
-): Mapping = adapterFor(backend).decorateTarget.apply(targetValues, clusterInputs)
-
-// Only the Secret name enters values.final.yaml. The Secret itself is created by the customer in
-// the Loki namespace and contains S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY.
-local function s3CompatibleCredentialsEnvFrom(clusterInputs: Mapping): List<Mapping> =
-  List(new Mapping {
-    ["secretRef"] = new Mapping {
-      ["name"] = clusterInputs[inputs.s3CompatibleCredentialsSecret.key]
-    }
-  })
-
-// Builds the whole `loki:` block of the chart. The product values it needs arrive already resolved
-// so this package never reads the stored draft, and the weeks-to-duration conversion stays here
-// because it is a chart-vocabulary concern, not a product one.
-function lokiValues(
-  retentionWeeks: Int,
-  clusterInputs: Mapping,
-  backend: types.StorageBackend,
-  replicationFactor: Int,
-): Mapping =
-  let (adapter = adapterFor(backend))
-  let (podLabels = adapter.lokiPodLabels)
+local function objectStorageValues(selected: backend, scope: sdkSettings.Scope): Mapping =
+  let (bucket = scope.inputs[(selected.bucket as contract.LogicalInput).key])
+  let (providerConfig = selected.storageConfig.apply(scope))
     new Mapping {
-      ["commonConfig"] = new Mapping { ["replication_factor"] = replicationFactor }
-      ["limits_config"] = new Mapping {
-        // Loki expects a duration; the product model intentionally exposes easier-to-understand weeks.
-        ["retention_period"] = "\(retentionWeeks * 168)h"
-      }
-      when (podLabels != null) {
-        ["podLabels"] = podLabels
-      }
-      when (backend is types.ObjectStorageBackend) {
-        ["storage"] = objectStorageValues(backend, clusterInputs, adapter)
-        ["schemaConfig"] = new Mapping {
-          // Initial schema for fresh Engine v2 installations. Changing storage on an existing Loki
-          // requires appending a future-dated period instead of rewriting this one.
-          ["configs"] =
-            List(new Mapping {
-              ["from"] = "2024-04-01"
-              ["store"] = "tsdb"
-              ["object_store"] = backend.objectStoreId
-              ["schema"] = "v13"
-              ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
-            })
-        }
-        ["compactor"] = new Mapping { ["delete_request_store"] = backend.objectStoreId }
-      }
-    }
-
-local function objectStorageValues(
-  backend: types.ObjectStorageBackend,
-  clusterInputs: Mapping,
-  adapter: HelmAdapter,
-): Mapping =
-  let (bucket = clusterInputs[backend.bucketInput.key])
-  let (providerConfig = adapter.objectStorageConfig.apply(clusterInputs))
-    new Mapping {
-      ["type"] = backend.objectStoreId
+      ["type"] = selected.objectStoreId
       ["bucketNames"] = new Mapping {
         ["chunks"] = bucket
         ["ruler"] = bucket
@@ -156,3 +60,19 @@ local function objectStorageValues(
         [providerConfig.first] = providerConfig.second
       }
     }
+
+local function singleBinaryValues(selected: backend): Mapping = new Mapping {
+  when (selected.isObjectStorage) {
+    ["persistence"] = new Mapping { ["enabled"] = false }
+    ["extraVolumes"] = List(new Mapping { ["name"] = "storage"; ["emptyDir"] = new Mapping {} })
+    ["extraVolumeMounts"] = List(new Mapping { ["name"] = "storage"; ["mountPath"] = "/var/loki" })
+  }
+}
+
+// The chart enables write/backend volume claims by default; with object storage they only hold
+// ephemeral state.
+local function statefulValues(selected: backend): Mapping = new Mapping {
+  when (selected.isObjectStorage) {
+    ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
+  }
+}

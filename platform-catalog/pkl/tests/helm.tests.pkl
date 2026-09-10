@@ -1,0 +1,48 @@
+amends "pkl:test"
+
+import "../sdk/helm.pkl"
+import "../sdk/settings.pkl"
+
+local topology: helm.Fragment = (_) -> new Mapping {
+  ["deploymentMode"] = "SingleBinary"
+  ["loki"] = new Mapping { ["commonConfig"] = new Mapping { ["replication_factor"] = 1 } }
+  ["singleBinary"] = new Mapping { ["replicas"] = 1 }
+}
+
+local retention: helm.Fragment = (scope) -> new Mapping {
+  ["loki"] = new Mapping { ["limits_config"] = new Mapping { ["retention_period"] = "\(scope.config["weeks"] * 168)h" } }
+}
+
+local storage: helm.Fragment = (scope) -> new Mapping {
+  ["singleBinary"] = new Mapping { ["persistence"] = new Mapping { ["enabled"] = false } }
+  ["serviceAccount"] = new Mapping { ["name"] = scope.inputs["sa"] }
+}
+
+local conflicting: helm.Fragment = (_) -> new Mapping {
+  ["singleBinary"] = new Mapping { ["replicas"] = 3 }
+}
+
+local scope = settings.scope(new Mapping { ["weeks"] = 2 }, null, new Mapping { ["sa"] = "loki" }, List())
+local compiled = helm.compile(List(topology, retention, storage), scope)
+
+facts {
+  ["fragments are deep-merged in declaration order, which fixes the key order"] {
+    compiled.keys.toList() == List("deploymentMode", "loki", "singleBinary", "serviceAccount")
+    (compiled["loki"] as Mapping).keys.toList() == List("commonConfig", "limits_config")
+    (compiled["singleBinary"] as Mapping) == new Mapping { ["replicas"] = 1; ["persistence"] = new Mapping { ["enabled"] = false } }
+    (compiled["loki"] as Mapping)["limits_config"] == new Mapping { ["retention_period"] = "336h" }
+  }
+
+  ["fragments receive the resolved configuration and the cluster inputs"] {
+    compiled["serviceAccount"] == new Mapping { ["name"] = "loki" }
+  }
+
+  ["two fragments writing the same leaf is an authoring error"] {
+    module.catch(() -> helm.compile(List(topology, conflicting), scope))
+      .contains("conflict on singleBinary.replicas")
+  }
+
+  ["an empty fragment list compiles to no value"] {
+    helm.compile(List(), scope) == new Mapping {}
+  }
+}

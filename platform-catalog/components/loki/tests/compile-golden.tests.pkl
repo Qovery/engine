@@ -1,6 +1,6 @@
 amends "pkl:test"
 
-import "../config/runtime-values/compile.pkl"
+import "fixtures.pkl"
 
 // Golden COMPILE outputs, one example per storage backend. Each example renders the derived
 // Helm values as JSON — the exact representation q-core consumes — so the expected file
@@ -18,7 +18,7 @@ local function compiledJson(
   clusterInputs: Mapping,
 ): String =
   jsonRenderer.renderValue(
-    compile.compile(
+    fixtures.helmValues(
       new Mapping {
         ["storage"] = storage
         ["retentionWeeks"] = retentionWeeks
@@ -31,7 +31,7 @@ local function compiledJson(
 local function compiledJsonForProfile(
   profileConfig: Mapping,
   clusterInputs: Mapping,
-): String = jsonRenderer.renderValue(compile.compile(profileConfig, clusterInputs))
+): String = jsonRenderer.renderValue(fixtures.helmValues(profileConfig, clusterInputs))
 
 examples {
   ["pvc single binary"] {

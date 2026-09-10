@@ -1,0 +1,565 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.settings
+
+import "../contract.pkl"
+import "validate.pkl"
+
+// Typed, declarative description of the customer-facing settings. A component declares WHAT a
+// setting is (type, default, bounds, label, nested members) once; the evaluator derives the Console
+// descriptor, the default, the type check and the bound checks from that declaration, so a
+// component never re-implements INVALID_TYPE, VALUE_OUT_OF_RANGE, VALUE_NOT_ALLOWED,
+// UNKNOWN_FIELD or indexed paths by hand.
+//
+// Scalars (IntSetting, BoolSetting, StringSetting, EnumSetting) render as contract.Field.
+// ObjectSetting renders as contract.ObjectField and ArraySetting as contract.ArrayField; their
+// members are settings too, so the same declarations describe a nested draft at any depth.
+
+// The cluster as seen by settings and rules. `present` distinguishes a request without
+// clusterContext (context-free DESCRIBE) from a context whose fields happen to be null.
+class Context {
+  present: Boolean
+  mode: contract.ClusterMode?
+  provider: String?
+  capabilities: List<String>
+}
+
+function context(clusterContext: Mapping?): Context =
+  if (clusterContext == null)
+    new Context { present = false; mode = null; provider = null; capabilities = List() }
+  else
+    new Context {
+      present = true
+      // An unknown mode is an evaluation error on purpose: the bundle fails closed until the
+      // contract learns the new mode, rather than guessing which choices it allows.
+      mode = clusterContext.getOrNull("mode") as contract.ClusterMode?
+      provider = clusterContext.getOrNull("provider") as String?
+      capabilities =
+        ((clusterContext.getOrNull("capabilities") as Listing?) ?? new Listing {})
+          .toList()
+          .map((capability) -> capability as String)
+    }
+
+// Everything a predicate, a description or a Helm fragment may look at, in one typed object.
+// `config` is the resolved configuration at the current level (see [resolve]): every declared key
+// is present, absent values carry their default, ill-typed values are null. Inside an object or an
+// array row, `config` is that object or row; `root` stays the top-level configuration. Helm
+// fragments receive the active configuration instead (see [activeConfig]): inactive settings are
+// absent, so a fragment cannot compile a value the customer's choices have switched off. `inputs`
+// are the cluster inputs as q-core supplies them.
+class Scope {
+  config: Mapping
+  root: Mapping
+  cluster: Context
+  inputs: Mapping
+  enabledComponents: List<String>
+}
+
+function scope(
+  resolvedConfig: Mapping,
+  clusterContext: Mapping?,
+  clusterInputs: Mapping,
+  enabledComponentKeys: List<String>,
+): Scope = new Scope {
+  config = resolvedConfig
+  root = resolvedConfig
+  cluster = context(clusterContext)
+  inputs = clusterInputs
+  enabledComponents = enabledComponentKeys
+}
+
+// The same scope, looking at one nested object (a member object or an array row).
+function nested(scope: Scope, resolvedObject: Mapping): Scope = (scope) { config = resolvedObject }
+
+typealias Predicate = (Scope) -> Boolean
+
+// A violation message: a literal, or a function of the component label for shared declarations.
+typealias Message = String | ((String) -> String)
+
+function render(message: Message, componentLabel: String): String =
+  if (message is String) message else message.apply(componentLabel)
+
+abstract class Setting {
+  // Relative to the enclosing object; the key of an array's item template is ignored.
+  key: String
+  label: String
+  description: String?
+  required: Boolean = false
+  sensitive: Boolean = false
+
+  // The setting exists for the current draft only while this holds. Inactive settings are not
+  // validated and not compiled. Top-level settings are still listed by a context-free DESCRIBE;
+  // nested settings are never listed while inactive, so a row's shape follows its own values.
+  activeWhen: Predicate = (_) -> true
+
+  // Optional description for contextual operations, when it depends on the draft or the cluster.
+  contextualDescription: ((Scope) -> String)? = null
+
+  // `required` always applies; `requiredWhen` adds a condition. Both are enforced at VALIDATE and
+  // COMPILE only (RESOLVE_REQUIREMENTS accepts an incomplete draft) and both are rendered as the
+  // descriptor's `required`. The code stays overridable for settings with an established
+  // machine-readable code; the message may be a function of the component label.
+  requiredWhen: Predicate = (_) -> false
+  requiredCode: String = validate.requiredFieldMissingCode
+  requiredMessage: Message?
+
+  // Human name of the expected type, used in INVALID_TYPE messages.
+  abstract function typeName(): String
+
+  // Applied when the draft has no value; scalars also render it as the Console default.
+  abstract function defaultValue(): Any?
+
+  abstract function accepts(value: Any): Boolean
+
+  // The setting's resolved value at the scope's level. Another folder reads this setting through
+  // its declaration (import its setting.pkl), never through a string key: renaming or retyping the
+  // setting is then caught by evaluation instead of silently disabling a rule.
+  function valueIn(scope: Scope): Any? = scope.config.getOrNull(key)
+}
+
+// Nested members are described and validated by the same machinery as top-level settings, except
+// for what only makes sense at the top: an enum's availability rules, the cluster inputs its
+// options activate, and sensitivity (the contract has no recursive redaction yet). Declaring them
+// on a nested setting is refused at declaration rather than silently ignored.
+const function nestable(members: List<Setting>): Boolean =
+  members.every((member) ->
+    (
+      !member.sensitive
+        && (
+          !(member is EnumSetting)
+            || (
+              member.availability.isEmpty
+                && member.options.every((option) -> option.inputs.isEmpty && option.compileInputs.isEmpty)
+            )
+        )
+    )
+      || throw("Nested setting \(member.key) cannot declare availability rules, option inputs or sensitivity; only a top-level setting can")
+  )
+
+abstract class ScalarSetting extends Setting {
+  fieldType: contract.FieldType
+
+  // Rendered as the Console default without ever being applied by the evaluator. Only composite
+  // declarations use it (resources.pkl pre-fills CUSTOM fields with a recommendation the customer
+  // must confirm); a plain setting declares `default`.
+  function suggestedValue(): Any? = null
+
+  // Constraints rendered to the Console; the scope lets an enum narrow its choices.
+  function constraints(scope: Scope): contract.Constraints = new {}
+
+  // Bound violation of a well-typed value, reported on `fieldPath`, or null. Messages name the
+  // setting by its key, never by the indexed path: the path is in `fieldPath`, and a message that
+  // embedded an index would change when the customer reorders rows.
+  function valueViolation(value: Any, fieldPath: String, componentLabel: String): contract.Violation? = null
+
+  function defaultText(): String? =
+    let (value = defaultValue() ?? suggestedValue())
+      if (value == null) null else "\(value)"
+}
+
+class IntSetting extends ScalarSetting {
+  default: Int?
+  suggested: Int?
+  min: Int?
+  max: Int?
+  fieldType = contract.numberFieldType
+  function typeName(): String = "a whole number"
+  function defaultValue(): Any? = default
+  function suggestedValue(): Any? = suggested
+  function accepts(value: Any): Boolean = value is Int
+  function value(scope: Scope): Int? = valueIn(scope) as Int?
+  // Inside the object body an unqualified `min` would resolve to the Constraints property being
+  // defined, so the setting is captured first.
+  function constraints(scope: Scope): contract.Constraints =
+    let (setting = this) new { min = setting.min; max = setting.max }
+  function valueViolation(value: Any, fieldPath: String, componentLabel: String): contract.Violation? =
+    if ((min != null && value < min) || (max != null && value > max))
+      validate.violation(
+        validate.valueOutOfRangeCode,
+        fieldPath,
+        "\(componentLabel) \(key) must be between \(min) and \(max)",
+      )
+    else
+      null
+}
+
+class BoolSetting extends ScalarSetting {
+  default: Boolean?
+  fieldType = contract.booleanFieldType
+  function typeName(): String = "a bool"
+  function defaultValue(): Any? = default
+  function accepts(value: Any): Boolean = value is Boolean
+  function isOn(scope: Scope): Boolean = valueIn(scope) == true
+}
+
+class StringSetting extends ScalarSetting {
+  default: String?
+  minLength: Int?
+  maxLength: Int?
+  pattern: String?
+  fieldType = contract.stringFieldType
+  function typeName(): String = "a string"
+  function defaultValue(): Any? = default
+  function accepts(value: Any): Boolean = value is String
+  function value(scope: Scope): String? = valueIn(scope) as String?
+  function constraints(scope: Scope): contract.Constraints =
+    let (setting = this)
+      new { minLength = setting.minLength; maxLength = setting.maxLength; pattern = setting.pattern }
+  function valueViolation(value: Any, fieldPath: String, componentLabel: String): contract.Violation? =
+    if (
+      (minLength != null && value.length < minLength) || (maxLength != null && value.length > maxLength)
+    )
+      validate.violation(
+        validate.lengthOutOfRangeCode,
+        fieldPath,
+        "\(componentLabel) \(key) must be between \(minLength ?? 0) and \(maxLength ?? "any number of") characters",
+      )
+    else if (pattern != null && !value.matches(Regex(pattern)))
+      validate.violation(
+        validate.inputPatternMismatchCode,
+        fieldPath,
+        "\(componentLabel) \(key) does not match the expected format",
+      )
+    else
+      null
+}
+
+// One choice of an enum setting, with everything that choice requires from the cluster: an
+// optional provider, the inputs the customer must supply, and the inputs q-core supplies only at
+// compile time. Choosing the option is what activates its inputs (top-level enums only).
+class Option {
+  value: String
+  provider: String?
+  inputs: List<contract.LogicalInput> = List()
+  compileInputs: List<String> = List()
+}
+
+// A rule deciding whether an option may be offered on a cluster. It narrows the Console choices,
+// gates the option's inputs, and reports its own violation when the selected option fails it.
+class Availability {
+  accepts: (Option, Scope) -> Boolean
+  code: String
+  message: (Option, Scope) -> String
+}
+
+class EnumSetting extends ScalarSetting {
+  default: String?
+  options: List<Option>
+  availability: List<Availability> = List()
+  fieldType = contract.stringFieldType
+  function typeName(): String = "a string"
+  function defaultValue(): Any? = default
+  function accepts(value: Any): Boolean = value is String
+  function values(): List<String> = options.map((option) -> option.value)
+  function option(value: Any?): Option? = options.findOrNull((option) -> option.value == value)
+  function available(option: Option, scope: Scope): Boolean =
+    availability.every((rule) -> rule.accepts.apply(option, scope))
+  function availableValues(scope: Scope): List<String> =
+    options.filter((option) -> available(option, scope)).map((option) -> option.value)
+  function constraints(scope: Scope): contract.Constraints =
+    let (setting = this)
+      new { allowedValues = if (scope.cluster.present) setting.availableValues(scope) else setting.values() }
+  function valueViolation(value: Any, fieldPath: String, componentLabel: String): contract.Violation? =
+    validate.enumValue(
+      fieldPath,
+      value,
+      values(),
+      "\(componentLabel) \(key) must be one of \(values().join(", "))",
+    )
+  // The selected option, when it is a known value. Unknown values are reported by valueViolation.
+  function selected(scope: Scope): Option? = option(valueIn(scope))
+  function selectedValue(scope: Scope): String? = valueIn(scope) as String?
+  function availabilityViolations(option: Option, scope: Scope): List<contract.Violation> =
+    availability
+      .filter((rule) -> !rule.accepts.apply(option, scope))
+      .map((rule) -> validate.violation(rule.code, key, rule.message.apply(option, scope)))
+}
+
+// A group of settings. An absent object resolves as an empty one, so its members' defaults apply;
+// an explicit null or a non-object value is a type violation. Member keys are relative names.
+class ObjectSetting extends Setting {
+  fields: List<Setting>(nestable(this))
+  function typeName(): String = "an object"
+  function defaultValue(): Any? = null
+  function accepts(value: Any): Boolean = value is Mapping
+}
+
+// An ordered collection whose items all follow one template: a scalar setting for a list of
+// values, an ObjectSetting for a list of rows. Each row is described and validated on its own
+// values, so two rows may expose different members. Like an absent object, an absent array is an
+// empty one: structured defaults are outside the contract.
+class ArraySetting extends Setting {
+  items: Setting(nestable(List(this)))
+  minItems: Int?
+  maxItems: Int?
+  uniqueItems: Boolean = false
+  function typeName(): String = "an array"
+  function defaultValue(): Any? = new Listing {}
+  function accepts(value: Any): Boolean = value is Listing
+  function collectionConstraints(): contract.CollectionConstraints =
+    let (setting = this)
+      new { minItems = setting.minItems; maxItems = setting.maxItems; uniqueItems = setting.uniqueItems }
+}
+
+// --- resolution -----------------------------------------------------------------------------------
+
+// The resolved configuration: every declared key is present; an absent value takes the declared
+// default, a present well-typed value is kept (objects and arrays recursively), and an ill-typed
+// value resolves to null so rules and compilation never see a value of the wrong type. Ill-typed
+// values are reported separately, from the raw draft.
+function resolve(settings: List<Setting>, draft: Mapping): Mapping = new Mapping {
+  for (setting in settings) {
+    [setting.key] =
+      resolveValue(
+        setting,
+        if (draft.containsKey(setting.key)) draft[setting.key] else setting.defaultValue(),
+        !draft.containsKey(setting.key),
+      )
+  }
+}
+
+local function resolveValue(setting: Setting, value: Any?, absent: Boolean): Any? =
+  if (setting is ObjectSetting)
+    if (absent) resolve(setting.fields, new Mapping {})
+    else if (value is Mapping) resolve(setting.fields, value)
+    else null
+  else if (setting is ArraySetting)
+    if (value is Listing) value.toList().map((item) -> resolveValue(setting.items, item, false)).toListing()
+    else null
+  else if (value != null && setting.accepts(value))
+    value
+  else
+    null
+
+// The resolved value restricted to the active members at every level: the effective configuration
+// a compiler reads, with inactive branches (a mode's unused fields) left out. An optional member
+// without a default that the draft left absent stays absent rather than becoming an explicit null.
+function activeValue(setting: Setting, value: Any?, scope: Scope): Any? =
+  if (setting is ObjectSetting && value is Mapping)
+    let (inner = nested(scope, value))
+      new Mapping {
+        for (member in setting.fields) {
+          when (member.activeWhen.apply(inner) && value.getOrNull(member.key) != null) {
+            [member.key] = activeValue(member, value[member.key], inner)
+          }
+        }
+      }
+  else if (setting is ArraySetting && value is Listing)
+    value.toList().map((item) -> activeValue(setting.items, item, scope)).toListing()
+  else
+    value
+
+// The configuration a Helm fragment reads: the active top-level settings only, each projected to
+// its active members. Values stay null where the draft left an optional setting absent.
+function activeConfig(settings: List<Setting>, scope: Scope): Mapping = new Mapping {
+  for (setting in settings) {
+    when (setting.activeWhen.apply(scope)) {
+      [setting.key] = activeValue(setting, scope.config.getOrNull(setting.key), scope)
+    }
+  }
+}
+
+// --- descriptors ----------------------------------------------------------------------------------
+
+// The descriptors of a list of settings at one level. `includeInactive` is what lets a context-free
+// DESCRIBE list every top-level setting; nested members always follow their activity.
+function fields(
+  settings: List<Setting>,
+  operation: contract.Operation,
+  scope: Scope,
+  includeInactive: Boolean,
+): List<contract.ConfigurationField> =
+  settings
+    .filter((setting) -> includeInactive || setting.activeWhen.apply(scope))
+    .map((setting) -> field(setting, operation, scope))
+
+function field(setting: Setting, operation: contract.Operation, scope: Scope): contract.ConfigurationField =
+  if (setting is ObjectSetting)
+    new contract.ObjectField {
+      key = setting.key
+      required = isRequired(setting, scope)
+      label = setting.label
+      description = describe(setting, operation, scope)
+      sensitive = setting.sensitive
+      fields = fields(setting.fields, operation, nested(scope, resolvedObject(setting, scope)), false)
+    }
+  else if (setting is ArraySetting)
+    arrayField(setting, operation, scope)
+  else if (setting is ScalarSetting)
+    new contract.Field {
+      key = setting.key
+      type = setting.fieldType
+      required = isRequired(setting, scope)
+      defaultValue = setting.defaultText()
+      label = setting.label
+      description = describe(setting, operation, scope)
+      sensitive = setting.sensitive
+      constraints = setting.constraints(scope)
+    }
+  else
+    throw("Unsupported setting \(setting.key)")
+
+local function arrayField(setting: ArraySetting, operation: contract.Operation, scope: Scope): contract.ArrayField =
+  let (template = setting.items)
+  let (rows = (scope.config.getOrNull(setting.key) as Listing?) ?? new Listing {})
+    new contract.ArrayField {
+      key = setting.key
+      required = isRequired(setting, scope)
+      label = setting.label
+      description = describe(setting, operation, scope)
+      sensitive = setting.sensitive
+      constraints = setting.collectionConstraints()
+      items =
+        if (template is ObjectSetting)
+          // The prototype of a new row: the members active on an empty row, with their defaults.
+          new contract.ObjectItem {
+            fields = fields(template.fields, operation, nested(scope, resolve(template.fields, new Mapping {})), false)
+          }
+        else if (template is ScalarSetting)
+          new contract.ScalarItem { type = template.fieldType; constraints = template.constraints(scope) }
+        else
+          throw("Array items must be scalar or object settings (\(setting.key))")
+      itemFields =
+        if (template is ObjectSetting)
+          // One complete member list per current row, on the row's own values; a mistyped row
+          // keeps its index and gets the prototype.
+          rows
+            .toList()
+            .map((row) ->
+              fields(
+                template.fields,
+                operation,
+                nested(scope, if (row is Mapping) row else resolve(template.fields, new Mapping {})),
+                false,
+              )
+            )
+        else
+          null
+    }
+
+local function isRequired(setting: Setting, scope: Scope): Boolean =
+  setting.required || setting.requiredWhen.apply(scope)
+
+local function describe(setting: Setting, operation: contract.Operation, scope: Scope): String? =
+  if (operation != contract.describeOperation && setting.contextualDescription != null)
+    setting.contextualDescription.apply(scope)
+  else
+    setting.description
+
+local function resolvedObject(setting: ObjectSetting, scope: Scope): Mapping =
+  (scope.config.getOrNull(setting.key) as Mapping?) ?? resolve(setting.fields, new Mapping {})
+
+// --- violations -----------------------------------------------------------------------------------
+
+// Violations owned by one setting, at any depth: a missing required value, an ill-typed value, a
+// value outside its declared bounds, and for objects and arrays the same for every active member
+// or item, plus unknown member names. Exactly one of required / ill-typed / out-of-bounds is
+// reported per value. The raw draft is needed here, and only here, to tell an absent value from an
+// explicit null, which is ill-typed.
+function violations(
+  setting: Setting,
+  operation: contract.Operation,
+  draft: Mapping,
+  scope: Scope,
+  componentLabel: String,
+  parentPath: String,
+): List<contract.Violation> =
+  let (path = validate.fieldPath(parentPath, setting.key))
+    if (!draft.containsKey(setting.key))
+      if (
+        (operation == contract.validateOperation || operation == contract.compileOperation)
+          && isRequired(setting, scope)
+      )
+        List(
+          validate.violation(
+            setting.requiredCode,
+            path,
+            if (setting.requiredMessage == null)
+              "\(componentLabel) requires \(setting.key)"
+            else
+              render(setting.requiredMessage, componentLabel),
+          ),
+        )
+      else if (setting is ObjectSetting)
+        // An absent object is an empty one: its required members are still due.
+        memberViolations(setting, operation, new Mapping {}, nested(scope, resolvedObject(setting, scope)), componentLabel, path)
+      else
+        List()
+    else
+      valueViolations(setting, operation, draft[setting.key], scope.config.getOrNull(setting.key), scope, componentLabel, path)
+
+// Violations of one present value (a member, or an array item).
+local function valueViolations(
+  setting: Setting,
+  operation: contract.Operation,
+  raw: Any?,
+  resolved: Any?,
+  scope: Scope,
+  componentLabel: String,
+  path: String,
+): List<contract.Violation> =
+  if (raw == null || !setting.accepts(raw))
+    List(
+      validate.invalidType(path, "\(componentLabel) configuration field \(setting.key) must be \(setting.typeName())"),
+    )
+  else if (setting is ScalarSetting)
+    validate.collect(List(setting.valueViolation(raw, path, componentLabel)))
+  else if (setting is ObjectSetting)
+    memberViolations(setting, operation, raw as Mapping, nested(scope, resolved as Mapping), componentLabel, path)
+  else if (setting is ArraySetting)
+    itemViolations(setting, operation, raw as Listing, resolved as Listing, scope, componentLabel, path)
+  else
+    List()
+
+local function memberViolations(
+  setting: ObjectSetting,
+  operation: contract.Operation,
+  raw: Mapping,
+  inner: Scope,
+  componentLabel: String,
+  path: String,
+): List<contract.Violation> =
+  validate.atPath(path, validate.unknownFields(raw, setting.fields.map((member) -> member.key).toSet(), componentLabel))
+    + setting.fields
+      .filter((member) -> member.activeWhen.apply(inner))
+      .flatMap((member) -> violations(member, operation, raw, inner, componentLabel, path))
+
+local function itemViolations(
+  setting: ArraySetting,
+  operation: contract.Operation,
+  raw: Listing,
+  resolved: Listing,
+  scope: Scope,
+  componentLabel: String,
+  path: String,
+): List<contract.Violation> =
+  validate.collect(
+    List(
+      validate.collectionSize(path, raw.length, setting.collectionConstraints(), sizeMessage(setting, path, componentLabel)),
+      if (setting.uniqueItems)
+        validate.uniqueItems(path, raw.toList(), "\(componentLabel) \(setting.key) must not contain duplicates")
+      else
+        null,
+    ),
+  )
+    + raw
+      .toList()
+      .mapIndexed((index, item) ->
+        valueViolations(
+          setting.items,
+          operation,
+          item,
+          resolved.toList()[index],
+          scope,
+          componentLabel,
+          validate.indexPath(path, index),
+        )
+      )
+      .flatMap((entries) -> entries)
+
+local function sizeMessage(setting: ArraySetting, path: String, componentLabel: String): String =
+  if (setting.minItems != null && setting.maxItems != null)
+    "\(componentLabel) \(setting.key) must contain between \(setting.minItems) and \(setting.maxItems) items"
+  else if (setting.minItems != null)
+    "\(componentLabel) \(setting.key) must contain at least \(setting.minItems) item(s)"
+  else
+    "\(componentLabel) \(setting.key) must contain at most \(setting.maxItems) items"

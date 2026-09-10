@@ -19,6 +19,12 @@ function operation(request: Mapping): contract.Operation =
 function profileConfig(request: Mapping): Mapping =
   (request.getOrNull("profileConfig") as Mapping?) ?? new Mapping {}
 
+// JSON containers are Mapping/Listing when decoded with useMapping. Preserve the raw draft:
+// these optional views distinguish invalid shapes from absent/empty values for validation.
+function objectValue(value: Any?): Mapping? = if (value is Mapping) value else null
+
+function arrayValue(value: Any?): Listing? = if (value is Listing) value else null
+
 function clusterContext(request: Mapping): Mapping? =
   request.getOrNull("clusterContext") as Mapping?
 

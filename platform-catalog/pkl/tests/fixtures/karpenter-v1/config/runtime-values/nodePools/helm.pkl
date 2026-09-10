@@ -1,0 +1,12 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.tests.karpenter.nodePools.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
+
+// Inspection projection only: the effective configuration as the evaluator hands it to fragments
+// (defaults applied, inactive members dropped), not the future NodePool/EC2NodeClass chart mapping.
+// No chart or Kubernetes resource is claimed by this fixture.
+fragment: sdkHelm.Fragment = (scope) -> new Mapping {
+  ["nodePools"] = setting.setting.valueIn(scope)
+}

@@ -1,0 +1,132 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/evaluate.pkl"
+import "../sdk/request.pkl"
+import "../sdk/resources.pkl"
+import "../sdk/settings.pkl"
+
+// A two-target component: `web` always runs, `worker` only when enabled. Exercises what the SDK
+// derives from a preset table: fields, activity, requirement, rules and the Helm blocks.
+
+local profiles: resources.ResourceProfiles = new {
+  description = "Budget of the demo workloads."
+  targets = List(
+    new resources.Target { key = "web"; label = "Web" },
+    new resources.Target { key = "worker"; label = "Worker"; activeWhen = (scope) -> scope.config["workers"] == true },
+  )
+  presets = new Mapping {
+    ["LOW"] = new Mapping { ["web"] = resources.budget(100, 128); ["worker"] = resources.budget(50, 64) }
+    ["HIGH"] = new Mapping {
+      ["web"] = new resources.Budget { cpuMilliRequest = 1000; cpuMilliLimit = 2000; memoryMiRequest = 1024 }
+      ["worker"] = resources.budget(500, 512)
+    }
+  }
+  recommended = "LOW"
+}
+
+local workers: settings.BoolSetting = new { key = "workers"; label = "Workers"; default = false }
+
+local component: evaluate.Component = new {
+  label = "Demo"
+  features = List(
+    new evaluate.Feature {
+      settings = List(workers)
+      rules = List()
+      fragment = (_) -> new Mapping { ["web"] = new Mapping { ["replicas"] = 1 } }
+    },
+    profiles.feature,
+  )
+}
+
+local function run(operation: contract.Operation, profileConfig: Mapping): contract.EvaluationResult =
+  evaluate.evaluate(component, request.build(operation, profileConfig, new Mapping { ["provider"] = "AWS" }, new Mapping {}, List()))
+
+local function keys(result: contract.EvaluationResult): List<String> = result.fields.map((field) -> field.key)
+local function codes(result: contract.EvaluationResult): List<String> = result.violations.map((violation) -> violation.code)
+local function helm(profileConfig: Mapping): Mapping = evaluate.unvalidatedHelmValues(component, profileConfig, new Mapping {})
+
+local describe = run(contract.describeOperation, new Mapping {})
+local lowDraft = run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "LOW" })
+local customDraft = run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "CUSTOM"; ["workers"] = true })
+
+facts {
+  ["the table is validated when declared"] {
+    module.catch(() ->
+      (profiles) { presets = new Mapping { ["LOW"] = new Mapping { ["web"] = resources.budget(1, 1) } } }.feature.settings
+    ).contains("Type constraint")
+    module.catch(() -> (profiles) { recommended = "MEDIUM" }.feature.settings).contains("Type constraint")
+  }
+
+  ["DESCRIBE lists the selector then four fields per target, seeded with the recommended preset"] {
+    keys(describe)
+      == List(
+        "workers",
+        "resources.profile",
+        "resources.web.requests.cpuMilli",
+        "resources.web.limits.cpuMilli",
+        "resources.web.requests.memoryMi",
+        "resources.web.limits.memoryMi",
+        "resources.worker.requests.cpuMilli",
+        "resources.worker.limits.cpuMilli",
+        "resources.worker.requests.memoryMi",
+        "resources.worker.limits.memoryMi",
+      )
+    describe.fields[1].constraints.allowedValues == List("CHART_DEFAULT", "LOW", "HIGH", "CUSTOM")
+    describe.fields[1].defaultValue == "CHART_DEFAULT"
+    describe.fields[2].defaultValue == "100"
+    describe.fields[3].defaultValue == null
+    describe.fields[5].defaultValue == "256"
+  }
+
+  ["a preset hides the custom fields and publishes the budgets of the active targets"] {
+    keys(lowDraft) == List("workers", "resources.profile")
+    (lowDraft.fields[1].description as String).endsWith("LOW: web 100m/128Mi (limit 256Mi); HIGH: web 1000m/1024Mi")
+  }
+
+  ["CUSTOM exposes the fields of the active targets only"] {
+    keys(customDraft).contains("resources.worker.requests.cpuMilli")
+    !keys(run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "CUSTOM" })).contains("resources.worker.requests.cpuMilli")
+  }
+
+  ["CUSTOM requires the requests when saving, with the established code and the component label"] {
+    codes(run(contract.validateOperation, new Mapping { ["resources.profile"] = "CUSTOM" }))
+      == List("REQUIRED_RESOURCE_REQUEST_MISSING", "REQUIRED_RESOURCE_REQUEST_MISSING")
+    run(contract.validateOperation, new Mapping { ["resources.profile"] = "CUSTOM" }).violations.first.message
+      == "Demo resource profile CUSTOM requires resources.web.requests.cpuMilli for the active topology"
+    customDraft.violations.isEmpty
+  }
+
+  ["a limit below its request is a rule violation naming the component"] {
+    let (
+      result =
+        run(contract.validateOperation, new Mapping {
+          ["resources.profile"] = "CUSTOM"
+          ["resources.web.requests.cpuMilli"] = 500
+          ["resources.web.limits.cpuMilli"] = 400
+          ["resources.web.requests.memoryMi"] = 256
+        })
+    )
+      codes(result) == List("LIMIT_BELOW_REQUEST")
+        && result.violations.first.message == "Demo resources.web.limits.cpuMilli must be at least resources.web.requests.cpuMilli"
+  }
+
+  ["the fragment writes one resources block per active target and nothing for CHART_DEFAULT"] {
+    helm(new Mapping {}) == new Mapping { ["web"] = new Mapping { ["replicas"] = 1 } }
+    helm(new Mapping { ["resources.profile"] = "HIGH" })
+      == new Mapping {
+        ["web"] = new Mapping {
+          ["replicas"] = 1
+          ["resources"] = new Mapping {
+            ["requests"] = new Mapping { ["cpu"] = "1000m"; ["memory"] = "1024Mi" }
+            ["limits"] = new Mapping { ["cpu"] = "2000m" }
+          }
+        }
+      }
+    (helm(new Mapping { ["resources.profile"] = "LOW"; ["workers"] = true })["worker"] as Mapping)["resources"]
+      == new Mapping {
+        ["requests"] = new Mapping { ["cpu"] = "50m"; ["memory"] = "64Mi" }
+        ["limits"] = new Mapping { ["memory"] = "128Mi" }
+      }
+  }
+}

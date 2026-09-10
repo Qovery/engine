@@ -1,0 +1,39 @@
+amends "pkl:test"
+
+import "fixtures.pkl"
+
+local function retention(weeks: Any): Mapping = (fixtures.pvcProfile) { ["retentionWeeks"] = weeks }
+
+facts {
+  ["the default retention is 12 weeks, compiled as a Loki duration"] {
+    (fixtures.helmValues(new Mapping {}, new Mapping {})["loki"] as Mapping)["limits_config"]
+      == new Mapping { ["retention_period"] = "2016h" }
+  }
+
+  ["weeks are converted to hours"] {
+    (fixtures.helmValues(retention(4), new Mapping {})["loki"] as Mapping)["limits_config"]
+      == new Mapping { ["retention_period"] = "672h" }
+  }
+
+  ["retention outside 1..52 weeks is rejected on its own path"] {
+    fixtures.codes(fixtures.validate(retention(0), fixtures.awsCustomer, new Mapping {}))
+      == List("VALUE_OUT_OF_RANGE")
+    fixtures.codes(fixtures.validate(retention(53), fixtures.awsCustomer, new Mapping {}))
+      == List("VALUE_OUT_OF_RANGE")
+    fixtures.paths(fixtures.validate(retention(99), fixtures.awsCustomer, new Mapping {}))
+      == List("retentionWeeks")
+  }
+
+  ["an explicit null is a type error, not a request for the default"] {
+    // The previous layout silently fell back to 12 weeks here; the contract now treats an explicit
+    // null like any other wrong type, at every level of a draft.
+    fixtures.codes(fixtures.validate(retention(null), fixtures.awsCustomer, new Mapping {})) == List("INVALID_TYPE")
+  }
+
+  ["a non-integer retention is a type error, not a range error"] {
+    let (result = fixtures.validate(retention(12.5), fixtures.awsCustomer, new Mapping {}))
+      fixtures.codes(result) == List("INVALID_TYPE")
+        && result.violations.first.message
+          == "Loki configuration field retentionWeeks must be a whole number"
+  }
+}

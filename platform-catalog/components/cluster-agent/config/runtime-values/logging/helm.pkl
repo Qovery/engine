@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.clusterAgent.logging.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+
+// The stable in-cluster Loki gateway, shared by the SingleBinary and SimpleScalable modes.
+lokiUrl: String = "http://loki-gateway.qovery.svc"
+
+// When Loki is not part of the cluster, the agent receives the legacy-compatible empty string.
+fragment: sdkHelm.Fragment = (scope) -> new Mapping {
+  ["environmentVariables"] = new Mapping {
+    ["LOKI_URL"] = if (scope.enabledComponents.contains("loki")) lokiUrl else ""
+  }
+}

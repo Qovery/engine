@@ -8,136 +8,122 @@ loki/
       overlays/
         qovery-karpenter.yaml   # Source 2 capability overlay selected by q-core
     runtime-values/
-      model.pkl          # L5 entrypoint: decodes prop:request, renders JSON
-      evaluation.pkl     # L4 builds the EvaluationResult envelope
-      describe.pkl       # L3 one module per contract operation, composition only
-      requirements.pkl
-      validate.pkl
-      compile.pkl
-      profile.pkl        # L1 typed reads of the stored draft
-      contract.pkl       # L0 vocabulary, no dependencies
-      context.pkl
-      product.pkl
-      sdk/               # L0 vendored authoring SDK (machine-synced, see ../../../pkl/README.md)
-        request.pkl
-        validate.pkl
-        result.pkl
-      storage/           # L2 self-contained feature package
-        types.pkl
-        inputs.pkl
-        backends.pkl
-        requirements.pkl
-        validate.pkl
-        helm.pkl
-      resources/         # L2 self-contained feature package
-        types.pkl
-        targets.pkl
-        presets.pkl
-        fields.pkl
-        validate.pkl
-        helm.pkl
+      model.pkl                 # the only entrypoint q-core calls: decode, evaluate, render JSON
+      settings.pkl              # table of contents: one feature per setting folder, in Console order
+      retentionWeeks/
+        setting.pkl             # what it is: Int, default 12, 1..52
+        helm.pkl                # what it owns: loki.limits_config.retention_period
+      highAvailability/
+        setting.pkl             # Bool, default false
+        dependencies.pkl        # needs object storage
+        helm.pkl                # the topology: deploymentMode, replicas, replication factor, gateway
+      storage/
+        setting.pkl             # Enum over the backends below, with the availability rules
+        backend.pkl             # template every backend file amends
+        pvc.pkl                 # one file per choice: the option, its cluster inputs, its Helm hooks
+        s3.pkl
+        gcs.pkl
+        azureBlob.pkl
+        s3Compatible.pkl
+        patterns.pkl            # input formats shared by several backends
+        helm.pkl                # loki.storage, schema, identity wiring, persistence of every workload
+      resources/
+        setting.pkl             # the workloads and the preset budget table; the SDK derives the rest
+      contract.pkl              # vendored contract (machine-synced, see ../../../pkl/README.md)
+      sdk/                      # vendored SDK, including the generic evaluator
   tests/
-    runtime-values.test.pkl
-    runtime-values.test.pkl-expected.pcf
-    compile-golden.tests.pkl
+    fixtures.pkl                # contexts, drafts and readers shared by the suites
+    evaluation.tests.pkl        # the four operations end to end
+    retentionWeeks.tests.pkl    # one suite per setting folder
+    highAvailability.tests.pkl
+    storage.tests.pkl
+    resources.tests.pkl
+    compile-golden.tests.pkl    # golden COMPILE outputs, one per storage backend
     compile-golden.tests.pkl-expected.pcf
-    rules.tests.pkl
-    resource-profiles.tests.pkl
 ```
 
-The files under `runtime-values/` follow the Console use cases. `model.pkl` is the only entrypoint
-called by q-core and routes each request to a small module named after the user action:
+## How to read a setting
 
-| Console use case | Data source | Pkl operation and files |
+Every folder answers the same three questions, in files that always carry the same names:
+
+| File | Question | What the evaluator derives from it |
 | --- | --- | --- |
-| List templates, layers and components | [`templates/qovery-cluster-v0/template.yaml`](../../../templates/qovery-cluster-v0/template.yaml), published in OCI | No Pkl call for the list. q-core then enriches every component with `DESCRIBE`. |
-| List the parameters a customer can change | Component config bundle | `DESCRIBE` → `model.pkl` → `describe.pkl` + no-op `validate.pkl`; `describe.pkl` reads `storage/backends.pkl` |
-| Refresh conditional inputs after a parameter changes | Current form draft + cluster context | `RESOLVE_REQUIREMENTS` → `model.pkl` → `describe.pkl` + `requirements.pkl` + `validate.pkl` |
-| Check constraints before saving | Current form draft + resolved inputs | `VALIDATE` → `model.pkl` → `describe.pkl` + `requirements.pkl` + `validate.pkl` |
-| Build the final Helm values for deployment | Valid saved profile + resolved inputs | `COMPILE` → the validation path above, then `compile.pkl` → `storage/helm.pkl` |
+| `setting.pkl` | What is it? | The Console descriptor (`DESCRIBE`), the default, `INVALID_TYPE`, `VALUE_OUT_OF_RANGE`, `VALUE_NOT_ALLOWED`, which settings are active for the current draft |
+| `dependencies.pkl` | What does it require from other settings or the cluster? | One violation per rule, with its stable code, on the path of the setting that is blamed |
+| `helm.pkl` | Which chart values does it own? | Its fragment of `helmValues`, deep-merged with the others; two fragments writing the same leaf value is an evaluation error |
 
-This distinction is intentional: Pkl does **not** define which layers exist or which components are
-in a layer. The root template is the catalog composition source of truth. Pkl describes and
-compiles the configuration of one component after q-core has found that component in the template.
+A file that would be empty is not created: `retentionWeeks` depends on nothing, and `storage` has
+no `dependencies.pkl` because what it requires from the cluster is attached to each backend choice
+and its availability rules are declared on the enum itself (below).
 
-Pkl imports are static: evaluating `model.pkl` resolves all of its imported modules from the bundle.
-The table describes the functions that contribute to each response, not a lazy file-loading order.
+`settings.pkl` lists one `Feature { settings; rules; fragment }` per folder. The three members have
+no implicit default: a folder without rule writes `rules = List()`, one without Helm values writes
+`fragment = sdkHelm.none`, and an omitted member fails evaluation. The
+feature order is the Console order and the merge order of the Helm fragments, hence the key order
+of `values.final.yaml`.
 
-## Where to look
+An enum setting whose choices carry their own inputs and Helm wiring, like `storage`, is split one
+level further: **one file per choice**, amending `backend.pkl`. Reading `s3.pkl` tells you that
+choosing S3 is only offered on AWS, asks the customer for a bucket and an IAM role, needs the region
+from q-core at compile time, and how the chart authenticates through IRSA. Adding a backend is
+adding a file and listing it in `storage/setting.pkl`.
 
-- `describe.pkl`: the labels, descriptions and Console ordering of the editable fields
-  (`retentionWeeks`, `highAvailability`, `storage`, `resources.profile` and the per-workload
-  resource fields). Presentation only — every default and bound is owned by the module that owns
-  the concept, so this layer stays a pure consumer;
-- `requirements.pkl`: resolves the draft, then asks each feature package which of its inputs the
-  selection activates;
-- `validate.pkl`: the operation gate, the rules for the product fields that belong to no feature
-  package, and one call per feature package;
-- `compile.pkl`: the readable, provider-neutral Loki Helm topology. It resolves the draft once and
-  passes plain values down, which is what lets the feature packages stay independent of it;
-- `product.pkl`: defaults and bounds for the settings that belong to no feature package;
-- `storage/helm.pkl`: the whole `loki:` chart block plus the per-backend Helm adapters;
-- `storage/types.pkl`: the shared storage types;
-- `storage/inputs.pkl`: logical runtime inputs with their labels, types and constraints;
-- `storage/backends.pkl`: the supported backend instances and provider matrix;
-- `storage/requirements.pkl`: the inputs the selected backend activates;
-- `storage/validate.pkl`: storage type/value rules, provider compatibility and the required-input
-  checks for the backend's customer and compile-only inputs;
-- `resources/types.pkl`: the profile vocabulary, integer units, bounds and budget/target types;
-- `resources/targets.pkl`: the workload-target registry and dotted Source 3 field keys;
-- `resources/presets.pkl`: the versioned `SMALL`/`MEDIUM`/`LARGE` budget tables;
-- `resources/fields.pkl`: the selector and per-workload custom fields with preset-seeded defaults;
-- `resources/validate.pkl`: the `CUSTOM` value rules (integers, bounds, required requests,
-  `limit >= request`);
-- `resources/helm.pkl`: budget-to-`resources`-block compilation;
-- `profile.pkl`: defaults and safe type conversion shared by resolve, validate and compile;
-- `contract.pkl`: vendored canonical operation and JSON response types shared with q-core;
-- `sdk/`: vendored authoring SDK — request decoding and typed readers (`sdk/request.pkl`), the
-  canonical violation codes and generic validators (`sdk/validate.pkl`), and the result envelope
-  owning the fail-closed COMPILE gate (`sdk/result.pkl`). Machine-synced from
-  `platform-catalog/pkl/sdk`, never edited here;
-- `context.pkl`: Loki-specific provider and cluster-mode types;
-- `model.pkl`: routing only.
+The rules that decide whether a choice is *offered* on a cluster (provider match, no object storage
+on Qovery-managed clusters) are declared once on the enum setting as `availability` rules: they
+narrow the Console list, gate the choice's inputs, and report their own violation when the selected
+choice fails them. An unavailable choice activates no input, whatever the reason.
 
-There are two kinds of constraints, kept next to the value they constrain:
+Resource profiles are a **composite declaration** provided by the SDK (`sdk/resources.pkl`): every
+chart has `resources` blocks, so the selector, the per-workload CUSTOM fields, the "limit at least
+request" rules and the `<target>.resources` values are derived once for every component. Loki only
+declares its five workloads, which of them run in each topology, and the SMALL/MEDIUM/LARGE budget
+of each, in `resources/setting.pkl`. The MEDIUM budgets pre-fill the CUSTOM fields without ever
+being applied: a request left empty under CUSTOM is reported, never silently filled.
 
-- field constraints returned by `DESCRIBE` live in `describe.pkl`, such as retention min/max and
-  the allowed storage choices for the cluster provider;
-- logical-input constraints returned by `RESOLVE_REQUIREMENTS` live with their input in
-  `storage/inputs.pkl`, such as bucket-name, IAM-role ARN, service-account email and UUID patterns.
+## Where a rule lives
 
-`validate.pkl` applies both sets and adds rules involving several values, for example “high
-availability requires object storage”. This avoids duplicating constraint metadata in a separate
-generic rules file.
+A dependency lives in the folder of the setting **that is blamed**, that is the `fieldPath` of the
+violation it reports. "High availability requires object storage" is reported on
+`highAvailability`, so it lives in `highAvailability/dependencies.pkl`, even though it reads the
+storage choice. It reads it through the storage declaration, `storageSetting.selectedBackend(scope)`,
+not through a string key: a folder may import a sibling's `setting.pkl` and nothing else, and the
+layering check refuses import cycles. Inside its own folder a setting is read the same way
+(`setting.isOn(scope)`, `setting.value(scope)`); `scope.config` is the resolved draft behind those
+accessors, with defaults applied and ill-typed values nulled.
 
 ## Pkl syntax used here
 
 | Syntax | Meaning in this model |
 | --- | --- |
-| `import "describe.pkl"` | Load another module from the same OCI bundle. |
+| `import "../sdk/settings.pkl" as sdkSettings` | Load a module from the same OCI bundle. Cross-folder imports carry the `<folder><Module>` alias, checked by the layering test. |
+| `amends "backend.pkl"` | A backend file *is* a filled-in copy of the template: same properties, no new public ones. `local` properties may be added. |
 | `local` | Private implementation detail, omitted from rendered output. |
-| `function name(arg: Type)` | Reusable typed function. |
-| `typealias Operation = "DESCRIBE" \| ...` | Closed vocabulary checked by Pkl instead of a free-form string. |
-| `new contract.Field { ... }` | Construct a checked contract object. Misspelled properties fail evaluation. |
-| `open class StorageBackend` | Allow the storage registry to define a stricter object-storage subtype. |
-| `class ObjectStorageBackend extends StorageBackend` | Require every object backend to declare its provider, Loki identifier, and bucket input. |
-| `backend is ObjectStorageBackend` | Narrow the type before reading object-storage-only properties. |
-| `Mapping<String, StorageBackend>` | Keep every backend in one typed registry instead of repeating provider matrices. |
+| `new sdkSettings.IntSetting { ... }` | Construct a checked SDK object. Misspelled properties fail evaluation. |
+| `(scope) -> setting.enabled(scope) && !backend.isObjectStorage` | A predicate over the evaluation scope: `scope.cluster` (mode, provider, capabilities), `scope.inputs`, `scope.enabledComponents`, and the settings read through their declarations (`setting.isOn(scope)`, `storageSetting.selectedBackend(scope)`). |
+| `List<Target>(!isEmpty, ...)` | A type constraint: the declaration fails at evaluation when the table is inconsistent. |
+| `const function` | A module function that class bodies may call (Pkl requirement for helpers used from inside a class). |
 | `new Mapping { ["key"] = value }` | Build dynamic Helm/JSON key-value data. |
 | `when (condition) { ... }` | Add mapping entries only when the condition is true. |
 | `value ?? fallback` | Use `fallback` when `value` is null. |
-| `value?.property` | Read a property only when `value` is not null. |
+| `x as Int` | Narrow a validated value; COMPILE only runs on a validated draft, so the cast is an invariant, not a check. |
 
-## Operations
+## Console use cases
 
-- `DESCRIBE`: returns the Console fields and their effective provider-specific choices.
-- `RESOLVE_REQUIREMENTS`: activates logical inputs from the current draft, for example a GCS
-  bucket and service account when `storage=gcs`.
-- `VALIDATE`: returns all product and input violations without persisting invalid configuration.
-- `COMPILE`: revalidates and emits Source 3 Helm values only when there is no violation.
+`model.pkl` is the only entrypoint called by q-core. The four operations are implemented once, in
+`sdk/evaluate.pkl`; the component only supplies data.
+
+| Console use case | Operation | What the evaluator does with the Loki declarations |
+| --- | --- | --- |
+| List the parameters a customer can change | `DESCRIBE` | Renders every `setting.pkl` in the order of `settings.pkl`; with a cluster context, narrows the storage choices to the available ones |
+| Refresh conditional inputs after a change | `RESOLVE_REQUIREMENTS` | Renders the active settings, returns the inputs of the selected available backend, applies the rules that hold on an incomplete draft |
+| Check constraints before saving | `VALIDATE` | Same, plus required values, input presence and formats |
+| Build the final Helm values | `COMPILE` | Same, plus the q-core compile-only inputs; then merges the `helm.pkl` fragments in the order of `settings.pkl` |
 
 q-core sends the request as JSON through `prop:request` and receives JSON from `model.pkl`'s
-`output`. Pkl syntax and errors never cross the backend API boundary.
+`output`. Pkl syntax and errors never cross the backend API boundary. Pkl does **not** define which
+layers exist or which components are in a layer: the root template is the catalog composition
+source of truth. Pkl describes and compiles the configuration of one component after q-core has
+found that component in the template.
 
 ## Self-managed storage matrix
 
@@ -151,8 +137,14 @@ provider-specific and disables Loki data PVCs; local `/var/loki` state uses `emp
 | Azure | `azureBlob` | account; container; managed-identity client ID | Azure Workload Identity label + annotation |
 | Scaleway | `s3Compatible` | bucket; endpoint; region; credentials Secret name | pre-created Kubernetes Secret |
 
-The evaluator rejects a storage/provider mismatch. High availability is valid with any of the four
-object-storage values and invalid with `pvc`.
+Each row is one file under `storage/`. The evaluator rejects a storage/provider mismatch. High
+availability is valid with any of the four object-storage values and invalid with `pvc`.
+
+The unscoped catalog remains a capability index and therefore lists all five storage values. A
+contextual catalog read and every cluster preview narrow the `storage` field to the effective pair:
+AWS=`pvc|s3`, GCP=`pvc|gcs`, Azure=`pvc|azureBlob`, Scaleway=`pvc|s3Compatible`. Qovery-managed
+clusters currently expose only `pvc`. The Console renders the returned `allowedValues`; it does not
+encode this matrix or any Loki-specific provider condition.
 
 The Loki workload image uses the Qovery `pub-mirror-loki` Public ECR repository and is pinned by
 manifest digest. The gateway's upstream `nginx-unprivileged` image is also digest-pinned; it remains
@@ -166,32 +158,16 @@ Self-managed Karpenter installations never select this Qovery-specific overlay. 
 preparatory for Qovery-managed Engine v2 clusters; the current customer-managed Engine v2 flow
 cannot select it.
 
-`storage/backends.pkl` is the source of truth for this matrix. Adding a backend starts by declaring
-its provider, Loki object-store identifier, bucket input, customer-input list, and internal
-compile-only input list there.
-`describe.pkl` derives the Console choices from that registry, `requirements.pkl` derives the
-conditional inputs, and `validate.pkl` checks provider compatibility from the same objects. Only
-chart-specific values remain in `storage/helm.pkl`; every backend must have an explicit Helm
-adapter, including backends whose adapter is a no-op. The colocalized Pkl test checks exact registry
-coverage so a new backend cannot silently compile without its chart behavior. `compile.pkl` stays a
-readable overview of the resulting Loki topology.
-
-The unscoped catalog remains a capability index and therefore lists all five storage values. A
-contextual catalog read and every cluster preview narrow the `storage` field to the effective pair:
-AWS=`pvc|s3`, GCP=`pvc|gcs`, Azure=`pvc|azureBlob`, Scaleway=`pvc|s3Compatible`. Qovery-managed
-clusters currently expose only `pvc`. The Console renders the returned `allowedValues`; it does not
-encode this matrix or any Loki-specific provider condition.
-
 ## Resource profiles
 
 One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIUM | LARGE | CUSTOM`
 (q-core `docs-v2/slice-4-7-source3-resource-profiles.md` owns the product contract):
 
 - `CHART_DEFAULT` (the default) emits no `resources` fragment, so a configuration stored before the
-  selector existed keeps its exact compiled values — the golden tests prove byte identity;
-- `SMALL`/`MEDIUM`/`LARGE` apply the component-owned budget tables in `resources/presets.pkl`. One
-  preset is role-aware internally (each workload target gets its own budget) while the customer
-  selects a single value. Presets are resource budgets, not capacity guarantees. The first table is
+  selector existed keeps its exact compiled values — the golden tests prove it;
+- `SMALL`/`MEDIUM`/`LARGE` apply the budget table in `resources/setting.pkl`. One preset is
+  role-aware internally (each workload target gets its own budget) while the customer selects a
+  single value. Presets are resource budgets, not capacity guarantees. The first table is
   PROVISIONAL until the Slice 4.7 calibration review approves observed numbers;
 - `CUSTOM` exposes `resources.<target>.requests|limits.cpuMilli|memoryMi` integer fields for the
   active topology; `500` compiles to `500m` and `512` to `512Mi`. Requests are required, limits
@@ -219,11 +195,11 @@ infrastructure without any customer action.
 ## Runtime values
 
 For AWS, the model exposes only the values a user or another platform component must provide: the
-S3 bucket name and the Loki IAM role ARN. The AWS backend also declares `infra.awsRegion` as an
-internal compile-only input. It is trusted cluster context: q-core declares it as a `qcoreValue`
-sourced from `cluster.region`, resolves it immediately before `COMPILE`, and passes it in
-`clusterInputs`. `VALIDATE` therefore does not ask the Console for a region, while `COMPILE` derives
-the requirement from the backend registry and fails closed if q-core does not inject it.
+S3 bucket name and the Loki IAM role ARN. The AWS backend also declares `infra.awsRegion` as a
+compile-only input (`s3.pkl`, `option.compileInputs`). It is trusted cluster context: q-core
+declares it as a `qcoreValue` sourced from `cluster.region`, resolves it immediately before
+`COMPILE`, and passes it in `clusterInputs`. `VALIDATE` therefore does not ask the Console for a
+region, while `COMPILE` checks it and fails closed if q-core does not inject it.
 
 For S3-compatible storage, q-core receives only the Secret name. The customer creates that Secret
 in the Loki namespace before deployment:
@@ -250,8 +226,10 @@ Until a migration workflow supplies that applied state, q-core must keep `storag
 future-dated Loki schema period; a topology migration must follow the chart's staged migration
 mode. Existing Engine v1 Loki installations are therefore not migration inputs for this bundle.
 
-This POC intentionally enables object storage only for `CUSTOMER_MANAGED`. `QOVERY_MANAGED` remains
-fail-closed until the Terraform-output execution barrier is available before Helm compilation.
+Object storage is enabled only for `CUSTOMER_MANAGED`. `QOVERY_MANAGED` remains fail-closed until
+the Terraform-output execution barrier is available before Helm compilation; on such a cluster an
+object-storage choice is not offered, reports `MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE`,
+and activates none of its inputs.
 
 ## Security boundary
 
@@ -259,30 +237,41 @@ In production, imports use q-core's virtual `bundle:/` loader. It exposes only `
 the same digest-pinned OCI component bundle. Filesystem, environment, package, and network access
 remain disabled.
 
-Run the contract examples from the engine repository root:
-
-```shell
-PKL_BIN=pkl ./scripts/test-platform-config.sh
-```
-
-The script first runs the component-local Pkl facts and snapshots, then exercises the complete JSON
-contract through `model.pkl`.
-
 ## Module layering
 
-The tree above is not a convention, it is a checked invariant. `tools/platform-catalog-tests/tests/
-module_layering.rs` parses every import in the published bundles and fails on: a feature package
-importing anything but `contract.pkl`/`context.pkl` from the root; one feature package importing
-another; a cross-package import whose alias is not `<package><Module>`; a same-package import that
-is aliased; an entrypoint that imports anything but `sdk/request.pkl` and `evaluation.pkl`; any
-import added to the vendored contract; and a vendored `sdk/` module importing anything but
-`contract.pkl` or another `sdk/` module. Importing `sdk/` is allowed from every module — it is the
-shared authoring layer, not a feature package. The same file also proves each of those rules fires,
-so the check cannot silently stop matching. Run it with:
+The tree above is a checked invariant. `tools/platform-catalog-tests/tests/module_layering.rs`
+parses every import in the published bundles and fails on: a setting folder importing anything but
+`contract.pkl` from the bundle root; a setting folder importing anything but a sibling's
+`setting.pkl`; two folders importing each other's `setting.pkl`; a cross-folder import whose alias
+is not `<folder><Module>`; a same-folder import that is aliased; an entrypoint that
+imports anything but `settings.pkl` and `sdk/`; any import added to the vendored contract; and a
+vendored `sdk/` module importing anything but `contract.pkl` or another `sdk/` module. Importing
+`sdk/` is allowed from every module. The same file proves each rule fires, so the check cannot
+silently stop matching. Run it with:
 
 ```shell
 cargo test --manifest-path tools/platform-catalog-tests/Cargo.toml --test module_layering
 ```
 
-The feature-to-root allow-list is a ratchet: it may shrink, never grow. Removing `context.pkl` from
-it means moving `SupportedProvider` — a storage concept — into `storage/types.pkl`.
+## Changes from the previous layout
+
+Contract-visible, none covered by a captured exchange, each pinned by a test:
+
+- an explicit `null` on a setting is `INVALID_TYPE`; it used to fall back to the default;
+- `RESOLVE_REQUIREMENTS` on a Qovery-managed cluster with an object-storage choice lists no input;
+- the order of violations follows the Console order of settings, then the dependency rules;
+- the key order of `values.final.yaml` follows the Console order (retention before topology).
+
+## Tests
+
+```bash
+./scripts/test-platform-config.sh
+```
+
+One suite per setting folder, an end-to-end suite per operation, and golden COMPILE outputs
+rendered as JSON so that a model change shows up as a plain values diff in the merge request.
+Regenerate the golden file after a deliberate change with:
+
+```bash
+pkl test --overwrite platform-catalog/components/loki/tests/compile-golden.tests.pkl
+```

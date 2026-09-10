@@ -1,0 +1,67 @@
+{
+  "operation": "RESOLVE_REQUIREMENTS",
+  "componentKey": "karpenter-configuration",
+  "profileConfig": {
+    "nodePools": [
+      {
+        "name": "general",
+        "instanceTypes": [
+          "m7i.large",
+          "m7i.xlarge"
+        ],
+        "spotEnabled": true,
+        "consolidation": {
+          "policy": "WhenEmptyOrUnderutilized"
+        },
+        "taints": [],
+        "ami": {
+          "mode": "default"
+        },
+        "subnets": {
+          "mode": "auto",
+          "tag": {
+            "key": "karpenter.sh/discovery",
+            "value": "demo-eks"
+          }
+        }
+      },
+      {
+        "name": "isolated",
+        "instanceTypes": [
+          "m7i.large"
+        ],
+        "spotEnabled": false,
+        "consolidation": {
+          "policy": "WhenEmpty"
+        },
+        "taints": [
+          {
+            "key": "dedicated",
+            "value": "demo",
+            "effect": "NoSchedule"
+          }
+        ],
+        "ami": {
+          "mode": "custom",
+          "id": "ami-00000000000000000",
+          "family": "AL2023"
+        },
+        "subnets": {
+          "mode": "custom",
+          "ids": [
+            "subnet-00000000000000000"
+          ]
+        }
+      }
+    ]
+  },
+  "clusterContext": {
+    "mode": "CUSTOMER_MANAGED",
+    "provider": "AWS"
+  },
+  "clusterInputs": {},
+  "componentOutputs": {},
+  "enabledComponents": [
+    "karpenter-configuration"
+  ]
+}

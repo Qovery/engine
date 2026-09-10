@@ -1,0 +1,47 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "retentionWeeks/setting.pkl" as retentionWeeksSetting
+import "retentionWeeks/helm.pkl" as retentionWeeksHelm
+import "highAvailability/setting.pkl" as highAvailabilitySetting
+import "highAvailability/dependencies.pkl" as highAvailabilityDependencies
+import "highAvailability/helm.pkl" as highAvailabilityHelm
+import "storage/setting.pkl" as storageSetting
+import "storage/helm.pkl" as storageHelm
+import "resources/setting.pkl" as resourcesSetting
+
+// Table of contents of the Loki configuration: one feature per setting folder, in Console order.
+// Each folder holds at most:
+//   setting.pkl        what the setting is: type, default, bounds, label
+//   dependencies.pkl   what it requires from other settings or from the cluster
+//   helm.pkl           the chart values it owns
+// What a storage choice requires from the cluster (its inputs) lives in that choice's own file
+// under storage/. The resource profiles are a composite SDK declaration: resources/setting.pkl
+// gives the targets and the preset table, the SDK derives its fields, rules and Helm fragment.
+//
+// The feature order is also the merge order of the Helm fragments, hence the key order of
+// values.final.yaml. Storage comes last so it sits directly above the cluster-inputs section its
+// choice activates in the Console.
+component: sdkEvaluate.Component = new {
+  label = "Loki"
+
+  features = List(
+    new sdkEvaluate.Feature {
+      settings = List(retentionWeeksSetting.setting)
+      rules = List()
+      fragment = retentionWeeksHelm.fragment
+    },
+    new sdkEvaluate.Feature {
+      settings = List(highAvailabilitySetting.setting)
+      rules = highAvailabilityDependencies.rules
+      fragment = highAvailabilityHelm.fragment
+    },
+    resourcesSetting.profiles.feature,
+    new sdkEvaluate.Feature {
+      settings = List(storageSetting.setting)
+      rules = List()
+      fragment = storageHelm.fragment
+    },
+  )
+}

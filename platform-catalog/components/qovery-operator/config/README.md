@@ -15,7 +15,7 @@ Demo clusters activate the `QOVERY_DEMO` capability, which merges
   worker Jobs only. Infrastructure workers never receive builder settings.
 
 The configuration is persisted in the Platform Template binding under the
-`qovery-operator` component. Its evaluator requires `cpuArchitectures` when
-`QOVERY_DEMO` is active and adds it to the Operator environment. Bootstrap and
+`qovery-operator` component. Its evaluator (`runtime-values/cpuArchitectures/`) requires
+`cpuArchitectures` when `QOVERY_DEMO` is active and adds it to the Operator environment. Bootstrap and
 Operator self-update therefore reuse the same explicit architecture without
 introducing cluster-specific runtime inputs.

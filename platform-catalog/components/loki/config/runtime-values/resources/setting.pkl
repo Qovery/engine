@@ -1,0 +1,71 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.setting
+
+import "../highAvailability/setting.pkl" as highAvailabilitySetting
+import "../sdk/resources.pkl" as sdkResources
+
+// The Loki workloads and their preset budgets. The SDK derives the selector, the CUSTOM fields,
+// the limit rules and the `<target>.resources` chart blocks from this table.
+//
+// Preset provenance (Slice 4.7 calibration):
+//
+// - MEDIUM is adopted verbatim from the engine v1 fleet defaults applied to every Qovery-managed
+//   Loki today (lib-engine/src/io_models/loki.rs and q-core ClusterAdvancedSettings: 300m CPU
+//   request, 1024Mi memory request, 2048Mi memory limit, uniform across the four Loki targets).
+//   A future managed-cluster migration to the platform catalog can therefore select MEDIUM and
+//   keep its pod resources unchanged. The fleet's 8000m CPU limit is dropped per the SDK preset
+//   policy: a ceiling that high never throttles, "no limit" states the same intent honestly.
+// - SMALL is anchored on the dev/staging minimum: a Loki single binary starts and serves low
+//   volume comfortably within 512Mi, and CPU requests size scheduling, not performance, for this
+//   bursty workload.
+// - LARGE is the last vertical step before selecting highAvailability: memory is Loki's practical
+//   scaling lever (query working set), so it doubles MEDIUM once more.
+// - The gateway (nginx) was never dimensioned by engine v1; its numbers remain proposed.
+//
+// Pending before the slice closes: confirm the SMALL/LARGE anchors and the gateway numbers against
+// the fleet's advanced-settings override distribution (loki.* keys in cluster advanced settings).
+// Changing a number requires a new bundle version and a new root template release, announced with
+// the old and new budgets (q-core docs-v2/slice-4-7-source3-resource-profiles.md).
+
+// Single-binary mode runs one workload; high availability runs the four simple-scalable ones. The
+// flag is read through the highAvailability declaration.
+
+profiles: sdkResources.ResourceProfiles = new {
+  description =
+    "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads."
+
+  targets = List(
+    new sdkResources.Target { key = "singleBinary"; label = "Single binary"; activeWhen = (scope) -> !highAvailabilitySetting.enabled(scope) },
+    new sdkResources.Target { key = "read"; label = "Read"; activeWhen = (scope) -> highAvailabilitySetting.enabled(scope) },
+    new sdkResources.Target { key = "write"; label = "Write"; activeWhen = (scope) -> highAvailabilitySetting.enabled(scope) },
+    new sdkResources.Target { key = "backend"; label = "Backend"; activeWhen = (scope) -> highAvailabilitySetting.enabled(scope) },
+    new sdkResources.Target { key = "gateway"; label = "Gateway"; activeWhen = (scope) -> highAvailabilitySetting.enabled(scope) },
+  )
+
+  //                               cpu (m) / memory (Mi); memory limit = 2x request, no CPU limit
+  presets = new Mapping {
+    ["SMALL"] = new Mapping {
+      ["singleBinary"] = sdkResources.budget(100, 512)
+      ["read"] = sdkResources.budget(100, 512)
+      ["write"] = sdkResources.budget(100, 512)
+      ["backend"] = sdkResources.budget(100, 512)
+      ["gateway"] = sdkResources.budget(50, 64)
+    }
+    ["MEDIUM"] = new Mapping {
+      ["singleBinary"] = sdkResources.budget(300, 1024)
+      ["read"] = sdkResources.budget(300, 1024)
+      ["write"] = sdkResources.budget(300, 1024)
+      ["backend"] = sdkResources.budget(300, 1024)
+      ["gateway"] = sdkResources.budget(100, 128)
+    }
+    ["LARGE"] = new Mapping {
+      ["singleBinary"] = sdkResources.budget(1000, 2048)
+      ["read"] = sdkResources.budget(1000, 2048)
+      ["write"] = sdkResources.budget(1000, 2048)
+      ["backend"] = sdkResources.budget(1000, 2048)
+      ["gateway"] = sdkResources.budget(250, 256)
+    }
+  }
+
+  recommended = "MEDIUM"
+}

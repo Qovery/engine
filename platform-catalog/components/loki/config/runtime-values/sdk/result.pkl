@@ -15,7 +15,7 @@ import "../contract.pkl"
 // scope, so `fields = fields` would be self-referential and overflow.
 function envelope(
   operation: contract.Operation,
-  resultFields: List<contract.Field>,
+  resultFields: List<contract.ConfigurationField>,
   resultRequiredInputs: List<contract.LogicalInput>,
   resultViolations: List<contract.Violation>,
   compiler: () -> Mapping,
