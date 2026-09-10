@@ -1442,6 +1442,7 @@ fn azure_aks_deploy_job() {
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
+            build_settings: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1582,6 +1583,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
+            build_settings: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1711,6 +1713,7 @@ fn azure_aks_deploy_cronjob() {
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
+            build_settings: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -1858,6 +1861,7 @@ fn azure_aks_deploy_cronjob_force_trigger() {
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
+            build_settings: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2016,6 +2020,7 @@ fn azure_aks_build_and_deploy_job() {
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
+            build_settings: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2108,6 +2113,7 @@ fn azure_aks_deploy_terraform_service() {
             terraform_credentials: None,
             extra_action_arguments: BTreeMap::new(),
             dockerfile_fragment: None,
+            build_settings: None,
         }
     }
 

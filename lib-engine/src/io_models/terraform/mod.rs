@@ -13,6 +13,7 @@ use crate::infrastructure::models::container_registry::{
 };
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes};
 use crate::io_models::annotations_group::AnnotationsGroup;
+use crate::io_models::build_settings::BuildSettings;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
@@ -213,6 +214,8 @@ pub struct TerraformService {
     #[serde(default)]
     pub external_secrets: BTreeMap<String, ExternalSecret>,
     #[serde(default)]
+    pub build_settings: Option<BuildSettings>,
+    #[serde(default)]
     pub managed_db_connectivity: Option<ManagedDbConnectivity>,
 }
 
@@ -230,6 +233,17 @@ pub struct ManagedDbConnectivity {
 }
 
 impl TerraformService {
+    fn resolved_build_settings(&self) -> BuildSettings {
+        self.build_settings.clone().unwrap_or(BuildSettings {
+            timeout_max_sec: self.advanced_settings.build_timeout_max_sec,
+            cpu_max_in_milli: self.advanced_settings.build_cpu_max_in_milli,
+            ram_max_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
+            disable_buildkit_cache: false,
+            skip_git_submodules: self.advanced_settings.build_skip_git_submodules,
+        })
+    }
+
     pub fn to_terraform_service_domain(
         self,
         context: &Context,
@@ -602,6 +616,8 @@ impl TerraformService {
 
         let extra_files_to_inject = self.build_extra_files(root_module_path)?;
 
+        let bs = self.resolved_build_settings();
+
         let mut build = Build {
             source: BuildSource::Git(Box::new(GitRepository {
                 url: git_url.clone(),
@@ -618,16 +634,16 @@ impl TerraformService {
                 root_path: root_path.clone(),
                 extra_files_to_inject,
                 docker_target_build_stage: None,
-                skip_submodules: self.advanced_settings.build_skip_git_submodules,
+                skip_submodules: bs.skip_git_submodules,
             })),
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: build_env_vars,
             disable_buildkit_cache: disable_build_cache,
-            timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
+            timeout: Duration::from_secs(bs.timeout_max_sec as u64),
             architectures,
-            max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
-            max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
-            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
+            max_cpu_in_milli: bs.cpu_max_in_milli,
+            max_ram_in_gib: bs.ram_max_in_gib,
+            ephemeral_storage_in_gib: bs.ephemeral_storage_in_gib,
             registries: vec![],
             dockerfile_fragment: self.dockerfile_fragment.as_ref().map(|fragment| match fragment {
                 DockerfileFragment::File { path } => BuildDockerfileFragment::File { path: path.clone() },
@@ -784,6 +800,7 @@ mod tests {
             terraform_credentials: None,
             extra_action_arguments: BTreeMap::new(),
             dockerfile_fragment: None,
+            build_settings: None,
         }
     }
 
@@ -927,5 +944,42 @@ mod tests {
             PathBuf::from("modules/root/backend.tf"),
             "backend.tf must be placed inside root_module_path"
         );
+    }
+
+    #[test]
+    fn resolved_build_settings_falls_back_to_advanced_settings() {
+        let mut svc = create_test_terraform_service("test-svc");
+        svc.advanced_settings.build_timeout_max_sec = 777;
+        let bs = svc.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 777);
+        assert_eq!(bs.cpu_max_in_milli, 4000); // default
+    }
+
+    #[test]
+    fn resolved_build_settings_uses_build_settings_when_present() {
+        let mut svc = create_test_terraform_service("test-svc");
+        svc.advanced_settings.build_timeout_max_sec = 777;
+        svc.build_settings = Some(BuildSettings {
+            timeout_max_sec: 3600,
+            ..Default::default()
+        });
+        let bs = svc.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 3600);
+    }
+
+    #[test]
+    fn resolved_build_settings_disable_buildkit_cache_defaults_to_false() {
+        let svc = create_test_terraform_service("test-svc");
+        let bs = svc.resolved_build_settings();
+        assert!(!bs.disable_buildkit_cache);
+    }
+
+    #[test]
+    fn resolved_build_settings_empty_object_uses_defaults() {
+        let mut svc = create_test_terraform_service("test-svc");
+        svc.advanced_settings.build_timeout_max_sec = 777;
+        svc.build_settings = Some(BuildSettings::default());
+        let bs = svc.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 1800);
     }
 }

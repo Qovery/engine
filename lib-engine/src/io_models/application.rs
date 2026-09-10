@@ -25,6 +25,7 @@ use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::infrastructure::models::container_registry::{ContainerRegistryInfo, DockerRegistryInfo};
 use crate::io_models::annotations_group::AnnotationsGroup;
+use crate::io_models::build_settings::BuildSettings;
 use crate::io_models::container::{AutoscalingConfig, ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -514,6 +515,8 @@ pub struct Application {
     /// Key is the environment variable name / k8s Secret key.
     #[serde(default)]
     pub external_secrets: BTreeMap<String, ExternalSecret>,
+    #[serde(default)]
+    pub build_settings: Option<BuildSettings>,
 }
 
 fn default_root_path_value() -> String {
@@ -521,6 +524,17 @@ fn default_root_path_value() -> String {
 }
 
 impl Application {
+    fn resolved_build_settings(&self) -> BuildSettings {
+        self.build_settings.clone().unwrap_or(BuildSettings {
+            timeout_max_sec: self.advanced_settings.build_timeout_max_sec,
+            cpu_max_in_milli: self.advanced_settings.build_cpu_max_in_milli,
+            ram_max_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
+            disable_buildkit_cache: self.advanced_settings.build_disable_buildkit_cache,
+            skip_git_submodules: self.advanced_settings.build_skip_git_submodules,
+        })
+    }
+
     pub fn to_application_domain(
         self,
         context: &Context,
@@ -790,6 +804,8 @@ impl Application {
         //FIXME: Return a result the function
         let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());
 
+        let bs = self.resolved_build_settings();
+
         let mut build = Build {
             source: BuildSource::Git(Box::new(GitRepository {
                 url,
@@ -806,7 +822,7 @@ impl Application {
                 root_path,
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: self.docker_target_build_stage.clone(),
-                skip_submodules: self.advanced_settings.build_skip_git_submodules,
+                skip_submodules: bs.skip_git_submodules,
             })),
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self
@@ -823,12 +839,12 @@ impl Application {
                     (k.clone(), v)
                 })
                 .collect::<BTreeMap<_, _>>(),
-            disable_buildkit_cache: self.advanced_settings.build_disable_buildkit_cache,
-            timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
+            disable_buildkit_cache: bs.disable_buildkit_cache,
+            timeout: Duration::from_secs(bs.timeout_max_sec as u64),
             architectures,
-            max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
-            max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
-            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
+            max_cpu_in_milli: bs.cpu_max_in_milli,
+            max_ram_in_gib: bs.ram_max_in_gib,
+            ephemeral_storage_in_gib: bs.ephemeral_storage_in_gib,
             registries: self.container_registries.clone(),
             dockerfile_fragment: None, // Applications don't support dockerfile fragments
         };
@@ -902,5 +918,80 @@ mod tests {
     fn ephemeral_storage_in_gib_defaults_to_none_when_absent() {
         let app: Application = serde_json::from_str(MINIMAL_APP_JSON).unwrap();
         assert_eq!(app.ephemeral_storage_in_gib, None);
+    }
+
+    #[test]
+    fn build_settings_absent_falls_back_to_advanced_settings() {
+        let json = format!(
+            r#"{{"advanced_settings": {{"build.timeout_max_sec": 999, "build.cpu_max_in_milli": 2000}}, {}}}"#,
+            &MINIMAL_APP_JSON[1..MINIMAL_APP_JSON.len() - 1]
+        );
+        let app: Application = serde_json::from_str(&json).unwrap();
+        assert!(app.build_settings.is_none());
+        let bs = app.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 999);
+        assert_eq!(bs.cpu_max_in_milli, 2000);
+        assert_eq!(bs.ram_max_in_gib, 8);
+    }
+
+    #[test]
+    fn build_settings_present_wins_over_advanced_settings() {
+        let json = format!(
+            r#"{{
+                "advanced_settings": {{"build.timeout_max_sec": 999, "build.cpu_max_in_milli": 2000}},
+                "build_settings": {{"timeout_max_sec": 3600, "cpu_max_in_milli": 8000, "ram_max_in_gib": 16}},
+                {}
+            }}"#,
+            &MINIMAL_APP_JSON[1..MINIMAL_APP_JSON.len() - 1]
+        );
+        let app: Application = serde_json::from_str(&json).unwrap();
+        assert!(app.build_settings.is_some());
+        let bs = app.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 3600);
+        assert_eq!(bs.cpu_max_in_milli, 8000);
+        assert_eq!(bs.ram_max_in_gib, 16);
+    }
+
+    #[test]
+    fn build_settings_empty_object_uses_build_settings_defaults() {
+        let json = format!(
+            r#"{{
+                "advanced_settings": {{"build.timeout_max_sec": 999}},
+                "build_settings": {{}},
+                {}
+            }}"#,
+            &MINIMAL_APP_JSON[1..MINIMAL_APP_JSON.len() - 1]
+        );
+        let app: Application = serde_json::from_str(&json).unwrap();
+        let bs = app.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 1800);
+    }
+
+    #[test]
+    fn build_settings_zero_values_not_replaced() {
+        let json = format!(
+            r#"{{
+                "advanced_settings": {{"build.timeout_max_sec": 999}},
+                "build_settings": {{"timeout_max_sec": 0, "cpu_max_in_milli": 0}},
+                {}
+            }}"#,
+            &MINIMAL_APP_JSON[1..MINIMAL_APP_JSON.len() - 1]
+        );
+        let app: Application = serde_json::from_str(&json).unwrap();
+        let bs = app.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 0);
+        assert_eq!(bs.cpu_max_in_milli, 0);
+    }
+
+    #[test]
+    fn build_settings_defaults_when_no_advanced_settings_no_build_settings() {
+        let app: Application = serde_json::from_str(MINIMAL_APP_JSON).unwrap();
+        let bs = app.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 1800);
+        assert_eq!(bs.cpu_max_in_milli, 4000);
+        assert_eq!(bs.ram_max_in_gib, 8);
+        assert_eq!(bs.ephemeral_storage_in_gib, None);
+        assert!(!bs.disable_buildkit_cache);
+        assert!(!bs.skip_git_submodules);
     }
 }

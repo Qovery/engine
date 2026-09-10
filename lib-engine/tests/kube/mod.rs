@@ -313,6 +313,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 docker_target_build_stage: None,
                 cpu_architecture: None,
                 autoscaling: None,
+                build_settings: None,
             };
             environment.applications = vec![app];
         }
@@ -367,6 +368,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 shared_image_feature_enabled: false,
                 output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
                 cpu_architecture: None,
+                build_settings: None,
             };
             environment.jobs = vec![job];
         }
