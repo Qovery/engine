@@ -382,10 +382,16 @@ engineResources.requests.memory="3Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 }
 
-function deploy_engines_environment_public() { ## Release env engines consuming the public-pool queue (QOV-2201), engine and builder pods pinned to qovery-default-public nodes
+function deploy_engines_environment_public() { ## Release env engines consuming the public-pool queue (QOV-2201), engine + builder + overprovisioner pods pinned to qovery-default-public nodes (QOV-2206)
   tag=$(generate_image_tag)
-  # autoscaler.minReplicas=1: the chart renders no PDB (engine nor builder) below 2 replicas,
-  # a node consolidation can evict a builder mid-build — accepted for the pilot fleet
+  # sized at parity with deploy_engines_environment_static_ip (QOV-2206 step 2, tier graduation):
+  # autoscaler.minReplicas=2 makes the chart render the engine and builder PDBs (pdb.yaml gates on
+  # minReplicas > 1), so a node consolidation can no longer evict a builder mid-build.
+  # the overprovisioning PriorityClass is cluster-scoped and owned by the private release in
+  # qovery-env (priorityClass.create=true); this release only references it, create must stay false
+  # or helm fails the install on ownership of the class.
+  # overprovisionning.tolerations deliberately omits the engine's 6h not-ready toleration, same
+  # rationale as the private fleet: warm pods hold no work, evict them fast from a NotReady node
   AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_SECRET_KEY" \
   AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
@@ -399,13 +405,17 @@ tolerations[0].tolerationSeconds=21600,\
 tolerations[1].key="nodepool/qovery-default-public",\
 tolerations[1].operator="Exists",\
 tolerations[1].effect="NoSchedule",\
-overprovisionning.enabled=false,\
+overprovisionning.tolerations[0].key="nodepool/qovery-default-public",\
+overprovisionning.tolerations[0].operator="Exists",\
+overprovisionning.tolerations[0].effect="NoSchedule",\
+overprovisionning.enabled=true,\
 overprovisionning.priorityClass.create=false \
   --set-string \
 image.tag="$tag",\
 fullnameOverride="qovery-engine-env-public",\
 nodeSelector."karpenter\.sh/nodepool"="qovery-default-public",\
 nodeSelector."kubernetes\.io/arch"="amd64",\
+overprovisionning.nodeSelector."karpenter\.sh/nodepool"="qovery-default-public",\
 buildContainer.enabled="true",\
 buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
 buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
@@ -426,9 +436,14 @@ networkPolicies.enabled="true",\
 metrics.enabled="true",\
 rbac.clusterPermission="deployer",\
 autoscaler.enabled="true",\
-autoscaler.minReplicas="1",\
+autoscaler.minReplicas="2",\
 autoscaler.maxReplicas="50",\
 autoscaler.averageValue="0.9",\
+overprovisionning.replicas="5",\
+overprovisionning.resources.requests.cpu="4",\
+overprovisionning.resources.limits.cpu="4",\
+overprovisionning.resources.requests.memory="8Gi",\
+overprovisionning.resources.limits.memory="8Gi",\
 engineResources.limits.cpu="1",\
 engineResources.limits.memory="3Gi",\
 engineResources.limits.ephemeral-storage="20Gi",\
