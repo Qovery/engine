@@ -19,6 +19,7 @@ pub mod application;
 pub mod aws_apn_id;
 mod azure;
 pub mod blueprint;
+pub mod build_settings;
 pub mod container;
 pub mod context;
 pub mod database;

@@ -102,6 +102,7 @@ impl TerraformServiceTestBuilder {
             terraform_credentials: None,
             extra_action_arguments: self.extra_action_arguments.clone(),
             dockerfile_fragment: None,
+            build_settings: None,
         }
     }
 }

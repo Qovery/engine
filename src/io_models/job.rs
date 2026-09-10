@@ -17,6 +17,7 @@ use crate::infrastructure::models::container_registry::{
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::to_environment_variable;
+use crate::io_models::build_settings::BuildSettings;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -223,6 +224,8 @@ pub struct Job {
     /// CPU architecture this service must run on. `None` means inherit the cluster default.
     #[serde(default)]
     pub cpu_architecture: Option<CpuArchitecture>,
+    #[serde(default)]
+    pub build_settings: Option<BuildSettings>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -231,6 +234,17 @@ pub struct ContainerRegistries {
 }
 
 impl Job {
+    fn resolved_build_settings(&self) -> BuildSettings {
+        self.build_settings.clone().unwrap_or(BuildSettings {
+            timeout_max_sec: self.advanced_settings.build_timeout_max_sec,
+            cpu_max_in_milli: self.advanced_settings.build_cpu_max_in_milli,
+            ram_max_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
+            disable_buildkit_cache: self.advanced_settings.build_disable_buildkit_cache,
+            skip_git_submodules: self.advanced_settings.build_skip_git_submodules,
+        })
+    }
+
     pub fn to_build(
         &self,
         registry_url: &ContainerRegistryInfo,
@@ -298,6 +312,8 @@ impl Job {
             Url::parse("https://invalid-git-url.com").expect("Error while trying to parse invalid git url")
         });
 
+        let bs = self.resolved_build_settings();
+
         let mut build = Build {
             source: BuildSource::Git(Box::new(GitRepository {
                 url,
@@ -314,7 +330,7 @@ impl Job {
                 root_path,
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: docker_target_build_stage.clone(),
-                skip_submodules: self.advanced_settings.build_skip_git_submodules,
+                skip_submodules: bs.skip_git_submodules,
             })),
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
             environment_variables: self
@@ -330,12 +346,12 @@ impl Job {
                     (k.clone(), v)
                 })
                 .collect::<BTreeMap<_, _>>(),
-            disable_buildkit_cache: self.advanced_settings.build_disable_buildkit_cache,
-            timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
+            disable_buildkit_cache: bs.disable_buildkit_cache,
+            timeout: Duration::from_secs(bs.timeout_max_sec as u64),
             architectures,
-            max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
-            max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
-            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
+            max_cpu_in_milli: bs.cpu_max_in_milli,
+            max_ram_in_gib: bs.ram_max_in_gib,
+            ephemeral_storage_in_gib: bs.ephemeral_storage_in_gib,
             registries: self.container_registries.registries.clone(),
             dockerfile_fragment: None, // Jobs don't support dockerfile fragments
         };
@@ -663,5 +679,69 @@ mod tests {
         }
         let p: Partial = serde_json::from_str("{}").unwrap();
         assert_eq!(p.ephemeral_storage_in_gib, None);
+    }
+
+    use super::*;
+
+    const MINIMAL_JOB_JSON: &str = r#"{
+        "long_id": "00000000-0000-0000-0000-000000000001",
+        "name": "test-job",
+        "kube_name": "test-job",
+        "action": "CREATE",
+        "schedule": {"on_start": {"lifecycle_type": "GENERIC"}},
+        "source": {"image": {"registry": {"DockerHub": {"long_id": "00000000-0000-0000-0000-000000000002", "url": "https://docker.io", "credentials": null}}, "image": "alpine", "tag": "latest"}},
+        "max_nb_restart": 0,
+        "max_duration_in_sec": 300,
+        "command_args": [],
+        "force_trigger": false,
+        "cpu_request_in_milli": 100,
+        "ram_request_in_mib": 128,
+        "ram_limit_in_mib": 256,
+        "container_registries": {"registries": []},
+        "output_variable_validation_pattern": ""
+    }"#;
+
+    #[test]
+    fn resolved_build_settings_falls_back_to_advanced_settings() {
+        let json = format!(
+            r#"{{"advanced_settings": {{"build.timeout_max_sec": 777}}, {}}}"#,
+            &MINIMAL_JOB_JSON[1..MINIMAL_JOB_JSON.len() - 1]
+        );
+        let job: Job = serde_json::from_str(&json).unwrap();
+        assert!(job.build_settings.is_none());
+        let bs = job.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 777);
+        assert_eq!(bs.cpu_max_in_milli, 4000); // default
+    }
+
+    #[test]
+    fn resolved_build_settings_uses_build_settings_when_present() {
+        let json = format!(
+            r#"{{
+                "build_settings": {{"timeout_max_sec": 3600}},
+                "advanced_settings": {{"build.timeout_max_sec": 777}},
+                {}
+            }}"#,
+            &MINIMAL_JOB_JSON[1..MINIMAL_JOB_JSON.len() - 1]
+        );
+        let job: Job = serde_json::from_str(&json).unwrap();
+        assert!(job.build_settings.is_some());
+        let bs = job.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 3600); // build_settings wins
+    }
+
+    #[test]
+    fn resolved_build_settings_empty_object_uses_defaults() {
+        let json = format!(
+            r#"{{
+                "build_settings": {{}},
+                "advanced_settings": {{"build.timeout_max_sec": 777}},
+                {}
+            }}"#,
+            &MINIMAL_JOB_JSON[1..MINIMAL_JOB_JSON.len() - 1]
+        );
+        let job: Job = serde_json::from_str(&json).unwrap();
+        let bs = job.resolved_build_settings();
+        assert_eq!(bs.timeout_max_sec, 1800); // BuildSettings::default(), not 777
     }
 }
