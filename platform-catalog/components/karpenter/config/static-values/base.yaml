@@ -1,0 +1,9 @@
+# Retain the upstream two-replica HA placement/topology policy and pin controller resources.
+replicas: 2
+controller:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      memory: 1Gi

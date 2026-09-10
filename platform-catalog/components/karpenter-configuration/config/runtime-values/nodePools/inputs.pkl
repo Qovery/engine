@@ -1,0 +1,29 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.nodePools.inputs
+
+import "../contract.pkl"
+
+inputs: List<contract.LogicalInput> =
+  List(
+    new contract.LogicalInput {
+      key = "aws.eksClusterName"
+      type = "string"
+      scope = "CLUSTER"
+      label = "Existing EKS cluster name"
+      constraints { minLength = 1; maxLength = 100; pattern = "[A-Za-z0-9][A-Za-z0-9_-]{0,99}" }
+    },
+    new contract.LogicalInput {
+      key = "aws.nodeRoleName"
+      type = "string"
+      scope = "CLUSTER"
+      label = "Existing node IAM role name"
+      constraints { minLength = 1; maxLength = 64; pattern = "[A-Za-z0-9_+=,.@-]{1,64}" }
+    },
+    new contract.LogicalInput {
+      key = "aws.nodeSecurityGroupId"
+      type = "string"
+      scope = "CLUSTER"
+      label = "Node security group ID"
+      constraints { pattern = "sg-([0-9a-f]{8}|[0-9a-f]{17})" }
+    },
+  )

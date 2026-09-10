@@ -1,0 +1,6 @@
+apiVersion: v2
+name: karpenter-custom-resources
+description: Engine v2 Karpenter NodePools and their individual EC2NodeClasses
+type: application
+version: 0.1.0
+appVersion: 1.10.0

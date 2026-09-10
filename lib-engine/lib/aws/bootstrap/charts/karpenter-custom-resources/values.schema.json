@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pools"
+  ],
+  "properties": {
+    "pools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "nodePoolSpec",
+          "nodeClassSpec"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^qovery-[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?$",
+            "maxLength": 63
+          },
+          "nodePoolSpec": {
+            "type": "object",
+            "required": [
+              "template"
+            ]
+          },
+          "nodeClassSpec": {
+            "type": "object",
+            "required": [
+              "role",
+              "amiSelectorTerms",
+              "subnetSelectorTerms",
+              "securityGroupSelectorTerms"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

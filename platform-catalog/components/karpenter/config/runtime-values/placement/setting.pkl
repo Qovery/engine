@@ -1,0 +1,64 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterController.placement.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+selectorKey: sdkSettings.StringSetting = new {
+  key = "nodeSelectorKey"
+  label = "Existing node group label key"
+  default = "eks.amazonaws.com/nodegroup"
+  minLength = 1
+  maxLength = 317
+  pattern = qualifiedNamePattern
+}
+selectorValue: sdkSettings.StringSetting = new {
+  key = "nodeSelectorValue"
+  label = "Existing node group label value"
+  required = true
+  minLength = 1
+  maxLength = 63
+  pattern = labelValuePattern
+}
+settings: List<sdkSettings.Setting> =
+  List(
+    selectorKey,
+    selectorValue,
+    new sdkSettings.ArraySetting {
+      key = "tolerations"
+      label = "Existing node group taints to tolerate"
+      items = new sdkSettings.ObjectSetting {
+        key = "toleration"
+        label = "Toleration"
+        fields =
+          List(
+            new sdkSettings.StringSetting {
+              key = "key"
+              label = "Taint key"
+              required = true
+              minLength = 1
+              maxLength = 317
+              pattern = qualifiedNamePattern
+            },
+            new sdkSettings.StringSetting {
+              key = "value"
+              label = "Taint value"
+              required = true
+              maxLength = 63
+              pattern = labelValuePattern
+            },
+            new sdkSettings.EnumSetting {
+              key = "effect"
+              label = "Effect"
+              required = true
+              options =
+                List("NoSchedule", "PreferNoSchedule", "NoExecute")
+                  .map((name) -> new sdkSettings.Option { value = name })
+            },
+          )
+      }
+    },
+  )
+
+qualifiedNamePattern: String =
+  "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+labelValuePattern: String = "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"

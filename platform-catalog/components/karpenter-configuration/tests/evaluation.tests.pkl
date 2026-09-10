@@ -1,0 +1,249 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/nodePools/helm.pkl" as nodePoolsHelm
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+import "../config/runtime-values/settings.pkl"
+
+local request = sdkRequest.decode(read("../../../examples/karpenter-v0/configuration.request.json"))
+local draft = request["profileConfig"] as Mapping
+
+local function evaluateRequest(value: Mapping) =
+  sdkEvaluate.evaluate(settings.component(sdkRequest.clusterInputs(value)), value)
+
+local function evaluate(config: Mapping, operation: contract.Operation): contract.EvaluationResult =
+  evaluateRequest((request) { ["profileConfig"] = config; ["operation"] = operation })
+
+local function pool(change: (Mapping) -> Mapping): Mapping = (draft) {
+  ["nodePools"] =
+    (draft["nodePools"] as Listing)
+      .toList()
+      .mapIndexed((index, raw) -> if (index == 1) change.apply(raw as Mapping) else raw)
+      .toListing()
+}
+
+local function rejects(config: Mapping, path: String): Boolean =
+  let (validated = evaluate(config, "VALIDATE"))
+  let (compiled = evaluate(config, "COMPILE"))
+    validated.violations.any((entry) -> entry.fieldPath == path)
+      && compiled.violations == validated.violations
+      && compiled.helmValues == null
+
+facts {
+  ["absent optional settings use the accepted defaults without requiring draft rewriting"] {
+    let (
+      minimal = new Mapping {
+        ["nodePools"] = new Listing {
+          new Mapping { ["name"] = "minimal"; ["instanceTypes"] = new Listing { "m7i.large" } }
+        }
+      }
+    )
+    let (result = evaluate(minimal, "COMPILE"))
+    let (spec = result.helmValues!!["pools"][0]["nodePoolSpec"])
+      result.violations.isEmpty
+        && spec["template"]["spec"]["requirements"][1]["values"] == new Listing { "on-demand" }
+        && spec["template"]["spec"]["taints"].isEmpty
+        && spec["disruption"]["consolidationPolicy"] == "WhenEmptyOrUnderutilized"
+  }
+  ["missing, malformed and duplicate pools cannot reach compilation"] {
+    rejects(new Mapping {}, "nodePools")
+    for (value in List(null, "unfinished", new Mapping {}, new Listing {})) {
+      rejects((draft) { ["nodePools"] = value }, "nodePools")
+    }
+    rejects((draft) { ["nodePools"] = new Listing { null } }, "nodePools[0]")
+    rejects(pool((value) -> (value) { ["name"] = "general" }), "nodePools[1].name")
+    rejects(pool((value) -> (value) { ["name"] = "A" }), "nodePools[1].name")
+    rejects(pool((value) -> (value) { ["name"] = "a".repeat(57) }), "nodePools[1].name")
+    evaluate(pool((value) -> (value) { ["name"] = "a".repeat(56) }), "COMPILE").violations.isEmpty
+  }
+  ["strict active shapes and indexed scalar constraints reject partial drafts"] {
+    for (key in List("ami", "subnets", "consolidation")) {
+      rejects(pool((value) -> (value) { [key] = null }), "nodePools[1].\(key)")
+    }
+    rejects(pool((value) -> (value) { ["spotEnabled"] = "false" }), "nodePools[1].spotEnabled")
+    rejects(
+      pool((value) -> (value) { ["instanceTypes"] = new Listing {} }),
+      "nodePools[1].instanceTypes",
+    )
+    rejects(
+      pool((value) -> (value) { ["instanceTypes"] = new Listing { "m7i.large"; "m7i.large" } }),
+      "nodePools[1].instanceTypes",
+    )
+    rejects(
+      pool((value) -> (value) { ["instanceTypes"] = new Listing { "m7i large" } }),
+      "nodePools[1].instanceTypes[0]",
+    )
+    rejects(
+      pool((value) -> (value) { ["ami"] = new Mapping { ["mode"] = "custom" } }),
+      "nodePools[1].ami.id",
+    )
+    rejects(
+      pool((value) -> (value) {
+        ["ami"] = new Mapping { ["mode"] = "custom"; ["id"] = "ami-wrong" }
+      }),
+      "nodePools[1].ami.id",
+    )
+    rejects(
+      pool((value) -> (value) { ["ami"] = new Mapping { ["mode"] = "unknown" } }),
+      "nodePools[1].ami.mode",
+    )
+    rejects(
+      pool((value) -> (value) {
+        ["subnets"] = new Mapping { ["mode"] = "custom"; ["ids"] = new Listing { "subnet-no" } }
+      }),
+      "nodePools[1].subnets.ids[0]",
+    )
+    rejects(
+      pool((value) -> (value) { ["consolidation"] = new Mapping { ["policy"] = "Never" } }),
+      "nodePools[1].consolidation.policy",
+    )
+    rejects(pool((value) -> (value) { ["unknown"] = true }), "nodePools[1].unknown")
+  }
+  ["taints use Kubernetes key/value constraints and reject duplicate key/effect pairs"] {
+    let (
+      taint = new Mapping {
+        ["key"] = "customer.example/dedicated"
+        ["value"] = ""
+        ["effect"] = "NoSchedule"
+      }
+    )
+    let (valid = pool((value) -> (value) { ["taints"] = new Listing { taint } }))
+      evaluate(valid, "COMPILE").violations.isEmpty
+    rejects(
+      pool((value) -> (value) { ["taints"] = new Listing { "unfinished" } }),
+      "nodePools[1].taints[0]",
+    )
+    for (key in List("bad key", "bad.example/", "a".repeat(64))) {
+      rejects(
+        pool((value) -> (value) {
+          ["taints"] = new Listing {
+            new Mapping { ["key"] = key; ["value"] = "ok"; ["effect"] = "NoSchedule" }
+          }
+        }),
+        "nodePools[1].taints[0].key",
+      )
+    }
+    rejects(
+      pool((value) -> (value) {
+        ["taints"] = new Listing {
+          new Mapping { ["key"] = "dedicated"; ["value"] = "a"; ["effect"] = "NoSchedule" }
+          new Mapping { ["key"] = "dedicated"; ["value"] = "b"; ["effect"] = "NoSchedule" }
+        }
+      }),
+      "nodePools[1].taints[1]",
+    )
+  }
+  ["inactive branches remain intact while only active values compile"] {
+    let (
+      inactive =
+        pool((value) -> (value) {
+          ["ami"] = new Mapping { ["mode"] = "default"; ["id"] = null; ["family"] = "unfinished" }
+          ["subnets"] = new Mapping { ["mode"] = "auto"; ["ids"] = "unfinished" }
+        })
+    )
+    let (result = evaluate(inactive, "COMPILE"))
+      result.violations.isEmpty
+        && result.helmValues!!["pools"][1]["nodeClassSpec"]["amiSelectorTerms"][0]["alias"]
+          == "al2023@latest"
+        && result.helmValues!!["pools"][1]["nodeClassSpec"]["subnetSelectorTerms"][0]["tags"]["karpenter.sh/discovery"]
+          == "customer-eks"
+    evaluate(
+      pool((value) -> (value) {
+        ["subnets"] = (value["subnets"] as Mapping) { ["tag"] = "unfinished" }
+      }),
+      "COMPILE",
+    )
+      .violations
+      .isEmpty
+  }
+  ["tag validation is EC2 syntax, not Kubernetes label syntax"] {
+    for (key in List("aws:reserved", "AWS:reserved", "", "a".repeat(129))) {
+      rejects(
+        pool((value) -> (value) {
+          ["subnets"] = new Mapping {
+            ["mode"] = "auto"
+            ["tag"] = new Mapping { ["key"] = key }
+          }
+        }),
+        "nodePools[1].subnets.tag.key",
+      )
+    }
+    rejects(
+      pool((value) -> (value) {
+        ["subnets"] = new Mapping {
+          ["mode"] = "auto"
+          ["tag"] = new Mapping { ["value"] = "a".repeat(257) }
+        }
+      }),
+      "nodePools[1].subnets.tag.value",
+    )
+  }
+  ["missing or malformed logical inputs yield violations without throwing"] {
+    for (key in List("aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId")) {
+      for (value in List(null, false, new Listing {}, "", "wrong value!")) {
+        let (
+          result =
+            evaluateRequest((request) {
+              ["clusterInputs"] = (request["clusterInputs"] as Mapping) { [key] = value }
+            })
+        )
+          result.helmValues == null
+            && result.violations.any((entry) -> entry.fieldPath == "clusterInputs.\(key)")
+      }
+    }
+  }
+  ["version and cluster identity are explicit and never default to a demo context"] {
+    for (
+      context in
+        List(
+          null,
+          new Mapping {},
+          new Mapping {
+            ["mode"] = "QOVERY_MANAGED"
+            ["provider"] = "AWS"
+            ["kubernetesVersion"] = "1.34"
+          },
+          new Mapping {
+            ["mode"] = "CUSTOMER_MANAGED"
+            ["provider"] = "GCP"
+            ["kubernetesVersion"] = "1.34"
+          },
+        )
+    ) {
+      let (result = evaluateRequest((request) { ["clusterContext"] = context }))
+        !result.violations.isEmpty && result.helmValues == null
+    }
+    for (version in List(null, 1.34, "1.29", "1.36", "v1.34", "1.34.1")) {
+      let (
+        result =
+          evaluateRequest((request) {
+            ["clusterContext"] = (request["clusterContext"] as Mapping) {
+              ["kubernetesVersion"] = version
+            }
+          })
+      )
+        result.helmValues == null
+          && result.violations.any((entry) -> entry.fieldPath == "clusterContext.kubernetesVersion")
+    }
+  }
+  ["AMI default matches the legacy version split; no custom ID is mixed with an alias"] {
+    for (minor in IntSeq(23, 32)) { nodePoolsHelm.standardAlias("1.\(minor)") == "al2@latest" }
+    for (minor in IntSeq(33, 35)) { nodePoolsHelm.standardAlias("1.\(minor)") == "al2023@latest" }
+    for (minor in IntSeq(30, 35)) {
+      let (
+        result =
+          evaluateRequest((request) {
+            ["clusterContext"] = (request["clusterContext"] as Mapping) {
+              ["kubernetesVersion"] = "1.\(minor)"
+            }
+          })
+      )
+        result.violations.isEmpty
+          && result.helmValues!!["pools"][0]["nodeClassSpec"]["amiSelectorTerms"][0]["alias"]
+            == nodePoolsHelm.standardAlias("1.\(minor)")
+          && result.helmValues!!["pools"][1]["nodeClassSpec"]["amiSelectorTerms"][0].keys
+            == Set("id")
+    }
+  }
+}

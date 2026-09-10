@@ -1,0 +1,54 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterController.placement.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
+
+fragment: sdkHelm.Fragment = (scope) -> compile(scope.config, scope.inputs)
+
+local function compile(config: Mapping, clusterInputs: Mapping): Mapping = new Mapping {
+  ["settings"] = new Mapping {
+    ["clusterName"] = clusterInputs["aws.eksClusterName"]
+    ["interruptionQueue"] = clusterInputs["aws.interruptionQueueName"]
+    ["eksControlPlane"] = true
+  }
+  ["serviceAccount"] = new Mapping {
+    ["name"] = "karpenter"
+    ["annotations"] = new Mapping {
+      ["eks.amazonaws.com/role-arn"] = clusterInputs["aws.controllerRoleArn"]
+    }
+  }
+  ["nodeSelector"] = new Mapping {
+    ["kubernetes.io/os"] = "linux"
+    [config[setting.selectorKey.key]] = config[setting.selectorValue.key]
+  }
+  ["affinity"] = new Mapping {
+    ["nodeAffinity"] = new Mapping {
+      ["requiredDuringSchedulingIgnoredDuringExecution"] = new Mapping {
+        ["nodeSelectorTerms"] = new Listing {
+          new Mapping {
+            ["matchExpressions"] = new Listing {
+              new Mapping { ["key"] = "karpenter.sh/nodepool"; ["operator"] = "DoesNotExist" }
+              new Mapping {
+                ["key"] = "eks.amazonaws.com/compute-type"
+                ["operator"] = "NotIn"
+                ["values"] = new Listing { "fargate" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ["tolerations"] = new Listing {
+    new Mapping { ["key"] = "CriticalAddonsOnly"; ["operator"] = "Exists" }
+    for (raw in config["tolerations"] as Listing) {
+      new Mapping {
+        ["key"] = raw["key"]
+        ["value"] = raw["value"]
+        ["effect"] = raw["effect"]
+        ["operator"] = "Equal"
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "operation": "COMPILE",
+  "componentKey": "karpenter",
+  "profileConfig": {
+    "nodeSelectorValue": "customer-system",
+    "tolerations": [
+      {
+        "key": "dedicated",
+        "value": "",
+        "effect": "NoSchedule"
+      }
+    ]
+  },
+  "clusterContext": {
+    "mode": "CUSTOMER_MANAGED",
+    "provider": "AWS",
+    "kubernetesVersion": "1.34"
+  },
+  "clusterInputs": {
+    "aws.eksClusterName": "customer-eks",
+    "aws.controllerRoleArn": "arn:aws:iam::123456789012:role/karpenter/controller",
+    "aws.interruptionQueueName": "customer-karpenter-interruptions"
+  },
+  "componentOutputs": {},
+  "enabledComponents": [
+    "karpenter-crd",
+    "karpenter",
+    "karpenter-configuration"
+  ]
+}

@@ -92,6 +92,20 @@ local validCompile =
     new Mapping { ["infra.bucket"] = "logs"; ["infra.region"] = "eu-west-3" },
   )
 
+// No customer-facing enum is needed for a component's unconditional infrastructure input.
+local requiredBucket: evaluate.Component = new {
+  label = "Required bucket"
+  inputs = List(bucket)
+  features = List(new evaluate.Feature {
+    settings = List()
+    rules = List()
+    // Missing input would throw if an invalid request reached this fragment.
+    fragment = (scope) -> new Mapping { ["bucket"] = scope.inputs["infra.bucket"] }
+  })
+}
+local function runRequired(operation: contract.Operation, inputs: Mapping): contract.EvaluationResult =
+  evaluate.evaluate(requiredBucket, request.build(operation, new Mapping {}, null, inputs, List()))
+
 facts {
   ["a feature must spell out its three members"] {
     module.catch(() -> new evaluate.Feature { rules = List(); fragment = helm.none }.settings).contains("undefined")
@@ -153,4 +167,32 @@ facts {
     evaluate.unvalidatedHelmValues(component, new Mapping {}, new Mapping {})
       == new Mapping { ["storage"] = "pvc"; ["replicas"] = 1; ["bucket"] = null }
   }
+  ["component inputs are exposed without adding a setting or requiring a value during discovery"] {
+    runRequired(contract.describeOperation, new Mapping {}).requiredInputs.isEmpty
+    runRequired(contract.describeOperation, new Mapping {}).violations.isEmpty
+    runRequired(contract.resolveRequirementsOperation, new Mapping {}).requiredInputs == List(bucket)
+    runRequired(contract.resolveRequirementsOperation, new Mapping {}).fields.isEmpty
+    runRequired(contract.resolveRequirementsOperation, new Mapping {}).violations.isEmpty
+    runRequired(contract.resolveRequirementsOperation, new Mapping {}).helmValues == null
+    evaluate.evaluate((component) { inputs = List(bucket) }, request.build(
+      contract.resolveRequirementsOperation, new Mapping {}, aws, new Mapping {}, List()
+    )).requiredInputs == List(bucket)
+  }
+  ["component inputs share presence and format validation and cannot bypass the compile gate"] {
+    for (operation in List(contract.validateOperation, contract.compileOperation)) {
+      let (result = runRequired(operation, new Mapping {}))
+        result.violations.map((entry) -> entry.code) == List("REQUIRED_INPUT_MISSING")
+          && result.violations.first.fieldPath == "clusterInputs.infra.bucket"
+          && result.helmValues == null
+      for (value in List(null, false, "Bad Bucket", new Listing {})) {
+        let (result = runRequired(operation, new Mapping { ["infra.bucket"] = value }))
+          !result.violations.isEmpty && result.helmValues == null
+      }
+    }
+    runRequired(contract.validateOperation, new Mapping { ["infra.bucket"] = "logs" }).violations.isEmpty
+    runRequired(contract.validateOperation, new Mapping { ["infra.bucket"] = "logs" }).helmValues == null
+    runRequired(contract.compileOperation, new Mapping { ["infra.bucket"] = "logs" }).helmValues
+      == new Mapping { ["bucket"] = "logs" }
+  }
+
 }

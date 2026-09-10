@@ -1,0 +1,16 @@
+{{- range .Values.pools }}
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: {{ .name | quote }}
+spec:
+  {{- toYaml .nodeClassSpec | nindent 2 }}
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: {{ .name | quote }}
+spec:
+  {{- toYaml .nodePoolSpec | nindent 2 }}
+{{- end }}

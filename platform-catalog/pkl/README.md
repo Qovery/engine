@@ -35,6 +35,7 @@ request)` implements the four operations once:
 | --- | --- | --- |
 | `IntSetting`, `BoolSetting`, `StringSetting`, `EnumSetting` | `<setting>/setting.pkl` | `Field` descriptor, applied default, `INVALID_TYPE`, `VALUE_OUT_OF_RANGE`, `LENGTH_OUT_OF_RANGE`, `VALUE_NOT_ALLOWED`, activity (`activeWhen`), conditional requirement (`requiredWhen`) |
 | `Option` (value, provider, inputs, compileInputs) and `Availability` | `<enum setting>/setting.pkl`, or one file per option | Narrowed `allowedValues` with a cluster context, `RESOLVE_REQUIREMENTS`, `REQUIRED_INPUT_MISSING` and `INPUT_PATTERN_MISMATCH` at the right phase, the availability violation of a selected unavailable option |
+| `Component.inputs` | Declarations in `<setting>/inputs.pkl`, assembled in `settings.pkl` | Unconditional logical inputs, exposed during RESOLVE_REQUIREMENTS and checked during VALIDATE/COMPILE using the same presence/format checks as option inputs |
 | `Rule` | `<blamed setting>/dependencies.pkl` | One violation per violated rule, on the operations it declares |
 | `Fragment` | `<setting>/helm.pkl` | `helmValues`, deep-merged in declaration order; a leaf written by two fragments throws |
 | `ResourceProfiles` (targets, preset budgets, recommended preset) | `resources/setting.pkl` | The profile selector, four CUSTOM fields per active target pre-filled with the recommendation, `REQUIRED_RESOURCE_REQUEST_MISSING`, `LIMIT_BELOW_REQUEST`, and the `<target>.resources` blocks |
@@ -42,13 +43,17 @@ request)` implements the four operations once:
 
 Every predicate, contextual description and Helm fragment receives one `Scope`: `config` (the
 resolved configuration: every declared key present, absent values at their default, ill-typed values
-`null` and reported separately), `cluster` (mode, provider, capabilities), `inputs` (the cluster
+`null` and reported separately), `cluster` (mode, provider, capabilities, optional `kubernetesVersion`), `inputs` (the cluster
 inputs) and `enabledComponents`. A rule reads another setting through that setting's declaration
 (`storageSetting.selectedBackend(scope)`, `highAvailabilitySetting.enabled(scope)`), never through a
 string key; the declaration classes expose `isOn`, `value` and `selectedValue` for that. Violation order is stable: unknown fields, then each active
 setting in Console order (its own value, the availability of its selected option, the inputs that
-option activates), then the rules. The feature order is also the merge order of the fragments,
+option activates), then component-wide inputs and the rules. The feature order is also the merge order of the fragments,
 hence the key order of the compiled values.
+
+The SDK forwards the supplied version without choosing a default or interpreting its range;
+version admission stays in component rules. Missing or non-string versions become null so those
+rules can report a violation. Components without version rules retain their existing behavior.
 
 Loki is the reference bundle for this layout (see its [README](../components/loki/config/README.md));
 cluster-agent, qovery-operator and the karpenter fixture use it too. Structured drafts use the same

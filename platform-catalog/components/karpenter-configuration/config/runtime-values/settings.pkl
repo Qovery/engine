@@ -1,0 +1,22 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.settings
+
+import "nodePools/dependencies.pkl" as nodePoolsDependencies
+import "nodePools/helm.pkl" as nodePoolsHelm
+import "nodePools/inputs.pkl" as nodePoolsInputs
+import "nodePools/setting.pkl" as nodePoolsSetting
+import "sdk/evaluate.pkl" as sdkEvaluate
+
+// Only the context-derived discovery default varies; evaluation stays in the shared SDK.
+function component(clusterInputs: Mapping): sdkEvaluate.Component =
+  let (name = clusterInputs.getOrNull("aws.eksClusterName"))
+    new {
+      label = "Karpenter configuration"
+      inputs = nodePoolsInputs.inputs
+      features =
+        List(new sdkEvaluate.Feature {
+          settings = List(nodePoolsSetting.forClusterName(if (name is String) name else null))
+          rules = nodePoolsDependencies.rules
+          fragment = nodePoolsHelm.fragment
+        })
+    }

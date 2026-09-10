@@ -1,0 +1,38 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterController.placement.dependencies
+
+import "../sdk/rules.pkl" as sdkRules
+import "setting.pkl"
+
+rules: List<sdkRules.Rule> =
+  List(
+    new sdkRules.FieldRule {
+      code = "INVALID_CONTROLLER_SELECTOR"
+      fieldPath = setting.selectorKey.key
+      message = "Choose the verified independent node group identity label"
+      violated = (scope) ->
+        List("karpenter.sh/nodepool", "eks.amazonaws.com/compute-type", "kubernetes.io/os")
+          .contains(setting.selectorKey.value(scope))
+    },
+    new sdkRules.FieldRule {
+      code = "UNSUPPORTED_CLUSTER"
+      fieldPath = "clusterContext"
+      message = "This catalogue model requires customer-managed AWS EKS"
+      violated = (scope) ->
+        scope.cluster.provider != "AWS" || scope.cluster.mode != "CUSTOMER_MANAGED"
+    },
+    new sdkRules.FieldRule {
+      code = "KUBERNETES_VERSION_REQUIRED"
+      fieldPath = "clusterContext.kubernetesVersion"
+      message = "Supply the cluster Kubernetes version through the evaluation context"
+      violated = (scope) -> scope.cluster.kubernetesVersion == null
+    },
+    new sdkRules.FieldRule {
+      code = "UNSUPPORTED_KUBERNETES_VERSION"
+      fieldPath = "clusterContext.kubernetesVersion"
+      message = "This Karpenter 1.10.0 demo is bounded to Kubernetes 1.30–1.35"
+      violated = (scope) ->
+        scope.cluster.kubernetesVersion != null
+          && !scope.cluster.kubernetesVersion!!.matches(Regex("1[.]3[0-5]"))
+    },
+  )

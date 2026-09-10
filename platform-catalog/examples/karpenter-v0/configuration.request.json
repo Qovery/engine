@@ -1,0 +1,68 @@
+{
+  "operation": "COMPILE",
+  "componentKey": "karpenter-configuration",
+  "profileConfig": {
+    "nodePools": [
+      {
+        "name": "general",
+        "instanceTypes": [
+          "c7i-flex.large",
+          "c7i.metal-24xl"
+        ],
+        "spotEnabled": true,
+        "consolidation": {
+          "policy": "WhenEmptyOrUnderutilized"
+        },
+        "taints": [],
+        "ami": {
+          "mode": "default"
+        },
+        "subnets": {
+          "mode": "auto"
+        }
+      },
+      {
+        "name": "isolated",
+        "instanceTypes": [
+          "m7i.large"
+        ],
+        "spotEnabled": false,
+        "consolidation": {
+          "policy": "WhenEmpty"
+        },
+        "taints": [
+          {
+            "key": "dedicated",
+            "value": "demo",
+            "effect": "NoSchedule"
+          }
+        ],
+        "ami": {
+          "mode": "custom",
+          "id": "ami-00000000000000000",
+          "family": "AL2023"
+        },
+        "subnets": {
+          "mode": "custom",
+          "ids": [
+            "subnet-00000000000000000"
+          ]
+        }
+      }
+    ]
+  },
+  "clusterContext": {
+    "mode": "CUSTOMER_MANAGED",
+    "provider": "AWS",
+    "kubernetesVersion": "1.34"
+  },
+  "clusterInputs": {
+    "aws.eksClusterName": "customer-eks",
+    "aws.nodeRoleName": "customer-node-role",
+    "aws.nodeSecurityGroupId": "sg-0123456789abcdef0"
+  },
+  "componentOutputs": {},
+  "enabledComponents": [
+    "karpenter-configuration"
+  ]
+}

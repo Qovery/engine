@@ -16,7 +16,7 @@ import "validate.pkl"
 //
 // Violation order is stable and documented: unknown fields first, then each setting in Console
 // order (its own value and, recursively, its members and items; then the inputs its selected
-// option activates), then the dependency rules.
+// option activates), then component-wide inputs and dependency rules.
 
 // Pkl gives List and nullable properties an implicit default, which would let an author forget a
 // member without noticing. A property of this type has none: it must be written, even as `List()`.
@@ -36,6 +36,9 @@ class Component {
   label: String
   // Console order, and therefore also the merge order (hence the key order) of the Helm values.
   features: List<Feature>
+  // Inputs required by the whole component, independent of a customer-facing enum choice.
+  // DESCRIBE omits them; RESOLVE_REQUIREMENTS exposes them without requiring their values.
+  inputs: List<contract.LogicalInput> = List()
 
   fixed settings: List<settings.Setting> = features.flatMap((feature) -> feature.settings)
   fixed rules: List<rules.Rule> = features.flatMap((feature) -> feature.rules)
@@ -59,7 +62,7 @@ function evaluate(component: Component, evaluationRequest: Mapping): contract.Ev
     result.envelope(
       operation,
       settings.fields(component.settings, operation, scope, isDescribe),
-      if (isDescribe) List() else requiredInputs(active, scope),
+      if (isDescribe) List() else component.inputs + requiredInputs(active, scope),
       if (isDescribe) List() else violations(component, active, operation, profileConfig, scope),
       () -> compile(component, scope),
     )
@@ -105,6 +108,7 @@ local function violations(
 ): List<contract.Violation> =
   validate.unknownFields(profileConfig, component.settings.map((setting) -> setting.key).toSet(), component.label)
     + active.flatMap((setting) -> settingViolations(component, setting, operation, profileConfig, scope))
+    + declaredInputViolations(component.inputs, operation, scope.inputs)
     + rules.violations(component.rules, operation, scope, component.label)
 
 // One setting's own violations, then the availability of its selected option, then the inputs
@@ -134,17 +138,21 @@ local function settingViolations(
 // A missing customer input is the customer's action to take before its format matters, so the two
 // checks chain. Compile-only inputs are supplied by q-core and checked only while compiling.
 local function inputViolations(option: settings.Option, operation: contract.Operation, clusterInputs: Mapping): List<contract.Violation> =
+  declaredInputViolations(option.inputs, operation, clusterInputs)
+    + if (operation == contract.compileOperation)
+      validate.collect(option.compileInputs.map((key) -> validate.requiredInput(clusterInputs, key)))
+    else
+      List()
+
+// Both component-wide and option-specific inputs share the same validation and lazy compile gate.
+local function declaredInputViolations(
+  inputs: List<contract.LogicalInput>,
+  operation: contract.Operation,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
   if (operation != contract.validateOperation && operation != contract.compileOperation)
     List()
   else
-    validate.collect(
-      option.inputs.map((input) ->
-        validate.requiredInput(clusterInputs, input.key) ?? validate.inputPattern(clusterInputs, input)
-      )
-        + (
-          if (operation == contract.compileOperation)
-            option.compileInputs.map((key) -> validate.requiredInput(clusterInputs, key))
-          else
-            List()
-        ),
-    )
+    validate.collect(inputs.map((input) ->
+      validate.requiredInput(clusterInputs, input.key) ?? validate.inputPattern(clusterInputs, input)
+    ))

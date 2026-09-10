@@ -1,0 +1,19 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterController.settings
+
+import "placement/dependencies.pkl" as placementDependencies
+import "placement/helm.pkl" as placementHelm
+import "placement/inputs.pkl" as placementInputs
+import "placement/setting.pkl" as placementSetting
+import "sdk/evaluate.pkl" as sdkEvaluate
+
+component: sdkEvaluate.Component = new {
+  label = "Karpenter controller"
+  inputs = placementInputs.inputs
+  features =
+    List(new sdkEvaluate.Feature {
+      settings = placementSetting.settings
+      rules = placementDependencies.rules
+      fragment = placementHelm.fragment
+    })
+}

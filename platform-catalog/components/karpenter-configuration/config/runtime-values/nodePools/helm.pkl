@@ -1,0 +1,107 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.nodePools.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+
+// Called behind the SDK's lazy validation gate. Construct values, never YAML/template text.
+fragment: sdkHelm.Fragment = (scope) ->
+  compile(scope.config, scope.inputs, scope.cluster.kubernetesVersion!!)
+
+local function compile(config: Mapping, clusterInputs: Mapping, kubernetesVersion: String): Mapping = new Mapping {
+  ["pools"] =
+    (config["nodePools"] as Listing)
+      .toList()
+      .map((value) -> pool(value as Mapping, clusterInputs, kubernetesVersion))
+      .toListing()
+}
+
+function pool(config: Mapping, clusterInputs: Mapping, kubernetesVersion: String): Mapping =
+  let (name = "qovery-\(config["name"])")
+    new Mapping {
+      ["name"] = name
+      ["nodePoolSpec"] = new Mapping {
+        ["template"] = new Mapping {
+          ["spec"] = new Mapping {
+            ["nodeClassRef"] = new Mapping {
+              ["group"] = "karpenter.k8s.aws"
+              ["kind"] = "EC2NodeClass"
+              ["name"] = name
+            }
+            ["requirements"] = new Listing {
+              new Mapping {
+                ["key"] = "node.kubernetes.io/instance-type"
+                ["operator"] = "In"
+                ["values"] = config["instanceTypes"]
+              }
+              new Mapping {
+                ["key"] = "karpenter.sh/capacity-type"
+                ["operator"] = "In"
+                ["values"] =
+                  if (config["spotEnabled"] == true)
+                    new Listing { "spot"; "on-demand" }
+                  else
+                    new Listing { "on-demand" }
+              }
+            }
+            // The pinned NodePool CRD rejects an explicit empty value; omission means empty.
+            ["taints"] =
+              (config["taints"] as Listing)
+                .toList()
+                .map((taint) -> new Mapping {
+                  ["key"] = taint["key"]
+                  ["effect"] = taint["effect"]
+                  when (taint["value"] != "") { ["value"] = taint["value"] }
+                })
+                .toListing()
+            ["expireAfter"] = "720h"
+            ["terminationGracePeriod"] = "4h"
+          }
+        }
+        ["disruption"] = new Mapping {
+          ["consolidationPolicy"] = config["consolidation"]["policy"]
+          ["consolidateAfter"] = "1m"
+          ["budgets"] = new Listing { new Mapping { ["nodes"] = "10%" } }
+        }
+        ["weight"] = 50
+      }
+      ["nodeClassSpec"] = nodeClass(config, clusterInputs, kubernetesVersion)
+    }
+
+function nodeClass(config: Mapping, clusterInputs: Mapping, kubernetesVersion: String): Mapping =
+  let (ami = config["ami"] as Mapping)
+  let (subnets = config["subnets"] as Mapping)
+    new Mapping {
+      ["role"] = clusterInputs["aws.nodeRoleName"]
+      ["metadataOptions"] = new Mapping { ["httpPutResponseHopLimit"] = 2 }
+      ["securityGroupSelectorTerms"] = new Listing {
+        new Mapping { ["id"] = clusterInputs["aws.nodeSecurityGroupId"] }
+      }
+      when (ami["mode"] == "custom") {
+        ["amiFamily"] = ami["family"]
+        ["amiSelectorTerms"] = new Listing { new Mapping { ["id"] = ami["id"] } }
+      } else {
+        ["amiSelectorTerms"] = new Listing {
+          new Mapping { ["alias"] = standardAlias(kubernetesVersion) }
+        }
+      }
+      when (subnets["mode"] == "custom") {
+        ["subnetSelectorTerms"] =
+          (subnets["ids"] as Listing).toList().map((id) -> new Mapping { ["id"] = id }).toListing()
+      } else {
+        ["subnetSelectorTerms"] = new Listing {
+          new Mapping {
+            ["tags"] = new Mapping {
+              [subnets["tag"]["key"]] = subnets["tag"]["value"]
+            }
+          }
+        }
+      }
+    }
+
+function standardAlias(kubernetesVersion: String): String =
+  if (kubernetesVersion.matches(Regex("1[.](2[3-9]|3[0-2])")))
+    "al2@latest"
+  else if (kubernetesVersion.matches(Regex("1[.]3[3-5]")))
+    "al2023@latest"
+  else
+    throw("Unsupported Kubernetes version")

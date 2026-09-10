@@ -1,0 +1,126 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.configuration.contract
+
+// Canonical language-neutral contract consumed by q-core. Component bundles vendor this file
+// because q-core deliberately resolves Pkl imports only inside one digest-pinned OCI bundle.
+// Keep property names aligned with ComponentConfigurationEvaluationResult.
+
+typealias Operation = "DESCRIBE" | "RESOLVE_REQUIREMENTS" | "VALIDATE" | "COMPILE"
+
+typealias InputScope = "PLATFORM_PROFILE" | "CLUSTER"
+
+// How the cluster is operated, as q-core sends it in clusterContext.mode.
+typealias ClusterMode = "QOVERY_MANAGED" | "CUSTOMER_MANAGED"
+
+typealias FieldType = "string" | "number" | "bool"
+
+describeOperation: Operation = "DESCRIBE"
+resolveRequirementsOperation: Operation = "RESOLVE_REQUIREMENTS"
+validateOperation: Operation = "VALIDATE"
+compileOperation: Operation = "COMPILE"
+
+platformProfileScope: InputScope = "PLATFORM_PROFILE"
+clusterScope: InputScope = "CLUSTER"
+
+qoveryManagedMode: ClusterMode = "QOVERY_MANAGED"
+customerManagedMode: ClusterMode = "CUSTOMER_MANAGED"
+
+stringFieldType: FieldType = "string"
+numberFieldType: FieldType = "number"
+booleanFieldType: FieldType = "bool"
+
+class Constraints {
+  allowedValues: List<String>? = null
+  min: Int? = null
+  max: Int? = null
+  minLength: Int? = null
+  maxLength: Int? = null
+  pattern: String? = null
+}
+
+// Common structured-field metadata. Keep Field separate to preserve its JSON property order
+// as well as its scalar types: no collection properties are added, even as null.
+abstract class StructuredField {
+  key: String
+  required: Boolean
+  label: String
+  description: String?
+  sensitive: Boolean = false
+}
+
+// The existing scalar API, including string-encoded defaults and scalar-only logical inputs.
+class Field {
+  key: String
+  type: FieldType
+  required: Boolean
+  defaultValue: String?
+  label: String
+  description: String?
+  sensitive: Boolean = false
+  constraints: Constraints = new {}
+}
+
+typealias ConfigurationField = Field | StructuredField(this is ObjectField || this is ArrayField)
+
+// Nested keys are literal, relative object member names, never dotted paths or array indices.
+// Nested secrets are deliberately unsupported until consumers implement recursive redaction.
+typealias NestedField =
+  ConfigurationField(!sensitive, key.matches(Regex("[A-Za-z_][A-Za-z0-9_-]*")))
+typealias ObjectFields = List<NestedField>(map((field) -> field.key).isDistinct)
+
+class ObjectField extends StructuredField {
+  fixed type: "object" = "object"
+  fields: ObjectFields
+}
+
+class CollectionConstraints {
+  minItems: Int(this >= 0)? = null
+  maxItems: Int(this >= 0, minItems == null || this >= minItems)? = null
+  uniqueItems: Boolean = false
+}
+
+// Items are value descriptors: they have no key or presentation metadata of their own.
+class ScalarItem {
+  type: FieldType
+  constraints: Constraints = new {}
+}
+
+class ObjectItem {
+  fixed type: "object" = "object"
+  fields: ObjectFields
+}
+
+class ArrayField extends StructuredField {
+  fixed type: "array" = "array"
+  constraints: CollectionConstraints = new {}
+  items: ScalarItem | ObjectItem
+  // Object rows only: one complete relative field list per current draft index, in input order.
+  // [] describes an empty/absent array; null is reserved for scalar arrays.
+  itemFields: List<ObjectFields>?(if (items is ObjectItem) this != null else this == null) = null
+}
+
+// Describes an input that becomes necessary only for the selected configuration.
+// Example: choosing S3 activates the bucket name and IAM role requirements.
+class LogicalInput {
+  key: String
+  type: FieldType
+  scope: InputScope
+  label: String
+  description: String?
+  sensitive: Boolean = false
+  constraints: Constraints = new {}
+}
+
+// Stable machine-readable validation error returned to q-core and the Console.
+class Violation {
+  code: String
+  fieldPath: String
+  message: String
+}
+
+class EvaluationResult {
+  fields: List<ConfigurationField> = List()
+  requiredInputs: List<LogicalInput> = List()
+  violations: List<Violation> = List()
+  helmValues: Mapping? = null
+}

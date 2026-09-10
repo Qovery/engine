@@ -1,0 +1,88 @@
+amends "pkl:test"
+
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+import "../config/runtime-values/settings.pkl"
+
+local request = sdkRequest.decode(read("../../../examples/karpenter-v0/controller.request.json"))
+local draft = request["profileConfig"] as Mapping
+
+local function evaluateRequest(value: Mapping) = sdkEvaluate.evaluate(settings.component, value)
+
+local function rejects(config: Mapping, path: String): Boolean =
+  let (
+    validated =
+      evaluateRequest((request) { ["operation"] = "VALIDATE"; ["profileConfig"] = config })
+  )
+  let (compiled = evaluateRequest((request) { ["profileConfig"] = config }))
+    validated.violations.any((entry) -> entry.fieldPath == path)
+      && compiled.violations == validated.violations
+      && compiled.helmValues == null
+
+facts {
+  ["independent node group is mandatory and incompatible selectors cannot replace safeguards"] {
+    rejects(new Mapping {}, "nodeSelectorValue")
+    for (value in List(null, "", "bad value", 4, "a".repeat(64))) {
+      rejects((draft) { ["nodeSelectorValue"] = value }, "nodeSelectorValue")
+    }
+    for (
+      key in
+        List(
+          "karpenter.sh/nodepool",
+          "eks.amazonaws.com/compute-type",
+          "kubernetes.io/os",
+          "",
+          "bad key",
+        )
+    ) {
+      rejects((draft) { ["nodeSelectorKey"] = key }, "nodeSelectorKey")
+    }
+    evaluateRequest((request) {
+      ["profileConfig"] = (draft) { ["nodeSelectorKey"] = "customer.example/system" }
+    })
+      .violations
+      .isEmpty
+  }
+  ["Equal tolerations allow empty values, validate nested syntax and reject unknown fields"] {
+    evaluateRequest(request).violations.isEmpty
+    rejects((draft) { ["tolerations"] = null }, "tolerations")
+    rejects((draft) { ["tolerations"] = new Listing { false } }, "tolerations[0]")
+    for (key in List("key", "value", "effect")) {
+      rejects(
+        (draft) {
+          ["tolerations"] = new Listing {
+            (draft["tolerations"][0] as Mapping) { [key] = "bad value" }
+          }
+        },
+        "tolerations[0].\(key)",
+      )
+    }
+    rejects(
+      (draft) {
+        ["tolerations"] = new Listing {
+          (draft["tolerations"][0] as Mapping) { ["operator"] = "Exists" }
+        }
+      },
+      "tolerations[0].operator",
+    )
+    rejects((draft) { ["replicas"] = 1 }, "replicas")
+  }
+  ["logical inputs must be supplied in their published format"] {
+    for (key in List("aws.eksClusterName", "aws.controllerRoleArn", "aws.interruptionQueueName")) {
+      for (value in List(null, false, "", "wrong value!")) {
+        let (
+          result =
+            evaluateRequest((request) {
+              ["clusterInputs"] = (request["clusterInputs"] as Mapping) { [key] = value }
+            })
+        )
+          result.helmValues == null
+            && result.violations.any((entry) -> entry.fieldPath == "clusterInputs.\(key)")
+      }
+    }
+  }
+  ["incomplete context prevents a controller compilation as well as a pool compilation"] {
+    let (result = evaluateRequest((request) { ["clusterContext"] = null }))
+      !result.violations.isEmpty && result.helmValues == null
+  }
+}

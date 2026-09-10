@@ -1,0 +1,185 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.nodePools.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+// A list of independently configured node pools (D11's `karpenter-configuration` fragment). Each
+// row is described on its own values: a custom AMI exposes its ID and family, custom subnets
+// expose their IDs while automatic discovery exposes the tag to match.
+
+setting: sdkSettings.ArraySetting = new {
+  key = "nodePools"
+  label = "NodePools"
+  required = true
+  minItems = 1
+  items = pool(null)
+}
+
+// The pool name identifies a pool across the collection (see dependencies.pkl).
+poolName: sdkSettings.StringSetting = new {
+  key = "name"
+  label = "Pool name"
+  required = true
+  minLength = 1
+  maxLength = 56
+  pattern = "[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?"
+}
+
+function forClusterName(name: String?): sdkSettings.ArraySetting = (setting) { items = pool(name) }
+
+local function pool(eksClusterName: String?): sdkSettings.ObjectSetting = new {
+  key = "pool"
+  label = "Node pool"
+  fields =
+    List(
+      poolName,
+      new sdkSettings.ArraySetting {
+        key = "instanceTypes"
+        label = "instanceTypes"
+        required = true
+        minItems = 1
+        uniqueItems = true
+        // Format only, not an instance catalogue: hyphens occur in both family and size names.
+        // The item key names the item in messages: "Karpenter instance type does not match ...".
+        items = new sdkSettings.StringSetting {
+          key = "instance type"
+          label = "Instance type"
+          pattern = "[a-z0-9]+(-[a-z0-9]+)*[.][a-z0-9]+(-[a-z0-9]+)*"
+        }
+      },
+      new sdkSettings.BoolSetting {
+        key = "spotEnabled"
+        label = "Allow Spot with On-Demand fallback"
+        default = false
+      },
+      new sdkSettings.ObjectSetting {
+        key = "consolidation"
+        label = "consolidation"
+        fields =
+          List(
+            choice(
+              "policy",
+              "WhenEmptyOrUnderutilized",
+              List("WhenEmpty", "WhenEmptyOrUnderutilized"),
+            ),
+          )
+      },
+      new sdkSettings.ArraySetting {
+        key = "taints"
+        label = "Taints"
+        items = taint
+      },
+      new sdkSettings.ObjectSetting {
+        key = "ami"
+        label = "ami"
+        fields =
+          List(
+            choice("mode", "default", List("default", "custom")),
+            new sdkSettings.StringSetting {
+              key = "id"
+              label = "AMI ID"
+              required = true
+              pattern = "ami-([0-9a-f]{8}|[0-9a-f]{17})"
+              activeWhen = customMode
+            },
+            (choice("family", "AL2023", List("AL2023", "AL2", "Bottlerocket"))) {
+              activeWhen = customMode
+            },
+          )
+      },
+      new sdkSettings.ObjectSetting {
+        key = "subnets"
+        label = "subnets"
+        fields =
+          List(
+            choice("mode", "auto", List("auto", "custom")),
+            new sdkSettings.ArraySetting {
+              key = "ids"
+              label = "ids"
+              required = true
+              minItems = 1
+              maxItems = 30
+              uniqueItems = true
+              items = new sdkSettings.StringSetting {
+                key = "subnet ID"
+                label = "Subnet ID"
+                pattern = "subnet-([0-9a-f]{8}|[0-9a-f]{17})"
+              }
+              activeWhen = customMode
+            },
+            new sdkSettings.ObjectSetting {
+              key = "tag"
+              label = "tag"
+              activeWhen = (scope) -> scope.config["mode"] == "auto"
+              fields =
+                List(
+                  new sdkSettings.StringSetting {
+                    key = "key"
+                    label = "Discovery tag key"
+                    default = "karpenter.sh/discovery"
+                    minLength = 1
+                    maxLength = 128
+                    pattern = "(?s)(?![aA][wW][sS]:).*"
+                  },
+                  new sdkSettings.StringSetting {
+                    key = "value"
+                    label = "Discovery tag value"
+                    default = eksClusterName
+                    minLength = 1
+                    maxLength = 256
+                  },
+                )
+            },
+          )
+      },
+    )
+}
+
+local taint: sdkSettings.ObjectSetting = new {
+  key = "taint"
+  label = "Taint"
+  fields =
+    List(
+      new sdkSettings.StringSetting {
+        key = "key"
+        label = "Taint key"
+        required = true
+        minLength = 1
+        maxLength = 317
+        pattern = qualifiedNamePattern
+      },
+      new sdkSettings.StringSetting {
+        key = "value"
+        label = "Taint value"
+        required = true
+        maxLength = 63
+        pattern = labelValuePattern
+      },
+      new sdkSettings.EnumSetting {
+        key = "effect"
+        label = "Effect"
+        required = true
+        options =
+          List("NoSchedule", "PreferNoSchedule", "NoExecute")
+            .map((name) -> new sdkSettings.Option { value = name })
+      },
+    )
+}
+
+// Within an `ami` or `subnets` object, the members that exist only for a custom choice.
+local customMode: sdkSettings.Predicate = (scope) -> scope.config["mode"] == "custom"
+
+local function choice(
+  fieldKey: String,
+  fieldDefault: String,
+  values: List<String>,
+): sdkSettings.EnumSetting = new {
+  key = fieldKey
+  label = fieldKey
+  default = fieldDefault
+  options = values.map((name) -> new sdkSettings.Option { value = name })
+}
+
+qualifiedNamePattern: String =
+  "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+labelValuePattern: String = "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"

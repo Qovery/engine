@@ -1,0 +1,29 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterController.placement.inputs
+
+import "../contract.pkl"
+
+inputs: List<contract.LogicalInput> =
+  List(
+    new contract.LogicalInput {
+      key = "aws.eksClusterName"
+      type = "string"
+      scope = "CLUSTER"
+      label = "Existing EKS cluster name"
+      constraints { minLength = 1; maxLength = 100; pattern = "[A-Za-z0-9][A-Za-z0-9_-]{0,99}" }
+    },
+    new contract.LogicalInput {
+      key = "aws.controllerRoleArn"
+      type = "string"
+      scope = "CLUSTER"
+      label = "Controller IAM role ARN"
+      constraints { pattern = "arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+" }
+    },
+    new contract.LogicalInput {
+      key = "aws.interruptionQueueName"
+      type = "string"
+      scope = "CLUSTER"
+      label = "Existing interruption queue name"
+      constraints { minLength = 1; maxLength = 80; pattern = "[A-Za-z0-9_-]{1,80}" }
+    },
+  )

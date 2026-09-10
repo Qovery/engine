@@ -21,14 +21,18 @@ class Context {
   mode: contract.ClusterMode?
   provider: String?
   capabilities: List<String>
+  kubernetesVersion: String?
 }
 
 function context(clusterContext: Mapping?): Context =
   if (clusterContext == null)
-    new Context { present = false; mode = null; provider = null; capabilities = List() }
+    new Context { present = false; mode = null; provider = null; capabilities = List(); kubernetesVersion = null }
   else
     new Context {
       present = true
+      kubernetesVersion =
+        let (version = clusterContext.getOrNull("kubernetesVersion"))
+          if (version is String) version else null
       // An unknown mode is an evaluation error on purpose: the bundle fails closed until the
       // contract learns the new mode, rather than guessing which choices it allows.
       mode = clusterContext.getOrNull("mode") as contract.ClusterMode?

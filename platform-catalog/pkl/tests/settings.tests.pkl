@@ -122,4 +122,15 @@ facts {
       })
     mode.option("nfs") == null
   }
+  ["cluster version reaches rules without inventing a default or coercing non-string context"] {
+    settings.context(null).kubernetesVersion == null
+    settings.context(new Mapping {}).kubernetesVersion == null
+    for (value in List(null, 1.34, false, new Listing {})) {
+      settings.context(new Mapping { ["kubernetesVersion"] = value }).kubernetesVersion == null
+    }
+    scopeOf(new Mapping {}, new Mapping { ["kubernetesVersion"] = "1.34" }).cluster.kubernetesVersion == "1.34"
+    // Interpretation of supported versions belongs to each component, not the generic SDK.
+    settings.context(new Mapping { ["kubernetesVersion"] = "custom-version" }).kubernetesVersion == "custom-version"
+  }
+
 }

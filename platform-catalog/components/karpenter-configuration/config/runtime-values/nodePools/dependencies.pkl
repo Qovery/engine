@@ -1,0 +1,106 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.nodePools.dependencies
+
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/settings.pkl" as sdkSettings
+import "../sdk/validate.pkl" as sdkValidate
+import "setting.pkl"
+
+rules: List<sdkRules.Rule> =
+  List(
+    new sdkRules.RowRule {
+      code = sdkValidate.duplicateItemCode
+      message = "Pool names must be unique"
+      paths = (scope) -> duplicateNames(scope)
+    },
+    new sdkRules.RowRule {
+      code = sdkValidate.duplicateItemCode
+      message = "Taint key/effect pairs must be unique"
+      paths = (scope) -> duplicateTaints(scope)
+    },
+    new sdkRules.FieldRule {
+      code = "UNSUPPORTED_CLUSTER"
+      fieldPath = "clusterContext"
+      message = "This catalogue model requires customer-managed AWS EKS"
+      violated = (scope) ->
+        scope.cluster.provider != "AWS" || scope.cluster.mode != "CUSTOMER_MANAGED"
+    },
+    new sdkRules.FieldRule {
+      code = "KUBERNETES_VERSION_REQUIRED"
+      fieldPath = "clusterContext.kubernetesVersion"
+      message = "Supply the cluster Kubernetes version through the evaluation context"
+      violated = (scope) -> scope.cluster.kubernetesVersion == null
+    },
+    new sdkRules.FieldRule {
+      code = "UNSUPPORTED_KUBERNETES_VERSION"
+      fieldPath = "clusterContext.kubernetesVersion"
+      message = "This Karpenter 1.10.0 demo is bounded to Kubernetes 1.30–1.35"
+      violated = (scope) ->
+        scope.cluster.kubernetesVersion != null
+          && !scope.cluster.kubernetesVersion!!.matches(Regex("1[.]3[0-5]"))
+    },
+  )
+
+local function rows(scope: sdkSettings.Scope): List =
+  ((scope.config.getOrNull(setting.setting.key) as Listing?) ?? new Listing {}).toList()
+
+local function duplicateNames(scope: sdkSettings.Scope): List<String> =
+  rows(scope)
+    .mapIndexed((index, row) ->
+      if (
+        row is Mapping
+          && row.getOrNull(setting.poolName.key) is String
+          && rows(scope)
+            .take(index)
+            .any((previous) ->
+              previous is Mapping
+                && previous.getOrNull(setting.poolName.key) == row[setting.poolName.key]
+            )
+      )
+        List(
+          sdkValidate.fieldPath(
+            sdkValidate.indexPath(setting.setting.key, index),
+            setting.poolName.key,
+          ),
+        )
+      else
+        List()
+    )
+    .flatMap((paths) -> paths)
+
+local function duplicateTaints(scope: sdkSettings.Scope): List<String> =
+  rows(scope)
+    .mapIndexed((index, row) ->
+      if (row is Mapping)
+        let (taints = ((row.getOrNull("taints") as Listing?) ?? new Listing {}).toList())
+          taints
+            .mapIndexed((taintIndex, taint) ->
+              if (
+                taint is Mapping
+                  && taint.getOrNull("key") is String
+                  && taint.getOrNull("effect") is String
+                  && taints
+                    .take(taintIndex)
+                    .any((other) ->
+                      other is Mapping
+                        && other.getOrNull("key") == taint["key"]
+                        && other.getOrNull("effect") == taint["effect"]
+                    )
+              )
+                List(
+                  sdkValidate.indexPath(
+                    sdkValidate.fieldPath(
+                      sdkValidate.indexPath(setting.setting.key, index),
+                      "taints",
+                    ),
+                    taintIndex,
+                  ),
+                )
+              else
+                List()
+            )
+            .flatMap((paths) -> paths)
+      else
+        List()
+    )
+    .flatMap((paths) -> paths)
