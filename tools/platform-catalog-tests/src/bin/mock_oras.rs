@@ -62,7 +62,19 @@ fn assert_directory_matches(expected_directory: &Path, staged_directory: &Path, 
 
 fn inspect_push() {
     let current_directory = env::current_dir().unwrap_or_else(|error| fail(&error.to_string()));
-    let expected_component_directory = required_path("EXPECTED_COMPONENT_DIR");
+    let component = current_directory
+        .file_name()
+        .unwrap_or_else(|| fail("component directory has no name"));
+    let expected_component_directory = required_path("EXPECTED_COMPONENTS_DIR").join(component);
+    if !expected_component_directory
+        .join("config/runtime-values/model.pkl")
+        .is_file()
+    {
+        if current_directory != expected_component_directory {
+            fail("static component was pushed from an unexpected directory");
+        }
+        return;
+    }
     if current_directory == expected_component_directory {
         fail("executable component was pushed without an isolated staging directory");
     }

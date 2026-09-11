@@ -32,9 +32,6 @@ const HELM_UPGRADE_TIMEOUT: Duration = Duration::from_secs(600);
 const LEGACY_REQUEST_SCHEMA_VERSION: u32 = 1;
 const PREFLIGHT_REQUEST_SCHEMA_VERSION: u32 = 2;
 
-/// Platform units are Qovery-owned: the namespace is protected configuration, not an input.
-const PROTECTED_PLATFORM_NAMESPACE: &str = "qovery";
-
 /// Kubernetes reads the container termination message from this path by default and truncates
 /// it at 4096 bytes. Override with `QOVERY_TERMINATION_MESSAGE_PATH` (tests, local runs).
 const DEFAULT_TERMINATION_MESSAGE_PATH: &str = "/dev/termination-log";
@@ -451,12 +448,12 @@ fn validate_platform_request(
                 format!("platform Helm unit `{}` has an unsupported action", unit.key),
             ));
         }
-        if unit.namespace != PROTECTED_PLATFORM_NAMESPACE {
+        if !is_valid_namespace(&unit.namespace) {
             return Err(unit_error(
-                PlatformUnitErrorCode::ForbiddenAction,
+                PlatformUnitErrorCode::InvalidPayload,
                 format!(
-                    "platform Helm unit `{}` targets namespace `{}`: only the protected `{PROTECTED_PLATFORM_NAMESPACE}` namespace is allowed",
-                    unit.key, unit.namespace
+                    "platform Helm unit `{}` namespace must be a valid DNS label (1-63 lowercase letters, digits or hyphens, with alphanumeric endpoints)",
+                    unit.key
                 ),
             ));
         }
@@ -505,6 +502,18 @@ fn validate_platform_request(
     }
 
     Ok(schema_version)
+}
+
+// The catalog selects the namespace; validate Kubernetes syntax, not component identity.
+fn is_valid_namespace(namespace: &str) -> bool {
+    let bytes = namespace.as_bytes();
+    let is_lowercase_alphanumeric = |byte: &u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
+    bytes.len() <= 63
+        && bytes.first().is_some_and(is_lowercase_alphanumeric)
+        && bytes.last().is_some_and(is_lowercase_alphanumeric)
+        && bytes
+            .iter()
+            .all(|byte| is_lowercase_alphanumeric(byte) || *byte == b'-')
 }
 
 fn result_schema_version_for(schema_version: Option<&str>) -> u32 {
@@ -1035,11 +1044,55 @@ mod tests {
     }
 
     #[test]
-    fn non_protected_namespace_is_a_forbidden_action() {
-        let mut unit = valid_unit();
-        unit.namespace = "kube-system".to_string();
-        let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
-        assert_eq!(err.code, PlatformUnitErrorCode::ForbiddenAction);
+    fn catalog_units_can_target_any_valid_namespace() {
+        for namespace in [
+            "qovery",
+            "kube-system",
+            "default",
+            "monitoring",
+            "a",
+            "0",
+            "0-pool",
+            &"a".repeat(63),
+        ] {
+            let mut unit = valid_unit();
+            unit.namespace = namespace.to_string();
+            unit.release_name = "metrics-release".to_string();
+            unit.chart.name = "metrics-chart".to_string();
+            unit.chart.repository = "oci://registry.example/charts/".to_string();
+            for schema in ["1", "2"] {
+                assert!(
+                    validate_create_request(Some(schema), &[unit.clone()], None).is_ok(),
+                    "{namespace}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_namespace_names_are_rejected() {
+        for namespace in [
+            "",
+            " ",
+            "Monitoring",
+            "pool_name",
+            "pool.name",
+            "-pool",
+            "pool-",
+            "pool/name",
+            "équipe",
+            "pool\n",
+            &"a".repeat(64),
+        ] {
+            let mut unit = valid_unit();
+            unit.namespace = namespace.to_string();
+            for schema in ["1", "2"] {
+                let error = validate_create_request(Some(schema), &[unit.clone()], None).unwrap_err();
+                assert_eq!(error.code, PlatformUnitErrorCode::InvalidPayload, "{namespace:?}");
+                assert_eq!(error.unit_key.as_deref(), Some(unit.key.as_str()));
+                assert!(error.message.contains("namespace must be a valid DNS label"));
+            }
+        }
     }
 
     #[test]

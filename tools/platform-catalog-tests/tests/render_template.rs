@@ -4,6 +4,7 @@ use platform_catalog_tests::{
 };
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
+use serde_yaml::Value as YamlValue;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -148,6 +149,30 @@ fn chart_entry(chart: &str, version: &str) -> JsonValue {
     })
 }
 
+fn assert_config_references_preserved(source_path: &str, rendered: &YamlValue) {
+    fn coordinates(template: &YamlValue) -> Vec<(String, String)> {
+        let mut references = Vec::new();
+        mappings_for_key(template, "configRef", &mut references);
+        let mut coordinates = references
+            .into_iter()
+            .map(|reference| {
+                (
+                    mapping_string(reference, "chart").expect("config chart").to_owned(),
+                    mapping_string(reference, "version").expect("config version").to_owned(),
+                )
+            })
+            .collect::<Vec<_>>();
+        coordinates.sort();
+        coordinates
+    }
+    let source = parse_yaml_file(repository_path(source_path));
+    assert_eq!(
+        coordinates(rendered),
+        coordinates(&source),
+        "rendering must preserve every source configRef, including multiplicity"
+    );
+}
+
 #[test]
 fn every_config_reference_is_pinned_from_verified_publication_outputs() {
     let fixture = RenderFixture::new();
@@ -163,20 +188,19 @@ fn every_config_reference_is_pinned_from_verified_publication_outputs() {
     let rendered_source = fs::read_to_string(&fixture.destination).expect("rendered template must exist");
     assert!(!rendered_source.contains("__PUBLISHED_CONFIG_DIGEST__"));
     let rendered = parse_yaml_file(&fixture.destination);
+    assert_config_references_preserved("platform-catalog/templates/qovery-cluster-v0/template.yaml", &rendered);
     let mut config_references = Vec::new();
     mappings_for_key(&rendered, "configRef", &mut config_references);
 
-    for entry in &fixture.config_entries {
-        let component = entry["component"].as_str().expect("component must be a string");
-        let version = entry["version"].as_str().expect("version must be a string");
-        let digest = entry["digest"].as_str().expect("digest must be a string");
+    assert!(!config_references.is_empty());
+    for reference in config_references {
         assert!(
-            config_references.iter().any(|reference| {
-                mapping_string(reference, "chart") == Some(component)
-                    && mapping_string(reference, "version") == Some(version)
-                    && mapping_string(reference, "digest") == Some(digest)
+            fixture.config_entries.iter().any(|entry| {
+                mapping_string(reference, "chart") == entry["component"].as_str()
+                    && mapping_string(reference, "version") == entry["version"].as_str()
+                    && mapping_string(reference, "digest") == entry["digest"].as_str()
             }),
-            "missing rendered config reference {component}:{version}@{digest}"
+            "rendered config reference has no matching verified publication: {reference:?}"
         );
     }
     assert!(contains_string(&rendered, "oci://public.ecr.aws/r3m4q3r9/charts/"));
@@ -200,6 +224,10 @@ fn demo_template_renders_from_the_verified_publication_outputs() {
     );
     let rendered_source = fs::read_to_string(&fixture.destination).expect("rendered template must exist");
     assert!(!rendered_source.contains("__PUBLISHED_CONFIG_DIGEST__"));
+    assert_config_references_preserved(
+        "platform-catalog/templates/qovery-demo-v0/template.yaml",
+        &parse_yaml_file(&fixture.destination),
+    );
 }
 
 #[test]
@@ -255,19 +283,34 @@ fn published_components_and_charts_are_referenced_by_the_template_set() {
 }
 
 #[test]
-fn every_component_release_uses_the_protected_qovery_namespace() {
+fn catalog_components_use_the_expected_release_identities() {
     for catalog_template in read_catalog().templates {
-        let template = parse_yaml_file(repository_path(&catalog_template.path));
-        let mut releases = Vec::new();
-        mappings_for_key(&template, "release", &mut releases);
-
-        assert!(!releases.is_empty(), "platform template must declare component releases");
-        for release in releases {
-            assert_eq!(
-                mapping_string(release, "namespace"),
-                Some("qovery"),
-                "every catalog component release must stay inside q-core's protected namespace"
-            );
+        let template: JsonValue =
+            serde_yaml::from_str(&fs::read_to_string(repository_path(&catalog_template.path)).unwrap()).unwrap();
+        let release = &template["platformTemplateRelease"];
+        let components = release["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|layer| layer["components"].as_array().unwrap())
+            .chain(release["bootstrap"].get("component"));
+        for component in components {
+            let key = component["key"].as_str().unwrap();
+            let expected_chart = match key {
+                "karpenter-crd" | "karpenter" => Some(key),
+                "karpenter-configuration" => Some("karpenter-custom-resources"),
+                _ => None,
+            };
+            if let Some(chart) = expected_chart {
+                assert_eq!(component["kind"], "HELM");
+                assert_eq!(component["release"]["name"], key);
+                assert_eq!(component["release"]["namespace"], "kube-system");
+                assert_eq!(component["chart"]["name"], chart);
+                assert_eq!(component["chart"]["repository"], "oci://public.ecr.aws/r3m4q3r9/charts/");
+                assert_eq!(component["configRef"]["chart"], key);
+            } else {
+                assert_eq!(component["release"]["namespace"], "qovery", "{key}");
+            }
         }
     }
 }
@@ -392,4 +435,155 @@ fn catalog_coordinate_must_match_the_template_identity() {
 
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("catalog expects qovery-cluster-v0:0.2.0"));
+}
+
+#[test]
+fn karpenter_layer_is_optional_aws_byok_with_complete_customer_input_wiring() {
+    let fixture = RenderFixture::new();
+    fixture.write_outputs();
+    assert!(fixture.render("0.1.0").status.success());
+    let template: JsonValue = serde_yaml::from_str(&fs::read_to_string(&fixture.destination).unwrap()).unwrap();
+    let layers = template["platformTemplateRelease"]["layers"].as_array().unwrap();
+    let layer = layers
+        .iter()
+        .find(|layer| layer["key"] == "karpenter")
+        .expect("Karpenter layer");
+    assert_eq!(
+        layer["applicability"],
+        json!({"modes": ["CUSTOMER_MANAGED"], "providers": ["AWS"]})
+    );
+    assert_eq!(layer["mandatory"], false);
+    assert_eq!(layer["enabledByDefault"], false);
+    let components = layer["components"].as_array().unwrap();
+    assert_eq!(
+        components
+            .iter()
+            .map(|component| component["key"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        ["karpenter-crd", "karpenter", "karpenter-configuration"]
+    );
+    assert_eq!(
+        components[1]["dependsOn"],
+        json!([{"component":"karpenter-crd", "kind":"requires"}])
+    );
+    assert_eq!(
+        components[2]["dependsOn"],
+        json!([
+            {"component":"karpenter-crd", "kind":"requires"}, {"component":"karpenter", "kind":"requires"}
+        ])
+    );
+    for (component, expected_inputs) in [
+        (
+            &components[1],
+            [
+                "aws.eksClusterName",
+                "aws.controllerRoleArn",
+                "aws.interruptionQueueName",
+            ],
+        ),
+        (
+            &components[2],
+            ["aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId"],
+        ),
+    ] {
+        assert_eq!(
+            component["configRef"]["evaluator"],
+            json!({"kind":"PKL", "entrypoint":"runtime-values/model.pkl"})
+        );
+        let declarations = component["runtimeInputs"].as_array().unwrap();
+        assert_eq!(
+            declarations
+                .iter()
+                .map(|input| input["name"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            expected_inputs
+        );
+        for input in declarations {
+            assert_eq!(
+                input["sources"],
+                json!([{"kind":"customerProvidedValue", "modes":["CUSTOMER_MANAGED"]}])
+            );
+            assert_eq!(input["required"], true);
+        }
+    }
+    let demo: JsonValue = serde_yaml::from_str(
+        &fs::read_to_string(repository_path("platform-catalog/templates/qovery-demo-v0/template.yaml")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !demo["platformTemplateRelease"]["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|layer| layer["key"] == "karpenter")
+    );
+}
+
+#[test]
+fn platform_workloads_wait_for_optional_karpenter_without_blocking_its_bootstrap() {
+    let template: JsonValue = serde_yaml::from_str(
+        &fs::read_to_string(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml")).unwrap(),
+    )
+    .unwrap();
+    let release = &template["platformTemplateRelease"];
+    let workloads = [
+        "cluster-agent",
+        "shell-agent",
+        "loki",
+        "alloy",
+        "cert-manager",
+        "qovery-cert-manager-webhook",
+        "external-dns",
+    ];
+    let other_components = [
+        "qovery-priority-class",
+        "external-dns-secret",
+        "cert-manager-configs",
+        "karpenter-crd",
+        "karpenter",
+        "karpenter-configuration",
+    ];
+    for component in release["layers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|layer| layer["components"].as_array().unwrap())
+    {
+        let key = component["key"].as_str().unwrap();
+        let dependencies = component["dependsOn"].as_array().map(Vec::as_slice).unwrap_or_default();
+        if workloads.contains(&key) {
+            let edges: Vec<_> = dependencies
+                .iter()
+                .filter(|edge| edge["component"] == "karpenter-configuration")
+                .collect();
+            assert_eq!(
+                edges,
+                [&json!({"component": "karpenter-configuration", "kind": "after"})],
+                "{key} must wait only when Karpenter is enabled"
+            );
+        } else {
+            assert!(
+                other_components.contains(&key),
+                "classify new component {key}: does it deploy pods that need Karpenter capacity?"
+            );
+            assert!(
+                dependencies
+                    .iter()
+                    .all(|edge| edge["component"] != "karpenter-configuration"),
+                "{key} does not deploy dependent pods and must not wait for Karpenter configuration"
+            );
+            if key.starts_with("karpenter") {
+                assert!(
+                    dependencies
+                        .iter()
+                        .all(|edge| !workloads.contains(&edge["component"].as_str().unwrap())),
+                    "{key} must not depend on workloads that wait for it"
+                );
+            }
+        }
+    }
+    assert!(
+        release["bootstrap"]["component"]["dependsOn"].is_null(),
+        "the operator must bootstrap independently of Karpenter"
+    );
 }

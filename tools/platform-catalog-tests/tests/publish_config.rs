@@ -1,4 +1,6 @@
 use platform_catalog_tests::{REGISTRY, assert_success, repository_path};
+use serde_json::Value;
+use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -9,7 +11,7 @@ const TEST_REGISTRY: &str = "registry.invalid/qovery";
 const ZERO_DIGEST: &str = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
 
 #[test]
-fn executable_component_publication_uses_isolated_staging_and_injects_the_pkl_sdk() {
+fn all_component_publication_includes_karpenter_and_injects_the_pkl_sdk() {
     let temporary_directory = TempDir::new().expect("temporary directory must be created");
     let mock_bin_directory = temporary_directory.path().join("bin");
     fs::create_dir(&mock_bin_directory).expect("mock binary directory must be created");
@@ -30,12 +32,9 @@ fn executable_component_publication_uses_isolated_staging_and_injects_the_pkl_sd
 
     let mut command = Command::new(repository_path("scripts/publish-platform-config.sh"));
     command
-        .arg("cluster-agent")
+        .arg("all")
         .env("PATH", path)
-        .env(
-            "EXPECTED_COMPONENT_DIR",
-            repository_path("platform-catalog/components/cluster-agent"),
-        )
+        .env("EXPECTED_COMPONENTS_DIR", repository_path("platform-catalog/components"))
         .env("EXPECTED_CONTRACT", repository_path("platform-catalog/pkl/contract.pkl"))
         .env("EXPECTED_SDK_DIR", repository_path("platform-catalog/pkl/sdk"))
         .env("MOCK_MARKER", &marker)
@@ -44,11 +43,30 @@ fn executable_component_publication_uses_isolated_staging_and_injects_the_pkl_sd
     assert_success(&mut command);
 
     assert!(marker.is_file(), "mocked ORAS push was not called");
-    let publications: Vec<serde_json::Value> =
+    let publications: Vec<Value> =
         serde_json::from_slice(&fs::read(&output_file).expect("publication output must be readable"))
             .expect("publication output must be valid JSON");
-    assert_eq!(publications.len(), 1);
-    let publication = &publications[0];
+    let catalog: Value =
+        serde_yaml::from_str(&fs::read_to_string(repository_path("platform-catalog/catalog.yaml")).unwrap()).unwrap();
+    let expected: BTreeSet<_> = catalog["components"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|component| component["name"].as_str().unwrap())
+        .collect();
+    let actual: BTreeSet<_> = publications
+        .iter()
+        .map(|publication| publication["component"].as_str().unwrap())
+        .collect();
+    assert_eq!(publications.len(), actual.len(), "duplicate publications");
+    assert_eq!(actual, expected);
+    for component in ["karpenter", "karpenter-crd", "karpenter-configuration"] {
+        assert!(actual.contains(component), "missing published bundle {component}");
+    }
+    let publication = publications
+        .iter()
+        .find(|publication| publication["component"] == "cluster-agent")
+        .unwrap();
     assert_eq!(publication["component"].as_str(), Some("cluster-agent"));
     let version = publication["version"]
         .as_str()

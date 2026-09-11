@@ -49,6 +49,17 @@ components:
     chart: cert-manager-configs # Qovery-authored issuer and Certificate chart
     version: v1
 
+  # Publish Karpenter artifacts ahead of template activation.
+  - name: karpenter-crd
+    chart: karpenter-crd
+    version: v1
+  - name: karpenter
+    chart: karpenter
+    version: v1
+  - name: karpenter-configuration
+    chart: karpenter-custom-resources
+    version: v1
+
 # Frozen charts mirrored by scripts/publish-frozen-charts.sh to
 # <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this
 # repo is the artifact actually executed (not an upstream pull at install time).
@@ -78,6 +89,12 @@ charts:
     path: lib-engine/lib/common/bootstrap/charts/external-dns
   - name: cert-manager-configs
     path: lib-engine/lib/common/bootstrap/charts/cert-manager-configs
+  - name: karpenter-crd
+    path: lib-engine/lib/aws/bootstrap/charts/karpenter-crd
+  - name: karpenter
+    path: lib-engine/lib/aws/bootstrap/charts/karpenter
+  - name: karpenter-custom-resources
+    path: lib-engine/lib/aws/bootstrap/charts/karpenter-custom-resources
 
 # Root platform template releases are generic OCI artifacts, published last
 # after every referenced config bundle and chart has been verified.

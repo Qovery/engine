@@ -186,9 +186,8 @@ output.
 
 Each root template may reference only the component and chart subset needed by
 that platform shape. The catalog test suite verifies that the union of all
-declared templates still covers every component bundle and chart listed for
-publication, while the renderer rejects missing, unknown, or duplicate
-references inside each root.
+declared templates covers every component bundle and chart listed for publication.
+The renderer rejects missing, unknown, or duplicate references inside each root.
 
 Publication order is an invariant: bundles first, charts second, root templates
 third, and the complete catalog snapshot last. A partial selection is accepted
@@ -201,6 +200,41 @@ first push. Slice 4.6 additionally requires
 Slice 4.8 additionally requires
 `platform-config/{cert-manager,qovery-cert-manager-webhook,external-dns-secret,external-dns,cert-manager-configs}`
 and the matching five `charts/*` repositories before publication.
+Karpenter artifact publication additionally requires these infrastructure-owned ECR
+repositories before running the job:
+
+- `platform-config/karpenter-crd`, `platform-config/karpenter`, `platform-config/karpenter-configuration`;
+- `charts/karpenter-crd`, `charts/karpenter`, `charts/karpenter-custom-resources`.
+
+The three config bundles start at `v1`; the vendored charts retain their own versions
+(`1.10.0` for the CRDs/controller and `0.1.0` for custom resources). The
+`qovery-cluster-v0` template includes an optional `karpenter` layer, disabled by
+default and limited to customer-managed AWS clusters. Its supported demo target
+is EKS; the existing applicability model does not distinguish AWS Kubernetes kinds.
+The `qovery-demo-v0` template remains unchanged.
+
+Deploy q-core's Kubernetes-version context and support for catalog namespaces,
+and the Engine worker's namespace validation, before activating this catalog
+snapshot. q-core !3928 already accepts this template's Karpenter identities in
+`kube-system`; versions before it reject the template even with the layer disabled.
+The generic follow-up validates namespace names as Kubernetes DNS labels (1–63
+lowercase ASCII letters, digits or hyphens, with alphanumeric endpoints), with no
+component-specific allowlist. Deploy both generic validators before introducing
+other namespace/identity combinations. The namespace remains template-owned; it
+is a Helm release target, not a sandbox for chart resources.
+The layer orders CRDs, controller and custom resources through `requires` edges.
+All other pod-producing components (cluster-agent, shell-agent, Loki, Alloy,
+cert-manager, its Qovery webhook and external-dns) declare `after` on
+`karpenter-configuration`. With Karpenter enabled, they wait until its NodePools
+and EC2NodeClasses have been applied. With the layer disabled, those edges are
+ignored. This ordering does not force pod placement or guarantee NodePool readiness.
+The operator, its Engine worker and Karpenter controller must bootstrap on
+existing independent capacity to avoid circular scheduling dependencies.
+AWS inputs use `customerProvidedValue`; no resource provisioning or live validation
+is implied by declaring those requirements. Before opting in, prepare and verify
+the AWS prerequisites, independent EC2 controller capacity and absence of a
+customer-owned Karpenter installation. Fargate and automatic adoption are excluded.
+Structured NodePool editing in Console remains a separate UI delivery.
 
 Slice 4.8 does not modify the legacy `qovery-cert-manager-webhook` Helm chart:
 the mirror keeps chart version `0.2.0`. Its Engine v2 config bundle selects the

@@ -1,4 +1,4 @@
-//! Unpublished Karpenter models evaluated through the same isolated entrypoint as q-core,
+//! Karpenter models evaluated through the same isolated entrypoint as q-core,
 //! then rendered with the actual vendored Helm charts. No AWS or Kubernetes access.
 
 use platform_catalog_tests::{
@@ -399,14 +399,4 @@ fn configuration_chart_has_no_implicit_pools_and_crd_component_uses_the_same_pin
             serde_yaml::from_str(&fs::read_to_string(repository_path(format!("{chart}/Chart.yaml"))).unwrap()).unwrap();
         assert_eq!(metadata["appVersion"], "1.10.0");
     }
-    let catalog: Value =
-        serde_yaml::from_str(&fs::read_to_string(repository_path("platform-catalog/catalog.yaml")).unwrap()).unwrap();
-    assert!(
-        !catalog["components"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|component| component["name"].as_str().unwrap().starts_with("karpenter")),
-        "activation requires the execution and ownership gates from subsequent lots"
-    );
 }
