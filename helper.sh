@@ -248,7 +248,7 @@ autoscaler.enabled="true",\
 autoscaler.maxReplicas="50",\
 autoscaler.minReplicas="1",\
 autoscaler.averageValue="0.5",\
-engineResources.limits.cpu="1",\
+engineResources.limits.cpu="2",\
 engineResources.limits.memory="5Gi",\
 engineResources.requests.cpu="300m",\
 engineResources.requests.memory="4Gi"
@@ -310,7 +310,7 @@ autoscaler.enabled="true",\
 autoscaler.maxReplicas="50",\
 autoscaler.minReplicas="1",\
 autoscaler.averageValue="0.5",\
-engineResources.limits.cpu="1",\
+engineResources.limits.cpu="2",\
 engineResources.limits.memory="5Gi",\
 engineResources.requests.cpu="300m",\
 engineResources.requests.memory="4Gi"
@@ -369,12 +369,13 @@ autoscaler.minReplicas="2",\
 autoscaler.maxReplicas="50",\
 autoscaler.averageValue="0.9",\
 overprovisionning.enabled="true",\
-overprovisionning.replicas="5",\
+overprovisionning.replicas.amd64="1",\
+overprovisionning.replicas.arm64="1",\
 overprovisionning.resources.requests.cpu="4",\
 overprovisionning.resources.limits.cpu="4",\
 overprovisionning.resources.requests.memory="8Gi",\
 overprovisionning.resources.limits.memory="8Gi",\
-engineResources.limits.cpu="1",\
+engineResources.limits.cpu="2",\
 engineResources.limits.memory="3Gi",\
 engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\
@@ -384,7 +385,7 @@ engineResources.requests.ephemeral-storage="20Gi"
 
 function deploy_engines_environment_public() { ## Release env engines consuming the public-pool queue (QOV-2201), engine + builder + overprovisioner pods pinned to qovery-default-public nodes (QOV-2206)
   tag=$(generate_image_tag)
-  # sized at parity with deploy_engines_environment_static_ip (QOV-2206 step 2, tier graduation):
+  # sized from the estate's task metrics:
   # autoscaler.minReplicas=2 makes the chart render the engine and builder PDBs (pdb.yaml gates on
   # minReplicas > 1), so a node consolidation can no longer evict a builder mid-build.
   # the overprovisioning PriorityClass is cluster-scoped and owned by the private release in
@@ -437,14 +438,15 @@ metrics.enabled="true",\
 rbac.clusterPermission="deployer",\
 autoscaler.enabled="true",\
 autoscaler.minReplicas="2",\
-autoscaler.maxReplicas="50",\
+autoscaler.maxReplicas="80",\
 autoscaler.averageValue="0.9",\
-overprovisionning.replicas="5",\
+overprovisionning.replicas.amd64="5",\
+overprovisionning.replicas.arm64="3",\
 overprovisionning.resources.requests.cpu="4",\
 overprovisionning.resources.limits.cpu="4",\
 overprovisionning.resources.requests.memory="8Gi",\
 overprovisionning.resources.limits.memory="8Gi",\
-engineResources.limits.cpu="1",\
+engineResources.limits.cpu="2",\
 engineResources.limits.memory="3Gi",\
 engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\

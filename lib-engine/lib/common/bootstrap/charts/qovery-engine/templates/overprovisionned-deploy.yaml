@@ -6,7 +6,7 @@ metadata:
   labels:
     app: qovery-engine-overprovisioning-amd64
 spec:
-  replicas: {{ .Values.overprovisionning.replicas }}
+  replicas: {{ .Values.overprovisionning.replicas.amd64 }}
   selector:
     matchLabels:
       app: qovery-engine-overprovisioning-amd64
@@ -43,7 +43,7 @@ metadata:
   labels:
     app: qovery-engine-overprovisioning-arm64
 spec:
-  replicas: {{ .Values.overprovisionning.replicas }}
+  replicas: {{ .Values.overprovisionning.replicas.arm64 }}
   selector:
     matchLabels:
       app: qovery-engine-overprovisioning-arm64
