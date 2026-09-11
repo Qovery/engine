@@ -78,6 +78,107 @@ platformTemplateRelease:
       mandatory: true
       enabledByDefault: true
       components: []
+    - key: karpenter
+      description: Optional Karpenter controller and CRDs for customer-managed AWS EKS with manually prepared AWS prerequisites.
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+        providers: [AWS]
+      mandatory: false
+      enabledByDefault: false
+      components:
+        - key: karpenter-crd
+          kind: HELM
+          release:
+            name: karpenter-crd
+            namespace: kube-system
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: karpenter-crd
+            version: 1.10.0
+          configRef:
+            chart: karpenter-crd
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: karpenter
+          kind: HELM
+          release:
+            name: karpenter
+            namespace: kube-system
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: karpenter
+            version: 1.10.0
+          dependsOn:
+            - component: karpenter-crd
+              kind: requires
+          configRef:
+            chart: karpenter
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+          runtimeInputs:
+            - name: aws.eksClusterName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.controllerRoleArn
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.interruptionQueueName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+    - key: karpenter-custom-configuration
+      description: Optional customer NodePools in a separate Helm release. Does not manage Qovery default or stable pools.
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+        providers: [AWS]
+      mandatory: false
+      enabledByDefault: false
+      components:
+        - key: karpenter-configuration
+          kind: HELM
+          release:
+            name: karpenter-custom-configuration
+            namespace: kube-system
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: karpenter-custom-resources
+            version: 0.1.0
+          dependsOn:
+            - component: karpenter-crd
+              kind: requires
+            - component: karpenter
+              kind: requires
+          configRef:
+            chart: karpenter-configuration
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+          runtimeInputs:
+            - name: aws.eksClusterName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.nodeRoleName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.nodeSecurityGroupId
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
     - key: qovery-stack
       applicability:
         modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]
@@ -470,96 +571,3 @@ platformTemplateRelease:
                 key: cluster.jwt
               required: true
               sensitive: true
-    - key: karpenter
-      description: Optional Karpenter for customer-managed AWS EKS with manually prepared AWS prerequisites.
-      applicability:
-        modes: [CUSTOMER_MANAGED]
-        providers: [AWS]
-      mandatory: false
-      enabledByDefault: false
-      components:
-        - key: karpenter-crd
-          kind: HELM
-          release:
-            name: karpenter-crd
-            namespace: kube-system
-          chart:
-            repository: oci://public.ecr.aws/r3m4q3r9/charts/
-            name: karpenter-crd
-            version: 1.10.0
-          configRef:
-            chart: karpenter-crd
-            version: v1
-            digest: __PUBLISHED_CONFIG_DIGEST__
-        - key: karpenter
-          kind: HELM
-          release:
-            name: karpenter
-            namespace: kube-system
-          chart:
-            repository: oci://public.ecr.aws/r3m4q3r9/charts/
-            name: karpenter
-            version: 1.10.0
-          dependsOn:
-            - component: karpenter-crd
-              kind: requires
-          configRef:
-            chart: karpenter
-            version: v1
-            digest: __PUBLISHED_CONFIG_DIGEST__
-            evaluator:
-              kind: PKL
-              entrypoint: runtime-values/model.pkl
-          runtimeInputs:
-            - name: aws.eksClusterName
-              sources:
-                - kind: customerProvidedValue
-                  modes: [CUSTOMER_MANAGED]
-              required: true
-            - name: aws.controllerRoleArn
-              sources:
-                - kind: customerProvidedValue
-                  modes: [CUSTOMER_MANAGED]
-              required: true
-            - name: aws.interruptionQueueName
-              sources:
-                - kind: customerProvidedValue
-                  modes: [CUSTOMER_MANAGED]
-              required: true
-        - key: karpenter-configuration
-          kind: HELM
-          release:
-            name: karpenter-configuration
-            namespace: kube-system
-          chart:
-            repository: oci://public.ecr.aws/r3m4q3r9/charts/
-            name: karpenter-custom-resources
-            version: 0.1.0
-          dependsOn:
-            - component: karpenter-crd
-              kind: requires
-            - component: karpenter
-              kind: requires
-          configRef:
-            chart: karpenter-configuration
-            version: v1
-            digest: __PUBLISHED_CONFIG_DIGEST__
-            evaluator:
-              kind: PKL
-              entrypoint: runtime-values/model.pkl
-          runtimeInputs:
-            - name: aws.eksClusterName
-              sources:
-                - kind: customerProvidedValue
-                  modes: [CUSTOMER_MANAGED]
-              required: true
-            - name: aws.nodeRoleName
-              sources:
-                - kind: customerProvidedValue
-                  modes: [CUSTOMER_MANAGED]
-              required: true
-            - name: aws.nodeSecurityGroupId
-              sources:
-                - kind: customerProvidedValue
-                  modes: [CUSTOMER_MANAGED]
-              required: true

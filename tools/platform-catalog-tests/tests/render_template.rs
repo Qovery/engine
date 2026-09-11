@@ -297,13 +297,13 @@ fn catalog_components_use_the_expected_release_identities() {
         for component in components {
             let key = component["key"].as_str().unwrap();
             let expected_chart = match key {
-                "karpenter-crd" | "karpenter" => Some(key),
-                "karpenter-configuration" => Some("karpenter-custom-resources"),
+                "karpenter-crd" | "karpenter" => Some((key, key)),
+                "karpenter-configuration" => Some(("karpenter-custom-resources", "karpenter-custom-configuration")),
                 _ => None,
             };
-            if let Some(chart) = expected_chart {
+            if let Some((chart, release_name)) = expected_chart {
                 assert_eq!(component["kind"], "HELM");
-                assert_eq!(component["release"]["name"], key);
+                assert_eq!(component["release"]["name"], release_name);
                 assert_eq!(component["release"]["namespace"], "kube-system");
                 assert_eq!(component["chart"]["name"], chart);
                 assert_eq!(component["chart"]["repository"], "oci://public.ecr.aws/r3m4q3r9/charts/");
@@ -438,7 +438,7 @@ fn catalog_coordinate_must_match_the_template_identity() {
 }
 
 #[test]
-fn karpenter_layer_is_optional_aws_byok_with_complete_customer_input_wiring() {
+fn karpenter_controller_and_custom_resources_are_independently_opt_in_with_separate_releases() {
     let fixture = RenderFixture::new();
     fixture.write_outputs();
     assert!(fixture.render("0.1.0").status.success());
@@ -460,14 +460,39 @@ fn karpenter_layer_is_optional_aws_byok_with_complete_customer_input_wiring() {
             .iter()
             .map(|component| component["key"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        ["karpenter-crd", "karpenter", "karpenter-configuration"]
+        ["karpenter-crd", "karpenter"]
     );
     assert_eq!(
         components[1]["dependsOn"],
         json!([{"component":"karpenter-crd", "kind":"requires"}])
     );
+    let custom_layer = layers
+        .iter()
+        .find(|layer| layer["key"] == "karpenter-custom-configuration")
+        .expect("custom resources layer");
+    assert_eq!(custom_layer["applicability"], layer["applicability"]);
+    assert_eq!(custom_layer["mandatory"], false);
+    assert_eq!(custom_layer["enabledByDefault"], false);
+    let custom_components = custom_layer["components"].as_array().unwrap();
+    assert_eq!(custom_components.len(), 1);
+    let custom = &custom_components[0];
+    assert_eq!(custom["key"], "karpenter-configuration");
     assert_eq!(
-        components[2]["dependsOn"],
+        custom["release"],
+        json!({"name":"karpenter-custom-configuration", "namespace":"kube-system"})
+    );
+    assert!(
+        layers
+            .iter()
+            .flat_map(|layer| layer["components"].as_array().unwrap())
+            .all(|component| component["release"]["name"] != "karpenter-configuration"),
+        "the legacy Qovery release must never be implicitly upgraded by the custom chart"
+    );
+    let controller_index = layers.iter().position(|layer| layer["key"] == "karpenter").unwrap();
+    let workloads_index = layers.iter().position(|layer| layer["key"] == "qovery-stack").unwrap();
+    assert!(controller_index < workloads_index);
+    assert_eq!(
+        custom["dependsOn"],
         json!([
             {"component":"karpenter-crd", "kind":"requires"}, {"component":"karpenter", "kind":"requires"}
         ])
@@ -481,10 +506,7 @@ fn karpenter_layer_is_optional_aws_byok_with_complete_customer_input_wiring() {
                 "aws.interruptionQueueName",
             ],
         ),
-        (
-            &components[2],
-            ["aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId"],
-        ),
+        (custom, ["aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId"]),
     ] {
         assert_eq!(
             component["configRef"]["evaluator"],

@@ -299,6 +299,10 @@ fn controller_render_keeps_upstream_resilience_and_pins_an_independent_ec2_group
     let pod = &deployment["spec"]["template"]["spec"];
     assert_eq!(deployment["spec"]["replicas"], 2);
     assert_eq!(
+        pod["containers"][0]["resources"],
+        json!({"requests": {"cpu": "100m", "memory": "1Gi"}, "limits": {"memory": "1Gi"}})
+    );
+    assert_eq!(
         pod["nodeSelector"],
         json!({"kubernetes.io/os":"linux","eks.amazonaws.com/nodegroup":"customer-system"})
     );
