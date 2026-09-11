@@ -236,6 +236,20 @@ fn operator_can_list_worker_pods_with_default_or_external_service_accounts() {
             }),
             "Operator must be able to confirm worker Pod termination before releasing capacity"
         );
+        for (group, resource, required_verbs) in [
+            ("batch", "jobs", &["create", "get", "list", "patch"][..]),
+            ("policy", "poddisruptionbudgets", &["create", "get"][..]),
+        ] {
+            assert!(
+                rules.iter().any(|rule| {
+                    yaml_path(rule, &["apiGroups"]).is_some_and(|groups| contains_string(groups, group))
+                        && yaml_path(rule, &["resources"]).is_some_and(|resources| contains_string(resources, resource))
+                        && yaml_path(rule, &["verbs"])
+                            .is_some_and(|verbs| required_verbs.iter().all(|verb| contains_string(verbs, verb)))
+                }),
+                "Operator must have {required_verbs:?} on {group}/{resource}"
+            );
+        }
     }
 }
 
