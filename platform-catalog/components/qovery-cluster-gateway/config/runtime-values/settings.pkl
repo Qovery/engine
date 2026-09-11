@@ -9,7 +9,7 @@ import "configuration/inputs.pkl" as configurationInputs
 
 component: sdkEvaluate.Component = new {
   label = "Qovery cluster gateway"
-  inputs = configurationInputs.requiredInputs
+  compileInputs = configurationInputs.compileInputs
   features = List(new sdkEvaluate.Feature {
     settings = configurationSetting.settings
     rules = configurationDependencies.rules

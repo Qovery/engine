@@ -22,10 +22,15 @@ facts {
         && result.violations.any((violation) -> violation.fieldPath == "clusterInputs.dns.managedDomain")
   }
 
-  ["RESOLVE_REQUIREMENTS requests the managed root domain without requiring its value"] {
+  ["RESOLVE_REQUIREMENTS does not expose q-core managed inputs to the Console"] {
     let (result = evaluate(contract.resolveRequirementsOperation, new Mapping {}, new Mapping {}))
       result.violations.isEmpty
-        && result.requiredInputs.map((input) -> input.key).toList() == List("dns.managedDomain")
+        && result.requiredInputs.isEmpty
+  }
+
+  ["VALIDATE does not require the q-core managed domain"] {
+    let (result = evaluate(contract.validateOperation, new Mapping {}, new Mapping {}))
+      result.violations.isEmpty
   }
 
   ["COMPILE applies Envoy Gateway profile fields"] {

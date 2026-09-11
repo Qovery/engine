@@ -39,6 +39,8 @@ class Component {
   // Inputs required by the whole component, independent of a customer-facing enum choice.
   // DESCRIBE omits them; RESOLVE_REQUIREMENTS exposes them without requiring their values.
   inputs: List<contract.LogicalInput> = List()
+  // q-core resolves these runtime inputs only for COMPILE. They must not become Console fields.
+  compileInputs: List<String> = List()
 
   fixed settings: List<settings.Setting> = features.flatMap((feature) -> feature.settings)
   fixed rules: List<rules.Rule> = features.flatMap((feature) -> feature.rules)
@@ -109,6 +111,7 @@ local function violations(
   validate.unknownFields(profileConfig, component.settings.map((setting) -> setting.key).toSet(), component.label)
     + active.flatMap((setting) -> settingViolations(component, setting, operation, profileConfig, scope))
     + declaredInputViolations(component.inputs, operation, scope.inputs)
+    + compileInputViolations(component.compileInputs, operation, scope.inputs)
     + rules.violations(component.rules, operation, scope, component.label)
 
 // One setting's own violations, then the availability of its selected option, then the inputs
@@ -139,10 +142,17 @@ local function settingViolations(
 // checks chain. Compile-only inputs are supplied by q-core and checked only while compiling.
 local function inputViolations(option: settings.Option, operation: contract.Operation, clusterInputs: Mapping): List<contract.Violation> =
   declaredInputViolations(option.inputs, operation, clusterInputs)
-    + if (operation == contract.compileOperation)
-      validate.collect(option.compileInputs.map((key) -> validate.requiredInput(clusterInputs, key)))
-    else
-      List()
+    + compileInputViolations(option.compileInputs, operation, clusterInputs)
+
+local function compileInputViolations(
+  compileInputs: List<String>,
+  operation: contract.Operation,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  if (operation == contract.compileOperation)
+    validate.collect(compileInputs.map((key) -> validate.requiredInput(clusterInputs, key)))
+  else
+    List()
 
 // Both component-wide and option-specific inputs share the same validation and lazy compile gate.
 local function declaredInputViolations(
