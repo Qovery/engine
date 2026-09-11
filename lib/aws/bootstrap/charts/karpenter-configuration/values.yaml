@@ -3,6 +3,8 @@
 # Declare variables to be passed into your templates.
 
 clusterName: ""
+# Optional explicit role; empty retains the existing KarpenterNodeRole-<cluster> convention.
+nodeRoleName: ""
 
 securityGroupId: ""
 
@@ -38,6 +40,7 @@ tags:
 global_node_pools:
   terminationGracePeriod: 4h
 stableNodePool:
+  consolidationPolicy: WhenEmptyOrUnderutilized
   requirements: []
   consolidateAfter: 30s
   consolidation:
