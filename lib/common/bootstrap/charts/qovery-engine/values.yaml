@@ -23,9 +23,10 @@ podDisruptionBudget:
 
 overprovisionning:
   enabled: false
-  # specify the number of over provisioned engine pods
-  # Set the number of replicas depending on the node size (to define how many node overprovidsionned you want)
-  replicas: 2
+  # warm pods per CPU architecture (arm64 warm pods only serve builder pods)
+  replicas:
+    amd64: 2
+    arm64: 2
   # PriorityClass is cluster-scoped: when several releases on one cluster enable
   # overprovisioning, exactly one keeps create=true (it owns the class), the others
   # set create=false and reference the same name
