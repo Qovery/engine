@@ -79,7 +79,7 @@ platformTemplateRelease:
       enabledByDefault: true
       components: []
     - key: karpenter
-      description: Optional Karpenter controller and CRDs for customer-managed AWS EKS with manually prepared AWS prerequisites.
+      description: Optional Karpenter with Qovery default/stable pools and optional customer pools. Existing releases require a separately reviewed migration; no automatic adoption.
       applicability:
         modes: [CUSTOMER_MANAGED]
         providers: [AWS]
@@ -134,14 +134,63 @@ platformTemplateRelease:
                 - kind: customerProvidedValue
                   modes: [CUSTOMER_MANAGED]
               required: true
-    - key: karpenter-custom-configuration
-      description: Optional customer NodePools in a separate Helm release. Does not manage Qovery default or stable pools.
-      applicability:
-        modes: [CUSTOMER_MANAGED]
-        providers: [AWS]
-      mandatory: false
-      enabledByDefault: false
-      components:
+        - key: karpenter-qovery-configuration
+          kind: HELM
+          release:
+            name: karpenter-configuration
+            namespace: kube-system
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: karpenter-configuration
+            version: 1.0.1
+          dependsOn:
+            - component: karpenter-crd
+              kind: requires
+            - component: karpenter
+              kind: requires
+          configRef:
+            chart: karpenter-qovery-configuration
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+          runtimeInputs:
+            - name: aws.eksClusterName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.nodeRoleName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.nodeSecurityGroupId
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: aws.amiSelectorTermsAlias
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+              required: true
+            - name: cluster.id
+              sources:
+                - kind: qcoreValue
+                  key: cluster.id
+              required: true
+            - name: cluster.organizationId
+              sources:
+                - kind: qcoreValue
+                  key: cluster.organizationId
+              required: true
+            - name: cluster.region
+              sources:
+                - kind: qcoreValue
+                  key: cluster.region
+              required: true
         - key: karpenter-configuration
           kind: HELM
           release:
@@ -168,17 +217,17 @@ platformTemplateRelease:
               sources:
                 - kind: customerProvidedValue
                   modes: [CUSTOMER_MANAGED]
-              required: true
+              required: false
             - name: aws.nodeRoleName
               sources:
                 - kind: customerProvidedValue
                   modes: [CUSTOMER_MANAGED]
-              required: true
+              required: false
             - name: aws.nodeSecurityGroupId
               sources:
                 - kind: customerProvidedValue
                   modes: [CUSTOMER_MANAGED]
-              required: true
+              required: false
     - key: qovery-stack
       applicability:
         modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]
@@ -197,6 +246,8 @@ platformTemplateRelease:
             version: 0.1.0
           dependsOn:
             - component: karpenter-configuration
+              kind: after
+            - component: karpenter-qovery-configuration
               kind: after
             - component: loki
               kind: after
@@ -250,6 +301,8 @@ platformTemplateRelease:
             version: 0.1.0
           dependsOn:
             - component: karpenter-configuration
+              kind: after
+            - component: karpenter-qovery-configuration
               kind: after
           configRef:
             chart: shell-agent
@@ -317,6 +370,8 @@ platformTemplateRelease:
             version: 6.55.0
           dependsOn:
             - component: karpenter-configuration
+              kind: after
+            - component: karpenter-qovery-configuration
               kind: after
             - component: qovery-priority-class
               kind: requires
@@ -389,6 +444,8 @@ platformTemplateRelease:
           dependsOn:
             - component: karpenter-configuration
               kind: after
+            - component: karpenter-qovery-configuration
+              kind: after
             - component: loki
               kind: requires
             - component: qovery-priority-class
@@ -426,6 +483,8 @@ platformTemplateRelease:
             name: gateway-helm
             version: v1.8.3
           dependsOn:
+            - component: karpenter-qovery-configuration
+              kind: after
             - component: karpenter-configuration
               kind: after
             - component: envoy-gateway-crd
@@ -468,6 +527,8 @@ platformTemplateRelease:
             name: qovery-cluster-gateway
             version: 0.1.0
           dependsOn:
+            - component: karpenter-qovery-configuration
+              kind: after
             - component: karpenter-configuration
               kind: after
             - component: envoy-gateway-crd
@@ -507,6 +568,8 @@ platformTemplateRelease:
           dependsOn:
             - component: karpenter-configuration
               kind: after
+            - component: karpenter-qovery-configuration
+              kind: after
           configRef:
             chart: cert-manager
             version: v1
@@ -522,6 +585,8 @@ platformTemplateRelease:
             version: 0.2.0
           dependsOn:
             - component: karpenter-configuration
+              kind: after
+            - component: karpenter-qovery-configuration
               kind: after
             - component: cert-manager
               kind: requires
@@ -565,6 +630,8 @@ platformTemplateRelease:
             version: 1.21.1
           dependsOn:
             - component: karpenter-configuration
+              kind: after
+            - component: karpenter-qovery-configuration
               kind: after
             - component: external-dns-secret
               kind: requires

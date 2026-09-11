@@ -10,7 +10,7 @@ local request = sdkRequest.decode(read("../../../examples/karpenter-v0/configura
 local draft = request["profileConfig"] as Mapping
 
 local function evaluateRequest(value: Mapping) =
-  sdkEvaluate.evaluate(settings.component(sdkRequest.clusterInputs(value)), value)
+  sdkEvaluate.evaluate(settings.component(sdkRequest.clusterInputs(value), sdkRequest.profileConfig(value)), value)
 
 local function evaluate(config: Mapping, operation: contract.Operation): contract.EvaluationResult =
   evaluateRequest((request) { ["profileConfig"] = config; ["operation"] = operation })
@@ -46,9 +46,8 @@ facts {
         && spec["template"]["spec"]["taints"].isEmpty
         && spec["disruption"]["consolidationPolicy"] == "WhenEmptyOrUnderutilized"
   }
-  ["missing, malformed and duplicate pools cannot reach compilation"] {
-    rejects(new Mapping {}, "nodePools")
-    for (value in List(null, "unfinished", new Mapping {}, new Listing {})) {
+  ["malformed and duplicate pools cannot reach compilation"] {
+    for (value in List(null, "unfinished", new Mapping {})) {
       rejects((draft) { ["nodePools"] = value }, "nodePools")
     }
     rejects((draft) { ["nodePools"] = new Listing { null } }, "nodePools[0]")

@@ -1,0 +1,59 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterQoveryConfiguration.pools.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+settings: List<sdkSettings.Setting> = List(
+  new sdkSettings.ObjectSetting {
+    key = "instanceRequirements"
+    label = "Shared instance requirements"
+    fields = List(
+      (stringList("architectures", "Architectures")) {
+        maxItems = 2
+        items = new sdkSettings.EnumSetting {
+          key = "architecture"
+          label = "Architecture"
+          options = List(new sdkSettings.Option { value = "amd64" }, new sdkSettings.Option { value = "arm64" })
+        }
+      },
+      stringList("families", "Instance families"),
+      stringList("sizes", "Instance sizes"),
+    )
+  },
+  new sdkSettings.IntSetting {
+    key = "diskSizeGiB"
+    label = "Shared disk size (GiB)"
+    required = true
+    default = 50
+    // KubernetesProviderDomain.QOVERY_MIN_DISK_SIZE; the Console legacy preset is 50 GiB.
+    min = 20
+  },
+  pool("default", "Default pool"),
+  pool("stable", "Stable pool"),
+)
+
+local function stringList(name: String, title: String): sdkSettings.ArraySetting = new {
+  key = name
+  label = title
+  required = true
+  minItems = 1
+  uniqueItems = true
+  items = new sdkSettings.StringSetting {
+    key = "value"
+    label = "Value"
+    minLength = 1
+    maxLength = 63
+    pattern = "[a-z0-9]+(-[a-z0-9]+)*"
+  }
+}
+
+local function pool(name: String, title: String): sdkSettings.ObjectSetting = new {
+  key = name
+  label = title
+  fields = List(new sdkSettings.BoolSetting {
+    key = "spotEnabled"
+    label = "Allow Spot with On-Demand fallback"
+    required = true
+    default = false
+  })
+}

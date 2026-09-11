@@ -7,6 +7,6 @@ import "settings.pkl"
 
 local request = sdkRequest.decode(read("prop:request"))
 output {
-  value = sdkEvaluate.evaluate(settings.component(sdkRequest.clusterInputs(request)), request)
+  value = sdkEvaluate.evaluate(settings.component(sdkRequest.clusterInputs(request), sdkRequest.profileConfig(request)), request)
   renderer = new JsonRenderer {}
 }

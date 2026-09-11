@@ -6,7 +6,7 @@ use platform_catalog_tests::{
 };
 use serde_json::{Value, json};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
@@ -403,4 +403,281 @@ fn configuration_chart_has_no_implicit_pools_and_crd_component_uses_the_same_pin
             serde_yaml::from_str(&fs::read_to_string(repository_path(format!("{chart}/Chart.yaml"))).unwrap()).unwrap();
         assert_eq!(metadata["appVersion"], "1.10.0");
     }
+}
+
+const QOVERY_CONFIG_CHART: &str = "lib-engine/lib/aws/bootstrap/charts/karpenter-configuration";
+const QOVERY_CONFIG_BASE: &str =
+    "platform-catalog/components/karpenter-qovery-configuration/config/static-values/base.yaml";
+const LEGACY_EFFECTIVE_VALUES: &str =
+    "platform-catalog/components/karpenter-qovery-configuration/tests/legacy-effective.values.yaml";
+
+fn rendered_qovery_configuration(req: &Value, preserved_values: &[PathBuf]) -> Vec<Value> {
+    let directory = tempdir().unwrap();
+    let values = directory.path().join("compiled.yaml");
+    fs::write(&values, serde_yaml::to_string(&compiled(req)).unwrap()).unwrap();
+    let mut layers = vec![repository_path(QOVERY_CONFIG_BASE)];
+    layers.extend_from_slice(preserved_values);
+    layers.push(values);
+    parse_yaml_documents(&helm_template(
+        "karpenter-configuration",
+        QOVERY_CONFIG_CHART,
+        "kube-system",
+        &layers,
+        &[],
+    ))
+    .into_iter()
+    .map(|value| serde_json::to_value(value).unwrap())
+    .collect()
+}
+
+#[test]
+fn qovery_default_stable_share_a_class_and_preserve_legacy_policy_except_stable_consolidation() {
+    let req = request("qovery-configuration");
+    let baseline = parse_yaml_documents(&helm_template(
+        "karpenter-configuration",
+        QOVERY_CONFIG_CHART,
+        "kube-system",
+        &[repository_path(LEGACY_EFFECTIVE_VALUES)],
+        &[],
+    ));
+    let mut expected: Vec<Value> = baseline
+        .into_iter()
+        .map(|value| serde_json::to_value(value).unwrap())
+        .collect();
+    let stable = expected
+        .iter_mut()
+        .find(|value| value["kind"] == "NodePool" && value["metadata"]["name"] == "stable")
+        .unwrap();
+    // No model means unchanged chart/legacy policy, including the old budget supplied by q-core.
+    assert_eq!(stable["spec"]["disruption"]["consolidationPolicy"], "WhenEmptyOrUnderutilized");
+    assert_eq!(stable["spec"]["disruption"]["budgets"].as_array().unwrap().len(), 2);
+    stable["spec"]["disruption"]["consolidationPolicy"] = json!("WhenEmpty");
+    stable["spec"]["disruption"]["budgets"] = json!([{"nodes":"10%"}]);
+    let actual = rendered_qovery_configuration(&req, &[repository_path(LEGACY_EFFECTIVE_VALUES)]);
+    assert_eq!(
+        actual, expected,
+        "a reviewed static overlay keeps non-exposed settings; only the stable policy/calendar changes"
+    );
+    assert_eq!(actual.len(), 3);
+    for name in ["default", "stable"] {
+        assert_eq!(
+            resource(&actual, "NodePool", name)["spec"]["template"]["spec"]["nodeClassRef"]["name"],
+            "default"
+        );
+    }
+    let class = resource(&actual, "EC2NodeClass", "default");
+    assert_eq!(class["spec"]["role"], "KarpenterNodeRole-example-eks");
+    assert_eq!(class["spec"]["blockDeviceMappings"][0]["ebs"]["iops"], 3500);
+    assert_eq!(class["spec"]["blockDeviceMappings"][0]["ebs"]["throughput"], 200);
+    assert_eq!(class["spec"]["tags"]["Owner"], "platform-team");
+    assert_eq!(class["spec"]["tags"]["aws-apn-id"], "pc:synthetic-example");
+}
+
+#[test]
+fn qovery_spot_is_independent_and_stable_defaults_to_empty_only_after_thirty_seconds() {
+    for default_spot in [false, true] {
+        for stable_spot in [false, true] {
+            let mut req = request("qovery-configuration");
+            req["profileConfig"]["default"]["spotEnabled"] = json!(default_spot);
+            req["profileConfig"]["stable"]["spotEnabled"] = json!(stable_spot);
+            req["profileConfig"]["diskSizeGiB"] = json!(80);
+            req["clusterInputs"]["aws.nodeRoleName"] = json!("existing-custom-node-role");
+            let docs = rendered_qovery_configuration(&req, &[]);
+            for (name, spot, weight) in [("default", default_spot, 50), ("stable", stable_spot, 10)] {
+                let pool = resource(&docs, "NodePool", name);
+                let requirements = pool["spec"]["template"]["spec"]["requirements"].as_array().unwrap();
+                let capacity = requirements
+                    .iter()
+                    .find(|value| value["key"] == "karpenter.sh/capacity-type")
+                    .unwrap();
+                assert_eq!(
+                    capacity["values"],
+                    if spot {
+                        json!(["spot", "on-demand"])
+                    } else {
+                        json!(["on-demand"])
+                    }
+                );
+                assert_eq!(pool["spec"]["weight"], weight);
+                assert_eq!(pool["spec"]["template"]["spec"]["expireAfter"], "720h");
+            }
+            let stable = resource(&docs, "NodePool", "stable");
+            assert_eq!(
+                stable["spec"]["disruption"],
+                json!({"consolidationPolicy":"WhenEmpty", "consolidateAfter":"30s", "budgets":[{"nodes":"10%"}]})
+            );
+            assert_eq!(
+                stable["spec"]["template"]["spec"]["taints"],
+                json!([{"key":"nodepool/stable", "effect":"NoSchedule"}])
+            );
+            let class = resource(&docs, "EC2NodeClass", "default");
+            assert_eq!(class["spec"]["role"], "existing-custom-node-role");
+            assert_eq!(class["spec"]["blockDeviceMappings"][0]["ebs"]["volumeSize"], "80Gi");
+            assert_eq!(
+                class["spec"]["subnetSelectorTerms"],
+                json!([{"tags":{"karpenter.sh/discovery":"example-eks"}}])
+            );
+        }
+    }
+}
+
+#[test]
+fn qovery_model_rejects_partial_lists_disk_and_spot_without_compiling() {
+    let cases = [
+        (
+            "/instanceRequirements/architectures",
+            json!([]),
+            "instanceRequirements.architectures",
+        ),
+        (
+            "/instanceRequirements/architectures",
+            json!(["riscv"]),
+            "instanceRequirements.architectures[0]",
+        ),
+        (
+            "/instanceRequirements/families",
+            json!(["m6i", "m6i"]),
+            "instanceRequirements.families",
+        ),
+        ("/instanceRequirements/sizes", json!([]), "instanceRequirements.sizes"),
+        ("/diskSizeGiB", json!(19), "diskSizeGiB"),
+        ("/diskSizeGiB", json!(20.5), "diskSizeGiB"),
+        ("/stable/spotEnabled", json!("false"), "stable.spotEnabled"),
+    ];
+    for (pointer, value, path) in cases {
+        for operation in ["VALIDATE", "COMPILE"] {
+            let mut req = request("qovery-configuration");
+            req["operation"] = json!(operation);
+            *req["profileConfig"].pointer_mut(pointer).unwrap() = value.clone();
+            let result = evaluate(&req);
+            assert!(
+                result["violations"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|value| value["fieldPath"] == path),
+                "{result}"
+            );
+            assert!(result.get("helmValues").is_none());
+        }
+    }
+    let mut req = request("qovery-configuration");
+    req["profileConfig"] = json!({});
+    assert!(evaluate(&req).get("helmValues").is_none());
+}
+
+#[test]
+fn qovery_logical_inputs_are_explicit_and_core_metadata_is_compile_only() {
+    for operation in ["DESCRIBE", "RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE"] {
+        let mut req = request("qovery-configuration");
+        req["operation"] = json!(operation);
+        if operation == "DESCRIBE" {
+            req["clusterContext"] = Value::Null;
+        }
+        if operation != "COMPILE" {
+            req["clusterInputs"]
+                .as_object_mut()
+                .unwrap()
+                .retain(|key, _| key.starts_with("aws."));
+        }
+        let result = evaluate(&req);
+        assert_eq!(result["violations"], json!([]));
+        assert_eq!(
+            result["requiredInputs"].as_array().unwrap().len(),
+            if operation == "DESCRIBE" { 0 } else { 4 }
+        );
+    }
+    let mut req = request("qovery-configuration");
+    req["clusterInputs"] = json!({});
+    let result = evaluate(&req);
+    assert!(result.get("helmValues").is_none());
+    assert!(
+        result["violations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value["fieldPath"] == "clusterInputs.aws.nodeRoleName")
+    );
+    assert!(
+        result["violations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value["fieldPath"] == "clusterInputs.cluster.id")
+    );
+}
+
+#[test]
+fn qovery_bottlerocket_alias_keeps_the_legacy_os_and_data_disk_layout() {
+    let mut req = request("qovery-configuration");
+    req["clusterInputs"]["aws.amiSelectorTermsAlias"] = json!("bottlerocket@v1.44.0");
+    let docs = rendered_qovery_configuration(&req, &[]);
+    let class = resource(&docs, "EC2NodeClass", "default");
+    assert_eq!(class["spec"]["amiSelectorTerms"], json!([{"alias":"bottlerocket@v1.44.0"}]));
+    let volumes = class["spec"]["blockDeviceMappings"].as_array().unwrap();
+    assert_eq!(volumes.len(), 2);
+    assert_eq!(volumes[0]["deviceName"], "/dev/xvda");
+    assert_eq!(volumes[0]["ebs"]["volumeSize"], "4Gi");
+    assert_eq!(volumes[1]["deviceName"], "/dev/xvdb");
+    assert_eq!(volumes[1]["ebs"]["volumeSize"], "50Gi");
+}
+
+#[test]
+fn custom_pools_absent_or_empty_need_no_aws_inputs_and_render_no_resources() {
+    for config in [json!({}), json!({"nodePools":[]})] {
+        for inputs in [
+            json!({}),
+            json!({"aws.eksClusterName":false, "aws.nodeRoleName":"invalid role", "aws.nodeSecurityGroupId":"invalid"}),
+        ] {
+            let mut req = request("configuration");
+            req["profileConfig"] = config.clone();
+            req["clusterInputs"] = inputs.clone();
+            req["clusterContext"] = Value::Null;
+            for operation in ["DESCRIBE", "RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE"] {
+                req["operation"] = json!(operation);
+                let result = evaluate(&req);
+                assert_eq!(result["requiredInputs"], json!([]), "{result}");
+                assert_eq!(result["violations"], json!([]), "{result}");
+                assert_eq!(result["fields"][0]["required"], false);
+                if operation == "COMPILE" {
+                    assert_eq!(result["helmValues"], json!({"pools":[]}));
+                    assert!(rendered_configuration(&req).is_empty());
+                } else {
+                    assert!(result.get("helmValues").is_none());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn one_custom_pool_activates_aws_requirements_and_cannot_compile_an_incomplete_row() {
+    let mut req = request("configuration");
+    req["profileConfig"] = json!({"nodePools":[{}]});
+    req["clusterInputs"] = json!({});
+    for operation in ["RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE"] {
+        req["operation"] = json!(operation);
+        let result = evaluate(&req);
+        assert_eq!(result["requiredInputs"].as_array().unwrap().len(), 3);
+        assert!(result.get("helmValues").is_none());
+        if operation != "RESOLVE_REQUIREMENTS" {
+            for path in [
+                "nodePools[0].name",
+                "nodePools[0].instanceTypes",
+                "clusterInputs.aws.nodeRoleName",
+            ] {
+                assert!(
+                    result["violations"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|entry| entry["fieldPath"] == path),
+                    "{result}"
+                );
+            }
+        }
+    }
+    req = request("configuration");
+    req["profileConfig"] = json!({"nodePools":[{"name":"extra", "instanceTypes":["m7i.large"]}]});
+    assert_eq!(rendered_configuration(&req).len(), 2);
 }

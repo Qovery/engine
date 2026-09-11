@@ -71,6 +71,9 @@ components:
   - name: karpenter-configuration
     chart: karpenter-custom-resources
     version: v1
+  - name: karpenter-qovery-configuration
+    chart: karpenter-configuration
+    version: v1
 
 # Frozen charts mirrored by scripts/publish-frozen-charts.sh to
 # <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this
@@ -115,6 +118,8 @@ charts:
     path: lib-engine/lib/common/bootstrap/charts/qovery-gateway-class
   - name: qovery-cluster-gateway
     path: lib-engine/lib/common/bootstrap/charts/qovery-cluster-gateway
+  - name: karpenter-configuration
+    path: lib-engine/lib/aws/bootstrap/charts/karpenter-configuration
 
 # Root platform template releases are generic OCI artifacts, published last
 # after every referenced config bundle and chart has been verified.

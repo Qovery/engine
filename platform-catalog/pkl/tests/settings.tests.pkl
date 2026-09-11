@@ -49,6 +49,17 @@ local custom = scopeOf(new Mapping { ["mode"] = "CUSTOM" }, null)
 local pvc = scopeOf(new Mapping { ["mode"] = "pvc" }, null)
 
 facts {
+  ["integer bounds report only the configured limits"] {
+    let (lower = (retention) { min = 20; max = null })
+      lower.valueViolation(19, "retentionWeeks", "Example")?.message == "Example retentionWeeks must be at least 20"
+    let (upper = (retention) { min = null; max = 52 })
+      upper.valueViolation(53, "retentionWeeks", "Example")?.message == "Example retentionWeeks must be at most 52"
+    let (lower = (retention) { min = 20; max = null })
+      lower.valueViolation(20, "retentionWeeks", "Example") == null
+    let (upper = (retention) { min = null; max = 52 })
+      upper.valueViolation(52, "retentionWeeks", "Example") == null
+  }
+
   ["resolve applies defaults, keeps well-typed values and nulls ill-typed ones"] {
     settings.resolve(all, new Mapping {})
       == new Mapping { ["retentionWeeks"] = 12; ["cpuMilli"] = null; ["flag"] = false; ["mode"] = "pvc" }

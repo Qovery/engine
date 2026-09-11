@@ -1,0 +1,41 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterQoveryConfiguration.pools.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+
+fragment: sdkHelm.Fragment = (scope) -> compile(scope.config, scope.inputs)
+
+local function compile(config: Mapping, inputs: Mapping): Mapping = new Mapping {
+  ["clusterName"] = inputs["aws.eksClusterName"]
+  ["nodeRoleName"] = inputs["aws.nodeRoleName"]
+  ["securityGroupId"] = inputs["aws.nodeSecurityGroupId"]
+  ["amiSelectorTermsAlias"] = inputs["aws.amiSelectorTermsAlias"]
+  ["isBottlerocket"] = (inputs["aws.amiSelectorTermsAlias"] as String).startsWith("bottlerocket@")
+  ["diskSize"] = "\(config["diskSizeGiB"])Gi"
+  ["defaultNodePool"] = new Mapping {
+    ["requirements"] = requirements(config["instanceRequirements"] as Mapping, config["default"]["spotEnabled"] as Boolean)
+  }
+  ["stableNodePool"] = new Mapping {
+    ["requirements"] = requirements(config["instanceRequirements"] as Mapping, config["stable"]["spotEnabled"] as Boolean)
+    ["consolidationPolicy"] = "WhenEmpty"
+    ["consolidation"] = new Mapping { ["budgets"] = new Listing {} }
+  }
+  ["tags"] = new Mapping {
+    ["ClusterId"] = (inputs["cluster.id"] as String).take(8)
+    ["ClusterLongId"] = inputs["cluster.id"]
+    ["OrganizationId"] = (inputs["cluster.organizationId"] as String).take(8)
+    ["OrganizationLongId"] = inputs["cluster.organizationId"]
+    ["Region"] = inputs["cluster.region"]
+  }
+}
+
+local function requirements(shared: Mapping, spot: Boolean): Listing = new Listing {
+  new Mapping { ["key"] = "kubernetes.io/arch"; ["operator"] = "In"; ["values"] = shared["architectures"] }
+  new Mapping { ["key"] = "karpenter.k8s.aws/instance-family"; ["operator"] = "In"; ["values"] = shared["families"] }
+  new Mapping { ["key"] = "karpenter.k8s.aws/instance-size"; ["operator"] = "In"; ["values"] = shared["sizes"] }
+  new Mapping {
+    ["key"] = "karpenter.sh/capacity-type"
+    ["operator"] = "In"
+    ["values"] = if (spot) new Listing { "spot"; "on-demand" } else new Listing { "on-demand" }
+  }
+}

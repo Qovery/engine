@@ -1,0 +1,18 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterQoveryConfiguration.settings
+
+import "pools/setting.pkl" as poolsSetting
+import "pools/inputs.pkl" as poolsInputs
+import "pools/dependencies.pkl" as poolsDependencies
+import "pools/helm.pkl" as poolsHelm
+import "sdk/evaluate.pkl" as sdkEvaluate
+
+component: sdkEvaluate.Component = new {
+  label = "Qovery Karpenter pools"
+  inputs = poolsInputs.inputs
+  features = List(new sdkEvaluate.Feature {
+    settings = poolsSetting.settings
+    rules = poolsDependencies.rules
+    fragment = poolsHelm.fragment
+  })
+}

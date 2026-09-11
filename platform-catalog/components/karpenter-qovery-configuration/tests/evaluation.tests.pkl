@@ -1,0 +1,54 @@
+amends "pkl:test"
+
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+import "../config/runtime-values/settings.pkl"
+
+local request = sdkRequest.decode(read("../../../examples/karpenter-v0/qovery-configuration.request.json"))
+local function evaluate(value: Mapping) = sdkEvaluate.evaluate(settings.component, value)
+
+facts {
+  ["AMI aliases reject incomplete or repeated version separators"] {
+    for (alias in List("al2023@v1.", "bottlerocket@v1..2", "al2@v.")) {
+      for (operation in List("VALIDATE", "COMPILE")) {
+        let (result = evaluate((request) {
+          ["operation"] = operation
+          ["clusterInputs"] = (request["clusterInputs"] as Mapping) { ["aws.amiSelectorTermsAlias"] = alias }
+        }))
+          result.helmValues == null && result.violations.any((entry) -> entry.fieldPath == "clusterInputs.aws.amiSelectorTermsAlias")
+      }
+    }
+  }
+  ["AMI aliases retain dated semantic and latest versions"] {
+    for (alias in List("al2023@v20260801", "al2@latest", "bottlerocket@v1.44.0", "bottlerocket@latest")) {
+      let (result = evaluate((request) {
+        ["clusterInputs"] = (request["clusterInputs"] as Mapping) { ["aws.amiSelectorTermsAlias"] = alias }
+      }))
+        result.violations.isEmpty && result.helmValues != null
+    }
+  }
+
+  ["logical inputs never fall back to synthetic infrastructure identifiers"] {
+    for (key in List("aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId", "aws.amiSelectorTermsAlias")) {
+      for (value in List(null, false, "", "invalid value!")) {
+        let (result = evaluate((request) {
+          ["clusterInputs"] = (request["clusterInputs"] as Mapping) { [key] = value }
+        }))
+          result.helmValues == null && result.violations.any((entry) -> entry.fieldPath == "clusterInputs.\(key)")
+      }
+    }
+  }
+  ["unavailable cluster context cannot compile pools"] {
+    for (context in List(null, new Mapping { ["provider"] = "GCP"; ["mode"] = "CUSTOMER_MANAGED" }, new Mapping { ["provider"] = "AWS"; ["mode"] = "QOVERY_MANAGED" })) {
+      let (result = evaluate((request) { ["clusterContext"] = context }))
+        result.helmValues == null && result.violations.any((entry) -> entry.code == "UNSUPPORTED_CLUSTER")
+    }
+  }
+  ["Source 2 exposes only the V0 fields and rejects hidden chart knobs"] {
+    evaluate(request).violations.isEmpty
+    let (result = evaluate((request) {
+      ["profileConfig"] = (request["profileConfig"] as Mapping) { ["stable"] = new Mapping { ["spotEnabled"] = false; ["consolidationPolicy"] = "Never" } }
+    }))
+      result.helmValues == null && result.violations.any((entry) -> entry.fieldPath == "stable.consolidationPolicy")
+  }
+}

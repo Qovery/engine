@@ -1,4 +1,4 @@
-# Karpenter pool configuration model — unpublished lot B
+# Karpenter custom pool configuration model
 
 This bundle compiles the accepted Source 2 pool profile into values for the new
 `karpenter-custom-resources` chart, version `0.1.0`, targeting Karpenter `1.10.0`.
@@ -8,8 +8,8 @@ It does not use or modify the legacy `karpenter-configuration` chart.
 assembles the `nodePools/` feature: `setting.pkl` declares types, bounds and defaults;
 `dependencies.pkl` declares indexed uniqueness and cluster admission rules; `inputs.pkl`
 declares the component-wide logical inputs; `helm.pkl` projects validated active values.
-The component factory receives cluster inputs only to declare the real EKS discovery-tag
-default. No request decoding, validation orchestration or compilation gate is duplicated.
+The component factory receives cluster inputs for the real EKS discovery-tag default
+and the draft to declare AWS inputs only when at least one pool exists. No request decoding, validation orchestration or compilation gate is duplicated.
 
 Contract and SDK copies are synchronized from `platform-catalog/pkl`. The SDK derives both
 prototypes and row descriptors, validates raw drafts, and passes defaulted active values
@@ -21,7 +21,7 @@ No runtime import reaches the test fixture, another component or an example file
 
 Each `nodePools` item creates one `NodePool` and one `EC2NodeClass`, both named
 `qovery-<name>`. A name is 1–56 lowercase DNS characters. Names remain stable when rows move.
-Empty pool lists, duplicate names, unknown fields and malformed active values are rejected.
+Absent or empty pool lists render no resources. Duplicate names, unknown fields and malformed active values are rejected.
 
 | Profile | Helm/resource result |
 | --- | --- |
@@ -52,26 +52,42 @@ Controller tolerations may retain an explicit empty value.
 ## Logical requirements and admission
 
 `aws.eksClusterName`, `aws.nodeRoleName` (a role name, not an ARN) and
-`aws.nodeSecurityGroupId` are required scalar CLUSTER inputs. They identify precreated resources;
+`aws.nodeSecurityGroupId` are required scalar CLUSTER inputs when at least one pool exists. They identify precreated resources;
 their syntax/presence is not evidence of existence, permissions or correct cluster/VPC ownership.
 RESOLVE_REQUIREMENTS advertises them; VALIDATE and COMPILE require valid values.
 
-Outside DESCRIBE, context must contain `provider: AWS`, `mode: CUSTOMER_MANAGED` and an exact
+With a nonempty pool list, outside DESCRIBE context must contain `provider: AWS`, `mode: CUSTOMER_MANAGED` and an exact
 `kubernetesVersion` such as `1.34`. KAR-03 bounds this demo to 1.30–1.35. This is a demo policy,
 not a claim that upstream Karpenter rejects every older version: the [pinned version provider](https://github.com/aws/karpenter-provider-aws/blob/v1.10.0/pkg/providers/version/version.go)
 admits 1.26–1.35. Older legacy AMI rules are covered as pure compatibility tests only.
 
 ## Activation dependencies
 
-The future optional layer requires this component after both `karpenter-crd` and `karpenter`
-using the existing `dependsOn` / `kind: requires` contract, in namespace `kube-system`.
-Publication and root-template wiring belong to lot G, after C–E establish context transport,
-namespace/Helm policy, readiness, ownership and AWS checks. The current q-core context does not
-yet send `kubernetesVersion`; this bundle is therefore deliberately absent from `catalog.yaml`
-and active templates. No OCI artifact or installation is implied by these sources.
+The registered `karpenter` layer contains this component after both `karpenter-crd` and
+`karpenter` using existing `dependsOn` / `kind: requires`, in `kube-system`. Publication and
+cluster deployment are separate steps; editing these sources does not publish an artifact.
 
 Renaming/removing deployed pools cannot be validated from this draft alone. The future runtime
 guard must compare the desired set against reliably observed owned resources before Helm.
 Existing customer Karpenter must be detected and blocked; this model does not implement adoption.
 
 See [local examples and verification](../../../examples/karpenter-v0/README.md).
+
+## POC activation and empty custom configuration
+
+The single optional `karpenter` layer groups CRDs, controller, Qovery pools and custom pools.
+The custom release remains `kube-system/karpenter-custom-configuration`, distinct from the
+Qovery release `kube-system/karpenter-configuration`. Per-component activation is future work.
+Controller and Qovery fields remain required when enabling the layer.
+
+An absent `nodePools` field or `nodePools: []` is valid and compiles `pools: []`, rendering
+no Kubernetes resource. It exposes no custom AWS requirements and does not validate unused
+AWS values or cluster/version admission. The model's component factory conditions its logical
+input declarations on the draft; scalar/row validation and the compile gate stay in the
+canonical SDK. Template runtime inputs are optional at transport level; once any pool exists,
+the model requires all three AWS inputs and retains every existing row/context constraint.
+Malformed arrays and incomplete rows are still rejected.
+
+An empty desired state removes resources previously owned by this custom Helm release.
+It is not a preserve-existing-resources switch. Retain all desired pools in the configuration
+before updating an existing release; no automatic migration or restoration is provided.

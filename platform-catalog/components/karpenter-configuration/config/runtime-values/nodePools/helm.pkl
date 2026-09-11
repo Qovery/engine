@@ -2,10 +2,14 @@
 module qovery.engine.platform.karpenterConfiguration.nodePools.helm
 
 import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
 
 // Called behind the SDK's lazy validation gate. Construct values, never YAML/template text.
 fragment: sdkHelm.Fragment = (scope) ->
-  compile(scope.config, scope.inputs, scope.cluster.kubernetesVersion!!)
+  if (setting.hasPools(scope.config))
+    compile(scope.config, scope.inputs, scope.cluster.kubernetesVersion!!)
+  else
+    new Mapping { ["pools"] = new Listing {} }
 
 local function compile(config: Mapping, clusterInputs: Mapping, kubernetesVersion: String): Mapping = new Mapping {
   ["pools"] =

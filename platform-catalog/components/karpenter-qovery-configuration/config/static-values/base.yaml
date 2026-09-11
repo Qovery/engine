@@ -1,0 +1,7 @@
+# Keep legacy chart defaults except the explicitly selected stable POC policy.
+stableNodePool:
+  consolidateAfter: 30s
+# The legacy Engine uses this value when its APN identifier is unset. A verified
+# partner identifier may be supplied by a reviewed static/context bundle overlay.
+tags:
+  aws-apn-id: not-set

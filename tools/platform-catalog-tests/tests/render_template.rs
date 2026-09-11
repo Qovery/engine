@@ -299,6 +299,7 @@ fn catalog_components_use_the_expected_release_identities() {
             let expected_chart = match key {
                 "karpenter-crd" | "karpenter" => Some((key, key)),
                 "karpenter-configuration" => Some(("karpenter-custom-resources", "karpenter-custom-configuration")),
+                "karpenter-qovery-configuration" => Some(("karpenter-configuration", "karpenter-configuration")),
                 _ => None,
             };
             if let Some((chart, release_name)) = expected_chart {
@@ -438,19 +439,22 @@ fn catalog_coordinate_must_match_the_template_identity() {
 }
 
 #[test]
-fn karpenter_controller_and_custom_resources_are_independently_opt_in_with_separate_releases() {
+fn one_opt_in_karpenter_layer_keeps_controller_qovery_and_custom_release_identities() {
     let fixture = RenderFixture::new();
     fixture.write_outputs();
     assert!(fixture.render("0.1.0").status.success());
     let template: JsonValue = serde_yaml::from_str(&fs::read_to_string(&fixture.destination).unwrap()).unwrap();
     let layers = template["platformTemplateRelease"]["layers"].as_array().unwrap();
-    let layer = layers
+    let karpenter_layers: Vec<_> = layers
         .iter()
-        .find(|layer| layer["key"] == "karpenter")
-        .expect("Karpenter layer");
+        .filter(|layer| layer["key"].as_str().unwrap().starts_with("karpenter"))
+        .collect();
+    assert_eq!(karpenter_layers.len(), 1);
+    let layer = karpenter_layers[0];
+    assert_eq!(layer["key"], "karpenter");
     assert_eq!(
         layer["applicability"],
-        json!({"modes": ["CUSTOMER_MANAGED"], "providers": ["AWS"]})
+        json!({"modes":["CUSTOMER_MANAGED"], "providers":["AWS"]})
     );
     assert_eq!(layer["mandatory"], false);
     assert_eq!(layer["enabledByDefault"], false);
@@ -460,44 +464,46 @@ fn karpenter_controller_and_custom_resources_are_independently_opt_in_with_separ
             .iter()
             .map(|component| component["key"].as_str().unwrap())
             .collect::<Vec<_>>(),
-        ["karpenter-crd", "karpenter"]
+        [
+            "karpenter-crd",
+            "karpenter",
+            "karpenter-qovery-configuration",
+            "karpenter-configuration"
+        ]
     );
     assert_eq!(
         components[1]["dependsOn"],
         json!([{"component":"karpenter-crd", "kind":"requires"}])
     );
-    let custom_layer = layers
-        .iter()
-        .find(|layer| layer["key"] == "karpenter-custom-configuration")
-        .expect("custom resources layer");
-    assert_eq!(custom_layer["applicability"], layer["applicability"]);
-    assert_eq!(custom_layer["mandatory"], false);
-    assert_eq!(custom_layer["enabledByDefault"], false);
-    let custom_components = custom_layer["components"].as_array().unwrap();
-    assert_eq!(custom_components.len(), 1);
-    let custom = &custom_components[0];
-    assert_eq!(custom["key"], "karpenter-configuration");
+    for component in &components[2..] {
+        assert_eq!(
+            component["dependsOn"],
+            json!([
+                {"component":"karpenter-crd", "kind":"requires"}, {"component":"karpenter", "kind":"requires"}
+            ])
+        );
+    }
     assert_eq!(
-        custom["release"],
+        components[2]["release"],
+        json!({"name":"karpenter-configuration", "namespace":"kube-system"})
+    );
+    assert_eq!(
+        components[3]["release"],
         json!({"name":"karpenter-custom-configuration", "namespace":"kube-system"})
     );
+    // Only the Qovery component may own the legacy release: upgrading it with the custom
+    // chart would delete default/stable resources absent from the custom chart's manifest.
     assert!(
-        layers
+        components
             .iter()
-            .flat_map(|layer| layer["components"].as_array().unwrap())
-            .all(|component| component["release"]["name"] != "karpenter-configuration"),
-        "the legacy Qovery release must never be implicitly upgraded by the custom chart"
+            .all(|component| component["release"]["name"] != "karpenter-configuration"
+                || component["key"] == "karpenter-qovery-configuration")
     );
-    let controller_index = layers.iter().position(|layer| layer["key"] == "karpenter").unwrap();
-    let workloads_index = layers.iter().position(|layer| layer["key"] == "qovery-stack").unwrap();
-    assert!(controller_index < workloads_index);
-    assert_eq!(
-        custom["dependsOn"],
-        json!([
-            {"component":"karpenter-crd", "kind":"requires"}, {"component":"karpenter", "kind":"requires"}
-        ])
+    assert!(
+        layers.iter().position(|layer| layer["key"] == "karpenter").unwrap()
+            < layers.iter().position(|layer| layer["key"] == "qovery-stack").unwrap()
     );
-    for (component, expected_inputs) in [
+    for (component, expected_inputs, required) in [
         (
             &components[1],
             [
@@ -505,27 +511,32 @@ fn karpenter_controller_and_custom_resources_are_independently_opt_in_with_separ
                 "aws.controllerRoleArn",
                 "aws.interruptionQueueName",
             ],
+            true,
         ),
-        (custom, ["aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId"]),
+        (
+            &components[3],
+            ["aws.eksClusterName", "aws.nodeRoleName", "aws.nodeSecurityGroupId"],
+            false,
+        ),
     ] {
         assert_eq!(
             component["configRef"]["evaluator"],
             json!({"kind":"PKL", "entrypoint":"runtime-values/model.pkl"})
         );
-        let declarations = component["runtimeInputs"].as_array().unwrap();
+        let inputs = component["runtimeInputs"].as_array().unwrap();
         assert_eq!(
-            declarations
+            inputs
                 .iter()
                 .map(|input| input["name"].as_str().unwrap())
                 .collect::<Vec<_>>(),
             expected_inputs
         );
-        for input in declarations {
+        for input in inputs {
             assert_eq!(
                 input["sources"],
                 json!([{"kind":"customerProvidedValue", "modes":["CUSTOMER_MANAGED"]}])
             );
-            assert_eq!(input["required"], true);
+            assert_eq!(input["required"], required);
         }
     }
     let demo: JsonValue = serde_yaml::from_str(
@@ -568,6 +579,7 @@ fn platform_workloads_wait_for_optional_karpenter_without_blocking_its_bootstrap
         "karpenter-crd",
         "karpenter",
         "karpenter-configuration",
+        "karpenter-qovery-configuration",
     ];
     for component in release["layers"]
         .as_array()
@@ -578,15 +590,17 @@ fn platform_workloads_wait_for_optional_karpenter_without_blocking_its_bootstrap
         let key = component["key"].as_str().unwrap();
         let dependencies = component["dependsOn"].as_array().map(Vec::as_slice).unwrap_or_default();
         if workloads.contains(&key) {
-            let edges: Vec<_> = dependencies
-                .iter()
-                .filter(|edge| edge["component"] == "karpenter-configuration")
-                .collect();
-            assert_eq!(
-                edges,
-                [&json!({"component": "karpenter-configuration", "kind": "after"})],
-                "{key} must wait only when Karpenter is enabled"
-            );
+            for pool_component in ["karpenter-configuration", "karpenter-qovery-configuration"] {
+                let edges: Vec<_> = dependencies
+                    .iter()
+                    .filter(|edge| edge["component"] == pool_component)
+                    .collect();
+                assert_eq!(
+                    edges,
+                    [&json!({"component": pool_component, "kind": "after"})],
+                    "{key} must wait only when the corresponding pools are enabled"
+                );
+            }
         } else {
             assert!(
                 other_components.contains(&key),
@@ -595,7 +609,8 @@ fn platform_workloads_wait_for_optional_karpenter_without_blocking_its_bootstrap
             assert!(
                 dependencies
                     .iter()
-                    .all(|edge| edge["component"] != "karpenter-configuration"),
+                    .all(|edge| edge["component"] != "karpenter-configuration"
+                        && edge["component"] != "karpenter-qovery-configuration"),
                 "{key} does not deploy dependent pods and must not wait for Karpenter configuration"
             );
             if key.starts_with("karpenter") {
@@ -612,4 +627,98 @@ fn platform_workloads_wait_for_optional_karpenter_without_blocking_its_bootstrap
         release["bootstrap"]["component"]["dependsOn"].is_null(),
         "the operator must bootstrap independently of Karpenter"
     );
+}
+
+#[test]
+fn qovery_pools_remain_required_within_the_layer_and_keep_their_legacy_release() {
+    let fixture = RenderFixture::new();
+    fixture.write_outputs();
+    assert!(fixture.render("0.1.0").status.success());
+    let template: JsonValue = serde_yaml::from_str(&fs::read_to_string(&fixture.destination).unwrap()).unwrap();
+    let layers = template["platformTemplateRelease"]["layers"].as_array().unwrap();
+    let layer = layers.iter().find(|layer| layer["key"] == "karpenter").unwrap();
+    assert_eq!(layer["mandatory"], false);
+    assert_eq!(layer["enabledByDefault"], false);
+    assert_eq!(
+        layer["applicability"],
+        json!({"modes":["CUSTOMER_MANAGED"], "providers":["AWS"]})
+    );
+    let components = layer["components"].as_array().unwrap();
+    let component = components
+        .iter()
+        .find(|component| component["key"] == "karpenter-qovery-configuration")
+        .unwrap();
+    assert_eq!(component["key"], "karpenter-qovery-configuration");
+    assert_eq!(
+        component["release"],
+        json!({"name":"karpenter-configuration", "namespace":"kube-system"})
+    );
+    assert_eq!(component["chart"]["name"], "karpenter-configuration");
+    assert_eq!(component["chart"]["version"], "1.0.1");
+    assert_eq!(
+        component["dependsOn"],
+        json!([
+            {"component":"karpenter-crd", "kind":"requires"}, {"component":"karpenter", "kind":"requires"}
+        ])
+    );
+    assert_eq!(component["configRef"]["chart"], "karpenter-qovery-configuration");
+    let inputs = component["runtimeInputs"].as_array().unwrap();
+    assert_eq!(inputs.len(), 7);
+    for name in [
+        "aws.eksClusterName",
+        "aws.nodeRoleName",
+        "aws.nodeSecurityGroupId",
+        "aws.amiSelectorTermsAlias",
+    ] {
+        let input = inputs.iter().find(|input| input["name"] == name).unwrap();
+        assert_eq!(
+            input["sources"],
+            json!([{"kind":"customerProvidedValue", "modes":["CUSTOMER_MANAGED"]}])
+        );
+        assert_eq!(input["required"], true);
+    }
+    for name in ["cluster.id", "cluster.organizationId", "cluster.region"] {
+        let input = inputs.iter().find(|input| input["name"] == name).unwrap();
+        assert_eq!(input["sources"], json!([{"kind":"qcoreValue", "key":name}]));
+        assert_eq!(input["required"], true);
+    }
+}
+
+#[test]
+fn component_dependency_graph_has_no_cycles() {
+    let template: JsonValue = serde_yaml::from_str(
+        &fs::read_to_string(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml")).unwrap(),
+    )
+    .unwrap();
+    let components: Vec<_> = template["platformTemplateRelease"]["layers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|layer| layer["components"].as_array().unwrap())
+        .collect();
+    let keys: Vec<_> = components
+        .iter()
+        .map(|component| component["key"].as_str().unwrap())
+        .collect();
+    let mut completed = Vec::new();
+    while completed.len() < components.len() {
+        let before = completed.len();
+        for component in &components {
+            let key = component["key"].as_str().unwrap();
+            if completed.contains(&key) {
+                continue;
+            }
+            let dependencies = component["dependsOn"].as_array().map(Vec::as_slice).unwrap_or_default();
+            for edge in dependencies {
+                assert!(keys.contains(&edge["component"].as_str().unwrap()));
+            }
+            if dependencies
+                .iter()
+                .all(|edge| completed.contains(&edge["component"].as_str().unwrap()))
+            {
+                completed.push(key);
+            }
+        }
+        assert!(completed.len() > before, "cycle in the full enabled catalogue dependency graph");
+    }
 }

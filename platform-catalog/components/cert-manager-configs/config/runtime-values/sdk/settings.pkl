@@ -180,7 +180,12 @@ class IntSetting extends ScalarSetting {
       validate.violation(
         validate.valueOutOfRangeCode,
         fieldPath,
-        "\(componentLabel) \(key) must be between \(min) and \(max)",
+        if (min != null && max != null)
+          "\(componentLabel) \(key) must be between \(min) and \(max)"
+        else if (min != null)
+          "\(componentLabel) \(key) must be at least \(min)"
+        else
+          "\(componentLabel) \(key) must be at most \(max)",
       )
     else
       null

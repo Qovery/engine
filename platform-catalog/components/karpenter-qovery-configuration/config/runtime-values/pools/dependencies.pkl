@@ -1,0 +1,21 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterQoveryConfiguration.pools.dependencies
+
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/validate.pkl" as sdkValidate
+import "inputs.pkl"
+
+rules: List<sdkRules.Rule> = List(
+  new sdkRules.FieldRule {
+    code = "UNSUPPORTED_CLUSTER"
+    fieldPath = "clusterContext"
+    message = "Qovery Karpenter pools require customer-managed AWS EKS in this V0"
+    violated = (scope) -> scope.cluster.provider != "AWS" || scope.cluster.mode != "CUSTOMER_MANAGED"
+  },
+  new sdkRules.RowRule {
+    code = sdkValidate.requiredInputMissingCode
+    message = "Required q-core runtime input is missing"
+    operations = List("COMPILE")
+    paths = (scope) -> inputs.compileInputs.filter((key) -> sdkValidate.inputIsBlank(scope.inputs, key)).map((key) -> "clusterInputs.\(key)")
+  },
+)
