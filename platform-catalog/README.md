@@ -141,6 +141,10 @@ to restrict), or locally:
 PLATFORM_CONFIG_REGISTRY=<registry> ./scripts/publish-platform-catalog.sh
 ```
 
+The manual job becomes available as soon as `test-platform-config` succeeds,
+without waiting for Engine image builds. If the test job is omitted by its
+path-based CI rules, publication remains available without that dependency.
+
 Each component's `config/` directory is pushed with ORAS as one OCI artifact
 (`artifactType: application/vnd.qovery.platform-config.v1`) to:
 

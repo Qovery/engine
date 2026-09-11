@@ -1051,6 +1051,11 @@ test-platform-config:
 publish-platform-catalog:
   stage: release
   extends: [.resources-minimal]
+  needs:
+    - job: test-platform-config
+      artifacts: false
+      # The test job is omitted when no platform-config paths changed.
+      optional: true
   retry: 0
   variables:
     # Config bundles to publish: space/comma-separated component names,
