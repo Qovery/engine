@@ -1,4 +1,6 @@
-{{- $isUserCertificate := not (empty .Values.userProvidedCertificate.crt) -}}
+{{- $hasInlineUserCertificate := not (empty .Values.userProvidedCertificate.crt) -}}
+{{- $hasExistingUserCertificate := not (empty .Values.userProvidedCertificate.existingSecretName) -}}
+{{- $isUserCertificate := or $hasInlineUserCertificate $hasExistingUserCertificate -}}
 
 {{/* 
    By default, we let cert-manager manage the certificate
@@ -24,7 +26,7 @@ spec:
     kind: ClusterIssuer
   dnsNames:
   - '*.{{- join "'\n  - '*." .Values.managedDns }}'
-{{ else }}
+{{ else if $hasInlineUserCertificate }}
 apiVersion: v1
 kind: Secret
 metadata:
