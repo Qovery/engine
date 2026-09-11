@@ -1,0 +1,26 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.envoyGateway.configuration.helm
+
+import "profile.pkl"
+import "../sdk/helm.pkl" as sdkHelm
+
+function compile(profileConfig: Mapping): Mapping =
+  new Mapping {
+    ["deployment"] = new Mapping {
+      ["replicas"] = profile.number(profileConfig, "envoy.gateway_controller.replicas", 1)
+      ["envoyGateway"] = new Mapping {
+        ["resources"] = new Mapping {
+          ["requests"] = new Mapping {
+            ["cpu"] = "\(profile.number(profileConfig, "envoy.vcpu.request_in_milli_cpu", 100))m"
+            ["memory"] = "\(profile.number(profileConfig, "envoy.memory.request_in_mib", 256))Mi"
+          }
+          ["limits"] = new Mapping {
+            ["cpu"] = "\(profile.number(profileConfig, "envoy.vcpu.limit_in_milli_cpu", 1000))m"
+            ["memory"] = "\(profile.number(profileConfig, "envoy.memory.limit_in_mib", 1024))Mi"
+          }
+        }
+      }
+    }
+  }
+
+fragment: sdkHelm.Fragment = (scope) -> compile(scope.config)

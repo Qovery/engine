@@ -38,3 +38,6 @@ k8sRemoveNginx: false
 userProvidedCertificate:
   crt: ""
   key: ""
+  # An existing TLS Secret must use the chart's fixed certificate name so the Gateway and
+  # ReferenceGrant continue to point at the same object.
+  existingSecretName: ""

@@ -1,0 +1,32 @@
+# Source 1 — the reviewed demo and BYOK-safe Envoy Gateway controller configuration.
+config:
+  envoyGateway:
+    gateway:
+      controllerName: qovery.com/gateway-controller
+    logging:
+      level:
+        default: warn
+
+# CRDs are owned by the dedicated envoy-gateway-crd release so upgrades are explicit.
+crds:
+  enabled: false
+
+service:
+  annotations: {}
+
+hpa:
+  enabled: false
+
+deployment:
+  replicas: 1
+  envoyGateway:
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+podDisruptionBudget:
+  maxUnavailable: 1

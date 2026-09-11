@@ -1,0 +1,90 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryClusterGateway.configuration.dependencies
+
+import "../contract.pkl"
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/validate.pkl" as sdkValidate
+
+// Only cross-field and certificate naming rules live here. The SDK handles scalar types,
+// required members, array bounds and unknown keys recursively from setting.pkl.
+local certificateKey = "envoy.client_validation.ca_certificates"
+local cidrsKey = "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs"
+local cidrPattern = Regex("^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/(3[0-2]|[12]?[0-9])$|^[0-9A-Fa-f:]+/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$")
+
+rules: List<sdkRules.Rule> = List(
+  new sdkRules.FieldRule {
+    code = sdkValidate.valueOutOfRangeCode
+    fieldPath = "envoy.hpa.max_number_instances"
+    message = "Envoy HPA maximum replicas must be greater than or equal to minimum replicas"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (minimum = scope.config.getOrNull("envoy.hpa.min_number_instances") as Int?)
+      let (maximum = scope.config.getOrNull("envoy.hpa.max_number_instances") as Int?)
+        minimum != null && maximum != null && minimum > maximum
+  },
+  new sdkRules.FieldRule {
+    code = sdkValidate.valueNotAllowedCode
+    fieldPath = cidrsKey
+    message = "Configure either trusted X-Forwarded-For hops or trusted CIDRs, not both"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (hops = scope.config.getOrNull("envoy.client_ip_detection.x_forwarded_for.number_trusted_hops") as Int?)
+      let (cidrs = scope.config.getOrNull(cidrsKey) as String?)
+        hops != null && cidrs != null && !cidrs.isBlank
+  },
+  new sdkRules.FieldRule {
+    code = sdkValidate.inputPatternMismatchCode
+    fieldPath = cidrsKey
+    message = "Trusted CIDRs must be comma-separated IPv4 or IPv6 CIDR ranges"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (cidrs = scope.config.getOrNull(cidrsKey) as String?)
+        cidrs != null && cidrs.split(",").map((cidr) -> cidr.trim())
+          .filter((cidr) -> !cidr.isBlank).any((cidr) -> !cidr.matches(cidrPattern))
+  },
+  new sdkRules.FieldRule {
+    code = sdkValidate.valueNotAllowedCode
+    fieldPath = certificateKey
+    message = "Client-validation CA certificate names must be unique"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (certificates = (scope.config.getOrNull(certificateKey) as Listing?) ?? new Listing {})
+        !certificates.toList().flatMap((certificate) ->
+          if (certificate is Mapping)
+            let (name = certificate.getOrNull("name") as String?)
+              if (name != null && !name.isBlank) List(name) else List()
+          else List()
+        ).isDistinct
+  },
+  new sdkRules.RowRule {
+    code = sdkValidate.inputPatternMismatchCode
+    message = "Certificate name must be at most 229 characters because the managed Secret adds a 24-character prefix"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    paths = (scope) ->
+      let (certificates = (scope.config.getOrNull(certificateKey) as Listing?) ?? new Listing {})
+        certificates.toList().mapIndexed((index, certificate) ->
+          if (certificate is Mapping)
+            let (name = certificate.getOrNull("name") as String?)
+              if (name != null && !name.isBlank && !"envoy-client-validation-\(name)".matches(Regex("^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$")))
+                List("\(certificateKey)[\(index)].name")
+              else List()
+          else List()
+        ).flatMap((paths) -> paths)
+  },
+  // Blank text is a missing certificate value even when the JSON member exists.
+  new sdkRules.RowRule {
+    code = sdkValidate.requiredFieldMissingCode
+    message = "Certificate name and ca_crt must not be blank"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    paths = (scope) ->
+      let (certificates = (scope.config.getOrNull(certificateKey) as Listing?) ?? new Listing {})
+        certificates.toList().mapIndexed((index, certificate) ->
+          if (certificate is Mapping)
+            List("name", "ca_crt").flatMap((key) ->
+              let (value = certificate.getOrNull(key) as String?)
+                if (value != null && value.isBlank) List("\(certificateKey)[\(index)].\(key)") else List()
+            )
+          else List()
+        ).flatMap((paths) -> paths)
+  },
+)

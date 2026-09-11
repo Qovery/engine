@@ -1,0 +1,16 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.certManagerConfigs.configuration.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+import "profile.pkl"
+
+settings: List<sdkSettings.Setting> = List(
+  new sdkSettings.EnumSetting {
+    key = profile.existingSecretNameKey
+    required = false
+    default = ""
+    label = "Existing TLS Secret"
+    description = "Name of a pre-provisioned kubernetes.io/tls Secret in the cert-manager namespace. Must be empty or exactly \(profile.gatewayCertificateSecretName), which the Gateway requires."
+    options = List("", profile.gatewayCertificateSecretName).map((choice) -> new sdkSettings.Option { value = choice })
+  },
+)

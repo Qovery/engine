@@ -1,0 +1,54 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryGatewayClass.configuration.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+// Both public and private GatewayClasses receive the same legacy cluster-wide HPA and log policy.
+settings: List<sdkSettings.Setting> = List(
+  new sdkSettings.BoolSetting {
+    key = "envoy.hpa.enabled"
+    required = false
+    default = false
+    label = "Enable GatewayClass HPA"
+    description = "Enables horizontal pod autoscaling for the public and private GatewayClass proxies."
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.min_number_instances"
+    label = "GatewayClass HPA minimum replicas"
+    description = "Minimum replicas for each GatewayClass proxy."
+    default = 1
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.max_number_instances"
+    label = "GatewayClass HPA maximum replicas"
+    description = "Maximum replicas for each GatewayClass proxy."
+    default = 1
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.cpu_average_utilization_percentage_threshold"
+    label = "GatewayClass HPA CPU target"
+    description = "CPU utilization target percentage for each GatewayClass proxy."
+    default = null
+    min = 1
+    max = 100
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.memory_average_utilization_percentage_threshold"
+    label = "GatewayClass HPA memory target"
+    description = "Memory utilization target percentage for each GatewayClass proxy."
+    default = null
+    min = 1
+    max = 100
+  },
+  new sdkSettings.StringSetting {
+    key = "envoy.access_log.format"
+    required = false
+    default = ""
+    label = "Envoy access log format"
+    description = "Optional raw JSON access-log format applied to public and private GatewayClass proxies. Do not base64-encode it."
+  },
+)

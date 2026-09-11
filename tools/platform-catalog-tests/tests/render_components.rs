@@ -87,6 +87,81 @@ fn priority_classes_render_with_expected_names() {
 }
 
 #[test]
+fn gateway_api_stack_renders_the_qovery_controller_and_public_gateway() {
+    let crd_documents = render(
+        "envoy-gateway-crd",
+        "lib-engine/lib/common/bootstrap/charts/envoy-gateway-crd",
+        "qovery",
+        &[values(
+            "platform-catalog/components/envoy-gateway-crd/config/static-values/base.yaml",
+        )],
+        &[],
+    );
+    assert!(
+        document_by_kind_and_name(
+            &crd_documents,
+            "CustomResourceDefinition",
+            "gatewayclasses.gateway.networking.k8s.io"
+        )
+        .is_some()
+    );
+    assert!(
+        document_by_kind_and_name(&crd_documents, "CustomResourceDefinition", "envoyproxies.gateway.envoyproxy.io")
+            .is_some()
+    );
+
+    let envoy_documents = render(
+        "envoy-gateway",
+        "lib-engine/lib/common/bootstrap/charts/envoy-gateway",
+        "qovery",
+        &[values(
+            "platform-catalog/components/envoy-gateway/config/static-values/base.yaml",
+        )],
+        &[],
+    );
+    assert!(document_by_kind_and_name(&envoy_documents, "Deployment", "envoy-gateway").is_some());
+    let configuration = document_by_kind_and_name(&envoy_documents, "ConfigMap", "envoy-gateway-config")
+        .expect("Envoy Gateway configuration must render");
+    assert!(any_document_contains_fragment(
+        std::slice::from_ref(configuration),
+        "qovery.com/gateway-controller"
+    ));
+
+    let class_documents = render(
+        "qovery-gateway-class",
+        "lib-engine/lib/common/bootstrap/charts/qovery-gateway-class",
+        "qovery",
+        &[values(
+            "platform-catalog/components/qovery-gateway-class/config/static-values/base.yaml",
+        )],
+        &[],
+    );
+    assert!(document_by_kind_and_name(&class_documents, "GatewayClass", "qovery-public-gateway").is_some());
+    assert!(document_by_kind_and_name(&class_documents, "GatewayClass", "qovery-private-gateway").is_some());
+
+    let runtime_values = write_runtime_values("dns:\n  domain: '*.example.com'\n");
+    let cluster_gateway_documents = render(
+        "qovery-cluster-gateway",
+        "lib-engine/lib/common/bootstrap/charts/qovery-cluster-gateway",
+        "qovery",
+        &[
+            values("platform-catalog/components/qovery-cluster-gateway/config/static-values/base.yaml"),
+            runtime_values.path().to_path_buf(),
+        ],
+        &[],
+    );
+    let gateway = document_by_kind_and_name(&cluster_gateway_documents, "Gateway", "qovery-cluster-public-gateway")
+        .expect("public cluster Gateway must render");
+    assert_eq!(
+        yaml_string(gateway, &["spec", "gatewayClassName"]),
+        Some("qovery-public-gateway")
+    );
+    let dns_route = document_by_kind_and_name(&cluster_gateway_documents, "HTTPRoute", "dns-only-route")
+        .expect("DNS route must render");
+    assert!(any_document_contains(std::slice::from_ref(dns_route), "*.example.com"));
+}
+
+#[test]
 fn cluster_agent_does_not_receive_the_legacy_loki_url() {
     let documents = render(
         "cluster-agent",
@@ -594,7 +669,7 @@ fn external_dns_secret_contains_only_the_encoded_provider_token() {
 }
 
 #[test]
-fn external_dns_is_service_only_and_reloads_when_credentials_rotate() {
+fn external_dns_watches_gateway_api_routes_and_reloads_when_credentials_rotate() {
     let runtime_values = write_runtime_values(
         "domainFilters:\n  - slice-4-8.example.com\ntxtOwnerId: 11111111-1111-1111-1111-111111111111\nextraArgs:\n  pdns-server: https://dns.example.com:443\npodAnnotations:\n  qovery.com/external-dns-credential-revision: revision-1\n",
     );
@@ -622,11 +697,33 @@ fn external_dns_is_service_only_and_reloads_when_credentials_rotate() {
         );
     }
     assert!(!any_document_contains(&documents, "--source=ingress"));
-    assert!(!any_document_contains(&documents, "--source=gateway"));
+    assert!(!any_document_contains(&documents, "--source=gateway-tlsroute"));
     assert!(
         !documents
             .iter()
             .any(|document| document_kind(document) == Some("ServiceMonitor"))
+    );
+    let static_values = parse_yaml_file(values(
+        "platform-catalog/components/external-dns/config/static-values/base.yaml",
+    ));
+    let sources = yaml_path(&static_values, &["sources"])
+        .and_then(Value::as_sequence)
+        .expect("ExternalDNS sources must be configured");
+    assert!(
+        sources
+            .iter()
+            .any(|source| source.as_str() == Some("gateway-httproute"))
+    );
+    assert!(
+        sources
+            .iter()
+            .any(|source| source.as_str() == Some("gateway-grpcroute"))
+    );
+    assert!(!sources.iter().any(|source| source.as_str() == Some("gateway")));
+    assert!(!sources.iter().any(|source| source.as_str() == Some("gateway-tlsroute")));
+    assert_eq!(
+        yaml_path(&static_values, &["enableGatewayListenerSets"]).and_then(Value::as_bool),
+        Some(true)
     );
 }
 
@@ -680,4 +777,34 @@ fn cert_manager_configs_render_dns01_resources_without_leaking_the_token() {
         "platform-catalog/components/cert-manager-configs/config/static-values/base.yaml",
     ));
     assert_eq!(yaml_string(&static_values, &["namespace"]), Some("qovery"));
+}
+
+#[test]
+fn cert_manager_configs_reference_a_preprovisioned_tls_secret_without_rendering_it() {
+    let runtime_values = write_runtime_values(
+        "k8sDeployApiGateway: true\nuserProvidedCertificate:\n  existingSecretName: letsencrypt-acme-qovery-cert\n",
+    );
+    let documents = render(
+        "cert-manager-configs",
+        "lib-engine/lib/common/bootstrap/charts/cert-manager-configs",
+        "qovery",
+        &[
+            values("platform-catalog/components/cert-manager-configs/config/static-values/base.yaml"),
+            runtime_values.path().to_owned(),
+        ],
+        &[],
+    );
+
+    assert!(
+        document_by_kind_and_name(&documents, "Certificate", "qovery-letsencrypt-tls").is_none(),
+        "an existing customer TLS Secret must suppress the chart-managed Certificate"
+    );
+    assert!(
+        document_by_kind_and_name(&documents, "Secret", "letsencrypt-acme-qovery-cert").is_none(),
+        "the chart must not receive or recreate customer TLS key material"
+    );
+    assert!(
+        document_by_kind_and_name(&documents, "ReferenceGrant", "allow-gateway-to-cert-manager-secrets").is_some(),
+        "the gateway must retain permission to reference the pre-provisioned Secret"
+    );
 }

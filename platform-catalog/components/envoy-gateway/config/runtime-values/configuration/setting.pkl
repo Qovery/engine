@@ -1,0 +1,48 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.envoyGateway.configuration.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+// Mirrors the controller-specific subset of the legacy `envoy.*` cluster settings.
+settings: List<sdkSettings.Setting> = List(
+  new sdkSettings.IntSetting {
+    key = "envoy.gateway_controller.replicas"
+    label = "Envoy Gateway controller replicas"
+    description = "Fixed replica count for the Envoy Gateway controller."
+    default = 1
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.vcpu.request_in_milli_cpu"
+    label = "Controller CPU request (mCPU)"
+    description = "CPU request for each Envoy Gateway controller pod, in millicores."
+    default = 100
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.vcpu.limit_in_milli_cpu"
+    label = "Controller CPU limit (mCPU)"
+    description = "CPU limit for each Envoy Gateway controller pod, in millicores."
+    default = 1000
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.memory.request_in_mib"
+    label = "Controller memory request (MiB)"
+    description = "Memory request for each Envoy Gateway controller pod, in MiB."
+    default = 256
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.memory.limit_in_mib"
+    label = "Controller memory limit (MiB)"
+    description = "Memory limit for each Envoy Gateway controller pod, in MiB."
+    default = 1024
+    min = 1
+    max = null
+  },
+)

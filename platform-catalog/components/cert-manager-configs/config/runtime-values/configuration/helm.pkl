@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.certManagerConfigs.configuration.helm
+
+import "profile.pkl"
+import "../sdk/helm.pkl" as sdkHelm
+
+function compile(profileConfig: Mapping): Mapping =
+  new Mapping {
+    ["userProvidedCertificate"] = new Mapping {
+      ["existingSecretName"] = profile.existingSecretName(profileConfig)
+    }
+  }
+
+fragment: sdkHelm.Fragment = (scope) -> compile(scope.config)

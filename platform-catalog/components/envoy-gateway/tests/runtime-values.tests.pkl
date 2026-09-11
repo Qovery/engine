@@ -1,0 +1,59 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/settings.pkl"
+import "../config/runtime-values/configuration/profile.pkl"
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+
+local function evaluate(operation: contract.Operation, profileConfig: Mapping): contract.EvaluationResult =
+  sdkEvaluate.evaluate(settings.component, sdkRequest.build(operation, profileConfig, null, new Mapping {}, List()))
+
+facts {
+  ["DESCRIBE exposes controller resource fields"] {
+    let (result = evaluate(contract.describeOperation, new Mapping {}))
+      result.fields.map((field) -> field.key).contains("envoy.vcpu.request_in_milli_cpu")
+        && result.fields.map((field) -> field.key).contains("envoy.memory.limit_in_mib")
+  }
+
+  ["COMPILE maps controller settings to Helm resources"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {
+      ["envoy.gateway_controller.replicas"] = 2
+      ["envoy.vcpu.request_in_milli_cpu"] = 250
+      ["envoy.memory.limit_in_mib"] = 2048
+    }))
+      result.violations.isEmpty
+        && (((result.helmValues as Mapping)["deployment"] as Mapping)["replicas"] == 2)
+        && ((((((result.helmValues as Mapping)["deployment"] as Mapping)["envoyGateway"] as Mapping)["resources"] as Mapping)["requests"] as Mapping)["cpu"] == "250m")
+  }
+
+  ["VALIDATE rejects a CPU limit below its request"] {
+    let (result = evaluate(contract.validateOperation, new Mapping {
+      ["envoy.vcpu.request_in_milli_cpu"] = 1000
+      ["envoy.vcpu.limit_in_milli_cpu"] = 100
+    }))
+      result.violations.any((violation) -> violation.fieldPath == "envoy.vcpu.limit_in_milli_cpu")
+  }
+
+  ["PROFILE falls back to the default number for malformed resource values"] {
+    profile.number(
+      new Mapping { ["envoy.vcpu.request_in_milli_cpu"] = "not-a-number" },
+      "envoy.vcpu.request_in_milli_cpu",
+      100,
+    ) == 100
+  }
+
+  ["VALIDATE does not use defaults for malformed resource bounds"] {
+    let (result = evaluate(contract.validateOperation, new Mapping {
+      ["envoy.vcpu.request_in_milli_cpu"] = "high"
+      ["envoy.vcpu.limit_in_milli_cpu"] = 50
+    }))
+      result.violations.any((violation) ->
+        violation.code == "INVALID_TYPE"
+          && violation.fieldPath == "envoy.vcpu.request_in_milli_cpu"
+      )
+        && !result.violations.any((violation) ->
+          violation.message == "CPU limit must be greater than or equal to CPU request"
+        )
+  }
+}

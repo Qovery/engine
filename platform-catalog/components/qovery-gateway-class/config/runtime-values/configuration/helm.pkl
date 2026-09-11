@@ -1,0 +1,32 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryGatewayClass.configuration.helm
+
+import "profile.pkl"
+import "../sdk/helm.pkl" as sdkHelm
+
+function compile(profileConfig: Mapping): Mapping =
+  new Mapping {
+    ["gatewayClass"] = new Mapping {
+      ["qoveryPublic"] = gatewayValues(profileConfig)
+      ["qoveryPrivate"] = gatewayValues(profileConfig)
+    }
+  }
+
+local function gatewayValues(profileConfig: Mapping): Mapping =
+  let (accessLogFormat = profile.string(profileConfig, "envoy.access_log.format", ""))
+    new Mapping {
+    ["hpa"] = new Mapping {
+      ["enabled"] = profile.bool(profileConfig, "envoy.hpa.enabled", false)
+      ["minReplicas"] = profile.number(profileConfig, "envoy.hpa.min_number_instances", 1)
+      ["maxReplicas"] = profile.number(profileConfig, "envoy.hpa.max_number_instances", 1)
+      ["targetCPUUtilizationPercentage"] = profile.optionalNumber(profileConfig, "envoy.hpa.cpu_average_utilization_percentage_threshold")
+      ["targetMemoryUtilizationPercentage"] = profile.optionalNumber(profileConfig, "envoy.hpa.memory_average_utilization_percentage_threshold")
+    }
+    ["accessLog"] = new Mapping {
+      when (!accessLogFormat.isBlank) {
+        ["format"] = accessLogFormat.base64
+      }
+    }
+  }
+
+fragment: sdkHelm.Fragment = (scope) -> compile(scope.config)

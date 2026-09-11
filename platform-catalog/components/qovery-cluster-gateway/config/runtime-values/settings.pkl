@@ -1,0 +1,18 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryClusterGateway.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "configuration/setting.pkl" as configurationSetting
+import "configuration/helm.pkl" as configurationHelm
+import "configuration/dependencies.pkl" as configurationDependencies
+import "configuration/inputs.pkl" as configurationInputs
+
+component: sdkEvaluate.Component = new {
+  label = "Qovery cluster gateway"
+  inputs = configurationInputs.requiredInputs
+  features = List(new sdkEvaluate.Feature {
+    settings = configurationSetting.settings
+    rules = configurationDependencies.rules
+    fragment = configurationHelm.fragment
+  })
+}

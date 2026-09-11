@@ -1,0 +1,18 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryGatewayClass.profile
+
+function bool(config: Mapping, key: String, defaultValue: Boolean): Boolean =
+  let (value = config.getOrNull(key) ?? defaultValue)
+    if (value is Boolean) value else defaultValue
+
+function number(config: Mapping, key: String, defaultValue: Int): Int =
+  let (value = config.getOrNull(key) ?? defaultValue)
+    if (value is Int) value else defaultValue
+
+function optionalNumber(config: Mapping, key: String): Int? =
+  let (value = config.getOrNull(key))
+    if (value is Int) value else null
+
+function string(config: Mapping, key: String, defaultValue: String): String =
+  let (value = config.getOrNull(key) ?? defaultValue)
+    if (value is String) value else defaultValue

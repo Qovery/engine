@@ -66,6 +66,15 @@ fn template_layers_keep_the_expected_component_order() {
     );
     assert_eq!(layer_components(&template, "log-infra"), ["loki", "alloy"]);
     assert_eq!(
+        layer_components(&template, "gateway-api"),
+        [
+            "envoy-gateway-crd",
+            "envoy-gateway",
+            "qovery-gateway-class",
+            "qovery-cluster-gateway",
+        ]
+    );
+    assert_eq!(
         layer_components(&template, "dns-certificates"),
         [
             "cert-manager",
@@ -95,6 +104,15 @@ fn demo_template_contains_only_the_legacy_demo_components() {
         ["cluster-agent", "shell-agent", "qovery-priority-class"]
     );
     assert_eq!(
+        layer_components(&template, "gateway-api"),
+        [
+            "envoy-gateway-crd",
+            "envoy-gateway",
+            "qovery-gateway-class",
+            "qovery-cluster-gateway",
+        ]
+    );
+    assert_eq!(
         layer_components(&template, "dns-certificates"),
         [
             "cert-manager",
@@ -108,7 +126,7 @@ fn demo_template_contains_only_the_legacy_demo_components() {
     let layers = yaml_path(&template, &["platformTemplateRelease", "layers"])
         .and_then(Value::as_sequence)
         .expect("demo template must declare layers");
-    assert_eq!(layers.len(), 2);
+    assert_eq!(layers.len(), 3);
     assert!(layers.iter().all(|layer| {
         yaml_path(layer, &["mandatory"]).and_then(Value::as_bool) == Some(true)
             && yaml_path(layer, &["enabledByDefault"]).and_then(Value::as_bool) == Some(true)
@@ -117,6 +135,40 @@ fn demo_template_contains_only_the_legacy_demo_components() {
     assert!(!contains_component(&template, "alloy"));
     assert!(!contains_component(&template, "qovery-engine"));
     assert!(!contains_component(&template, "ingress-nginx"));
+}
+
+#[test]
+fn gateway_components_declare_their_execution_dependencies() {
+    for template_path in [
+        "platform-catalog/templates/qovery-cluster-v0/template.yaml",
+        "platform-catalog/templates/qovery-demo-v0/template.yaml",
+    ] {
+        let template = parse_yaml_file(repository_path(template_path));
+        let cluster_gateway = component(&template, "qovery-cluster-gateway");
+        let dependencies = yaml_path(cluster_gateway, &["dependsOn"])
+            .and_then(Value::as_sequence)
+            .expect("cluster gateway must declare its prerequisites");
+        let prerequisite_keys = dependencies
+            .iter()
+            .filter(|dependency| yaml_string(dependency, &["kind"]) == Some("requires"))
+            .filter_map(|dependency| yaml_string(dependency, &["component"]))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            prerequisite_keys,
+            ["envoy-gateway-crd", "envoy-gateway", "qovery-gateway-class"],
+            "{template_path} must create the Gateway only after its API, controller, and class"
+        );
+
+        let input = yaml_path(cluster_gateway, &["runtimeInputs"])
+            .and_then(Value::as_sequence)
+            .and_then(|inputs| {
+                inputs
+                    .iter()
+                    .find(|input| yaml_string(input, &["name"]) == Some("dns.managedDomain"))
+            })
+            .expect("cluster gateway must declare its managed DNS input");
+        assert_eq!(yaml_string(input, &["source", "key"]), Some("dns.managedDomain"));
+    }
 }
 
 fn contains_component(template: &Value, component_key: &str) -> bool {

@@ -556,11 +556,15 @@ fn platform_workloads_wait_for_optional_karpenter_without_blocking_its_bootstrap
         "cert-manager",
         "qovery-cert-manager-webhook",
         "external-dns",
+        "envoy-gateway",
+        "qovery-cluster-gateway",
     ];
     let other_components = [
         "qovery-priority-class",
         "external-dns-secret",
         "cert-manager-configs",
+        "envoy-gateway-crd",
+        "qovery-gateway-class",
         "karpenter-crd",
         "karpenter",
         "karpenter-configuration",

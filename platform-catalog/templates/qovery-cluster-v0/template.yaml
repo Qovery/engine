@@ -397,6 +397,98 @@ platformTemplateRelease:
             chart: alloy
             version: v1
             digest: __PUBLISHED_CONFIG_DIGEST__
+    - key: gateway-api
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+      mandatory: true
+      enabledByDefault: true
+      components:
+        - key: envoy-gateway-crd
+          kind: HELM
+          release:
+            name: envoy-gateway-crd
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: gateway-crds-helm
+            version: v1.8.3
+          configRef:
+            chart: envoy-gateway-crd
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: envoy-gateway
+          kind: HELM
+          release:
+            name: envoy-gateway
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: gateway-helm
+            version: v1.8.3
+          dependsOn:
+            - component: karpenter-configuration
+              kind: after
+            - component: envoy-gateway-crd
+              kind: requires
+          configRef:
+            chart: envoy-gateway
+            version: v1
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: qovery-gateway-class
+          kind: HELM
+          release:
+            name: qovery-gateway-class
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-gateway-class
+            version: 0.1.0
+          dependsOn:
+            - component: envoy-gateway-crd
+              kind: requires
+            - component: envoy-gateway
+              kind: requires
+          configRef:
+            chart: qovery-gateway-class
+            version: v1
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: qovery-cluster-gateway
+          kind: HELM
+          release:
+            name: qovery-cluster-gateway
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-cluster-gateway
+            version: 0.1.0
+          dependsOn:
+            - component: karpenter-configuration
+              kind: after
+            - component: envoy-gateway-crd
+              kind: requires
+            - component: envoy-gateway
+              kind: requires
+            - component: qovery-gateway-class
+              kind: requires
+          configRef:
+            chart: qovery-cluster-gateway
+            version: v1
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.managedDomain
+              source:
+                kind: qcoreValue
+                key: dns.managedDomain
+              required: true
     - key: dns-certificates
       applicability:
         modes: [CUSTOMER_MANAGED]
@@ -476,6 +568,8 @@ platformTemplateRelease:
               kind: after
             - component: external-dns-secret
               kind: requires
+            - component: qovery-cluster-gateway
+              kind: after
           configRef:
             chart: external-dns
             version: v1
@@ -528,6 +622,9 @@ platformTemplateRelease:
           configRef:
             chart: cert-manager-configs
             version: v1
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
             digest: __PUBLISHED_CONFIG_DIGEST__
           runtimeInputs:
             - name: dns.providerKind

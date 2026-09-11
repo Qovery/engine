@@ -1,0 +1,9 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.certManagerConfigs.profile
+
+existingSecretNameKey: String = "envoy.custom_certificate.existing_secret_name"
+gatewayCertificateSecretName: String = "letsencrypt-acme-qovery-cert"
+
+function existingSecretName(config: Mapping): String? =
+  let (value = config.getOrNull(existingSecretNameKey) ?? "")
+    if (value is String) value else null

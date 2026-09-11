@@ -1,4 +1,4 @@
-# Source 1 — reviewed Service-only Qovery DNS behavior.
+# Source 1 — reviewed Qovery DNS behavior for Services and the Gateway API stack.
 annotationFilter: "external-dns.alpha.kubernetes.io/exclude notin (true)"
 triggerLoopOnEvent: true
 policy: sync
@@ -11,7 +11,13 @@ image:
 provider: pdns
 sources:
   - service
-enableGatewayListenerSets: false
+  - gateway-httproute
+  - gateway-grpcroute
+# HACK(QOV-2106): ExternalDNS still watches TLSRoute through the deprecated v1alpha2 API,
+# while the installed Gateway API CRDs serve it only at v1. Re-enable gateway-tlsroute after
+# https://github.com/kubernetes-sigs/external-dns/issues/6247 is fixed upstream and the chart is bumped.
+# Envoy Gateway installs ListenerSet through envoy-gateway-crd.
+enableGatewayListenerSets: true
 
 extraArgs:
   pdns-api-key: "$(PDNS_API_KEY)"

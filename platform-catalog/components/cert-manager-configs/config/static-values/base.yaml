@@ -19,3 +19,4 @@ k8sRemoveNginx: true
 userProvidedCertificate:
   crt: ""
   key: ""
+  existingSecretName: ""

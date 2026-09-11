@@ -1,0 +1,266 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.resources
+
+import "evaluate.pkl"
+import "helm.pkl"
+import "rules.pkl"
+import "settings.pkl"
+
+// Kubernetes resource budgets as one composite declaration. A component names its workload
+// targets and gives, for each preset, the budget of every target. The SDK derives everything
+// else: the profile selector, the per-target CUSTOM fields pre-filled with a recommendation, the
+// "limit at least request" rules and the `<target>.resources` chart blocks. Every Helm chart has
+// resources blocks, so this concept lives here rather than in each component.
+//
+// Wire format: `<key>.profile` selects CHART_DEFAULT, a preset, or CUSTOM;
+// `<key>.<target>.{requests,limits}.{cpuMilli,memoryMi}` are the CUSTOM fields.
+
+// Product units are integers: cpuMilli compiles to "<n>m" and memoryMi to "<n>Mi". Upper bounds
+// catch unit mistakes (a value entered in cores, bytes or KiB) before pod scheduling.
+const cpuMilliMin: Int = 1
+const cpuMilliMax: Int = 64000
+const memoryMiMin: Int = 1
+const memoryMiMax: Int = 262144
+
+// CHART_DEFAULT emits nothing so existing installations keep the chart behavior; CUSTOM enables
+// the per-target fields.
+const chartDefaultProfile: String = "CHART_DEFAULT"
+const customProfile: String = "CUSTOM"
+
+// One workload of the chart, named after its values key. A target inactive for the current draft
+// gets no field, no check and no resources block.
+class Target {
+  key: String
+  label: String
+  activeWhen: settings.Predicate = (_) -> true
+}
+
+// Requests are always present; limits stay optional because a CPU limit throttles and a memory
+// limit OOM-kills, so each one must be a deliberate choice rather than a structural obligation.
+class Budget {
+  cpuMilliRequest: Int
+  cpuMilliLimit: Int? = null
+  memoryMiRequest: Int
+  memoryMiLimit: Int? = null
+}
+
+// The platform preset policy: no CPU limit (throttling needs an explicit isolation justification)
+// and a memory limit at twice the request as documented headroom. Declare a Budget directly to
+// depart from it.
+const function budget(cpuMilli: Int, memoryMi: Int): Budget = new {
+  cpuMilliRequest = cpuMilli
+  memoryMiRequest = memoryMi
+  memoryMiLimit = memoryMi * 2
+}
+
+class ResourceProfiles {
+  // Prefix of every field key.
+  key: String = "resources"
+  label: String = "Resource profile"
+  description: String
+  targets: List<Target>(!isEmpty, map((target) -> target.key).isDistinct)
+
+  // Preset name -> target key -> budget. Names are offered in this order between CHART_DEFAULT and
+  // CUSTOM, and every preset must budget every target. A published preset table is immutable:
+  // changing a number requires a new bundle version.
+  presets: Mapping<String, Mapping<String, Budget>>(
+    !isEmpty,
+    !keys.contains(chartDefaultProfile) && !keys.contains(customProfile),
+    toMap().values.every((table) -> table.keys.toSet() == targets.map((target) -> target.key).toSet()),
+  )
+
+  // The preset whose budgets pre-fill the CUSTOM fields. The customer must still confirm them: a
+  // request left empty under CUSTOM is reported, never silently filled.
+  recommended: String(presets.containsKey(this))
+
+  profileKey: String = "\(key).profile"
+  profileNames: List<String> = List(chartDefaultProfile) + presets.keys.toList() + List(customProfile)
+
+  function selectedProfile(scope: settings.Scope): String? = scope.config[profileKey] as String?
+  function isCustom(scope: settings.Scope): Boolean = selectedProfile(scope) == customProfile
+  function activeTargets(scope: settings.Scope): List<Target> = targets.filter((target) -> target.activeWhen.apply(scope))
+  function isActive(scope: settings.Scope, target: Target): Boolean = isCustom(scope) && target.activeWhen.apply(scope)
+  function budgetFor(profileName: String, target: Target): Budget = presets[profileName][target.key]
+
+  // What the component lists in its settings.pkl: the Console fields, the dependency rules and
+  // the Helm fragment, as one feature.
+  // Inside the object body `this` is the Feature being built, so the profiles are captured first.
+  feature: evaluate.Feature =
+    let (profiles = this)
+      new {
+        settings = List(selector(profiles)) + profiles.targets.flatMap((target) -> customFields(profiles, target))
+        rules = profiles.targets.flatMap((target) -> limitRules(profiles, target))
+        fragment = resourcesFragment(profiles)
+      }
+}
+
+const function cpuRequestKey(profiles: ResourceProfiles, target: Target): String = "\(profiles.key).\(target.key).requests.cpuMilli"
+const function cpuLimitKey(profiles: ResourceProfiles, target: Target): String = "\(profiles.key).\(target.key).limits.cpuMilli"
+const function memoryRequestKey(profiles: ResourceProfiles, target: Target): String = "\(profiles.key).\(target.key).requests.memoryMi"
+const function memoryLimitKey(profiles: ResourceProfiles, target: Target): String = "\(profiles.key).\(target.key).limits.memoryMi"
+
+// The selector. Without read-only rendering in the contract, exposing the custom fields while a
+// preset is selected would let a customer edit values that are deliberately ignored; contextual
+// operations therefore publish each preset's budgets for the active topology in the description.
+const local function selector(profiles: ResourceProfiles): settings.EnumSetting = new {
+  key = profiles.profileKey
+  label = profiles.label
+  description = profiles.description
+  default = chartDefaultProfile
+  options = profiles.profileNames.map((name) -> new settings.Option { value = name })
+  contextualDescription = (scope) ->
+    "\(profiles.description) Preset budgets, listed here temporarily until the Console shows them as read-only fields — \(presetSummary(profiles, profiles.activeTargets(scope)))"
+}
+
+const local function presetSummary(profiles: ResourceProfiles, activeTargets: List<Target>): String =
+  profiles.presets.keys
+    .map((profileName) ->
+      "\(profileName): "
+        + activeTargets
+          .map((target) -> "\(target.key) \(budgetSummary(profiles.budgetFor(profileName, target)))")
+          .join(", ")
+    )
+    .join("; ")
+
+const local function budgetSummary(budget: Budget): String =
+  "\(budget.cpuMilliRequest)m/\(budget.memoryMiRequest)Mi"
+    + (if (budget.memoryMiLimit == null) "" else " (limit \(budget.memoryMiLimit)Mi)")
+
+// The four CUSTOM fields of one target, active only while CUSTOM is selected and the target is
+// part of the topology. Requests are required then; limits stay optional.
+const local function customFields(profiles: ResourceProfiles, target: Target): List<settings.Setting> =
+  let (seed = profiles.budgetFor(profiles.recommended, target))
+    List(
+      customField(
+        profiles,
+        target,
+        cpuRequestKey(profiles, target),
+        "\(target.label) CPU request (millicores)",
+        "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+        seed.cpuMilliRequest,
+        cpuMilliMin,
+        cpuMilliMax,
+        true,
+      ),
+      customField(
+        profiles,
+        target,
+        cpuLimitKey(profiles, target),
+        "\(target.label) CPU limit (millicores)",
+        "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+        seed.cpuMilliLimit,
+        cpuMilliMin,
+        cpuMilliMax,
+        false,
+      ),
+      customField(
+        profiles,
+        target,
+        memoryRequestKey(profiles, target),
+        "\(target.label) memory request (MiB)",
+        "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+        seed.memoryMiRequest,
+        memoryMiMin,
+        memoryMiMax,
+        true,
+      ),
+      customField(
+        profiles,
+        target,
+        memoryLimitKey(profiles, target),
+        "\(target.label) memory limit (MiB)",
+        "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+        seed.memoryMiLimit,
+        memoryMiMin,
+        memoryMiMax,
+        false,
+      ),
+    )
+
+const local function customField(
+  profiles: ResourceProfiles,
+  target: Target,
+  fieldKey: String,
+  fieldLabel: String,
+  fieldDescription: String,
+  seedValue: Int?,
+  minValue: Int,
+  maxValue: Int,
+  isRequest: Boolean,
+): settings.IntSetting = new {
+  key = fieldKey
+  label = fieldLabel
+  description = fieldDescription
+  suggested = seedValue
+  min = minValue
+  max = maxValue
+  activeWhen = (scope) -> profiles.isActive(scope, target)
+  requiredWhen = (scope) -> isRequest && profiles.isActive(scope, target)
+  requiredCode = "REQUIRED_RESOURCE_REQUEST_MISSING"
+  requiredMessage = (componentLabel) -> "\(componentLabel) resource profile CUSTOM requires \(fieldKey) for the active topology"
+}
+
+// A limit below its request cannot be scheduled. Checked per active target, independently for
+// CPU and memory, only once both values are well-typed: missing or ill-typed values are already
+// reported by the fields themselves.
+const local function limitRules(profiles: ResourceProfiles, target: Target): List<rules.Rule> = List(
+  limitAboveRequest(profiles, target, cpuRequestKey(profiles, target), cpuLimitKey(profiles, target)),
+  limitAboveRequest(profiles, target, memoryRequestKey(profiles, target), memoryLimitKey(profiles, target)),
+)
+
+const local function limitAboveRequest(
+  profiles: ResourceProfiles,
+  target: Target,
+  requestKey: String,
+  limitKey: String,
+): rules.FieldRule = new {
+  code = "LIMIT_BELOW_REQUEST"
+  fieldPath = limitKey
+  message = (componentLabel) -> "\(componentLabel) \(limitKey) must be at least \(requestKey)"
+  violated = (scope) ->
+    let (request = scope.config[requestKey])
+    let (limit = scope.config[limitKey])
+      profiles.isActive(scope, target) && request is Int && limit is Int && limit < request
+}
+
+// One `resources` block per active target. The compiled values are complete on their own: no
+// namespace LimitRange or other admission-time default is needed to finish them.
+const local function resourcesFragment(profiles: ResourceProfiles): helm.Fragment = (scope) ->
+  let (profileName = profiles.selectedProfile(scope) as String)
+    new Mapping {
+      when (profileName != chartDefaultProfile) {
+        for (target in profiles.activeTargets(scope)) {
+          [target.key] = new Mapping { ["resources"] = resourcesBlock(compiledBudget(profiles, scope.config, profileName, target)) }
+        }
+      }
+    }
+
+// COMPILE runs only on a validated configuration, so a missing custom request here is an
+// invariant failure, not a default.
+const local function compiledBudget(profiles: ResourceProfiles, cfg: Mapping, profileName: String, target: Target): Budget =
+  if (profileName == customProfile)
+    new {
+      cpuMilliRequest = cfg[cpuRequestKey(profiles, target)] as Int
+      cpuMilliLimit = cfg[cpuLimitKey(profiles, target)] as Int?
+      memoryMiRequest = cfg[memoryRequestKey(profiles, target)] as Int
+      memoryMiLimit = cfg[memoryLimitKey(profiles, target)] as Int?
+    }
+  else
+    profiles.budgetFor(profileName, target)
+
+const local function resourcesBlock(budget: Budget): Mapping = new {
+  ["requests"] = new Mapping {
+    ["cpu"] = "\(budget.cpuMilliRequest)m"
+    ["memory"] = "\(budget.memoryMiRequest)Mi"
+  }
+  when (budget.cpuMilliLimit != null || budget.memoryMiLimit != null) {
+    ["limits"] = new Mapping {
+      when (budget.cpuMilliLimit != null) {
+        ["cpu"] = "\(budget.cpuMilliLimit)m"
+      }
+      when (budget.memoryMiLimit != null) {
+        ["memory"] = "\(budget.memoryMiLimit)Mi"
+      }
+    }
+  }
+}

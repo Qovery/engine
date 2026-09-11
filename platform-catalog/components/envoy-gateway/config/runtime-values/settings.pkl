@@ -1,0 +1,17 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.envoyGateway.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "configuration/setting.pkl" as configurationSetting
+import "configuration/helm.pkl" as configurationHelm
+import "configuration/dependencies.pkl" as configurationDependencies
+
+component: sdkEvaluate.Component = new {
+  label = "Envoy Gateway controller"
+  inputs = List()
+  features = List(new sdkEvaluate.Feature {
+    settings = configurationSetting.settings
+    rules = configurationDependencies.rules
+    fragment = configurationHelm.fragment
+  })
+}

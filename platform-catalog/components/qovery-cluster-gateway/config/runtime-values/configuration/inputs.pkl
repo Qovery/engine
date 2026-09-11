@@ -1,0 +1,14 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryClusterGateway.configuration.inputs
+
+import "../contract.pkl"
+
+requiredInputs: List<contract.LogicalInput> = List(
+  new contract.LogicalInput {
+    key = "dns.managedDomain"
+    type = contract.stringFieldType
+    scope = contract.clusterScope
+    label = "Managed DNS domain"
+    description = "Root DNS domain used to derive the public gateway wildcard hostname."
+  },
+)

@@ -1,0 +1,67 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/settings.pkl"
+import "../config/runtime-values/configuration/profile.pkl"
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+
+local function evaluate(operation: contract.Operation, profileConfig: Mapping): contract.EvaluationResult =
+  sdkEvaluate.evaluate(settings.component, sdkRequest.build(operation, profileConfig, null, new Mapping {}, List()))
+
+facts {
+  ["DESCRIBE exposes the shared HPA and access-log policy"] {
+    let (result = evaluate(contract.describeOperation, new Mapping {}))
+      result.fields.map((field) -> field.key).contains("envoy.hpa.enabled")
+        && result.fields.map((field) -> field.key).contains("envoy.access_log.format")
+  }
+
+  ["COMPILE applies the HPA policy to both GatewayClasses"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {
+      ["envoy.hpa.enabled"] = true
+      ["envoy.hpa.min_number_instances"] = 2
+      ["envoy.hpa.max_number_instances"] = 6
+    }))
+      result.violations.isEmpty
+        && (((((result.helmValues as Mapping)["gatewayClass"] as Mapping)["qoveryPublic"] as Mapping)["hpa"] as Mapping)["maxReplicas"] == 6)
+        && (((((result.helmValues as Mapping)["gatewayClass"] as Mapping)["qoveryPrivate"] as Mapping)["hpa"] as Mapping)["enabled"] == true)
+  }
+
+  ["VALIDATE reports a non-integer HPA value without aborting"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { ["envoy.hpa.max_number_instances"] = "six" },
+    ))
+      result.violations.any((violation) -> violation.fieldPath == "envoy.hpa.max_number_instances")
+  }
+
+  ["PROFILE uses safe HPA defaults for malformed scalar values"] {
+    let (profileConfig = new Mapping {
+      ["envoy.hpa.enabled"] = "true"
+      ["envoy.hpa.min_number_instances"] = "two"
+      ["envoy.hpa.max_number_instances"] = "six"
+    })
+      profile.bool(profileConfig, "envoy.hpa.enabled", false) == false
+        && profile.number(profileConfig, "envoy.hpa.min_number_instances", 1) == 1
+        && profile.number(profileConfig, "envoy.hpa.max_number_instances", 1) == 1
+  }
+
+  ["COMPILE preserves the static access-log default when no format is configured"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {}))
+      (((((result.helmValues as Mapping)["gatewayClass"] as Mapping)["qoveryPublic"] as Mapping)["accessLog"] as Mapping).getOrNull("format") == null)
+  }
+
+  ["VALIDATE does not substitute defaults for malformed HPA bounds"] {
+    let (result = evaluate(contract.validateOperation, new Mapping {
+      ["envoy.hpa.min_number_instances"] = "high"
+      ["envoy.hpa.max_number_instances"] = 0
+    }))
+      result.violations.any((violation) ->
+        violation.code == "INVALID_TYPE"
+          && violation.fieldPath == "envoy.hpa.min_number_instances"
+      )
+        && !result.violations.any((violation) ->
+          violation.message == "Envoy HPA maximum replicas must be greater than or equal to minimum replicas"
+        )
+  }
+}

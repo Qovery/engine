@@ -1,0 +1,6 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.envoyGateway.profile
+
+function number(config: Mapping, key: String, defaultValue: Int): Int =
+  let (value = config.getOrNull(key) ?? defaultValue)
+    if (value is Int) value else defaultValue

@@ -1,0 +1,123 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryClusterGateway.configuration.helm
+
+import "profile.pkl"
+import "../sdk/helm.pkl" as sdkHelm
+
+function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
+  let (managedDomain = profile.string(clusterInputs, "dns.managedDomain", ""))
+  let (accessLogFormat = profile.string(profileConfig, "envoy.access_log.format", ""))
+  let (streamIdleTimeoutSeconds = profile.optionalNumber(profileConfig, "envoy.gateway_api.http_stream_idle_timeout_seconds"))
+  let (numberTrustedHops = profile.optionalNumber(profileConfig, "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops"))
+  let (defaultCustomHttpErrors = profile.optionalString(profileConfig, "envoy.custom_http_errors.default"))
+  let (defaultBackendImage = profile.optionalString(profileConfig, "envoy.default_backend.image"))
+  let (defaultBackendTag = profile.optionalString(profileConfig, "envoy.default_backend.tag"))
+  let (minReplicas = profile.optionalNumber(profileConfig, "envoy.hpa.min_number_instances"))
+  let (maxReplicas = profile.optionalNumber(profileConfig, "envoy.hpa.max_number_instances"))
+    new Mapping {
+      ["dns"] = new Mapping { ["domain"] = "*.\(managedDomain)" }
+      ["gateway"] = new Mapping {
+        ["qoveryPublic"] = new Mapping {
+          ["timeout"] = new Mapping {
+            ["http"] = new Mapping {
+              when (streamIdleTimeoutSeconds != null) {
+                ["streamIdleTimeoutSeconds"] = streamIdleTimeoutSeconds
+              }
+            }
+          }
+          ["path"] = new Mapping {
+            ["disableMergeSlashes"] = profile.boolean(profileConfig, "envoy.gateway_api.path.disable_merge_slashes", false)
+            ["escapedSlashesAction"] = profile.escapedSlashesAction(profileConfig)
+          }
+          ["xForwardedFor"] = new Mapping {
+            when (numberTrustedHops != null) {
+              ["numberTrustedHops"] = numberTrustedHops
+            }
+            ["trustedCIDRs"] = trustedCidrs(profileConfig)
+          }
+          ["clientValidation"] = new Mapping {
+            ["caCertificates"] = clientValidationCaCertificates(profileConfig)
+          }
+          ["customHttpErrors"] = new Mapping {
+            when (defaultCustomHttpErrors != null) {
+              ["default"] = defaultCustomHttpErrors
+            }
+          }
+          ["compression"] = new Mapping {
+            ["enable"] = profile.boolean(profileConfig, "envoy.enable_compression", true)
+          }
+          ["defaultBackend"] = new Mapping {
+            ["enable"] = profile.boolean(profileConfig, "envoy.default_backend.enable", false)
+            when (defaultBackendImage != null) {
+              ["image"] = defaultBackendImage
+            }
+            when (defaultBackendTag != null) {
+              ["tag"] = defaultBackendTag
+            }
+          }
+        }
+      }
+      ["envoyProxy"] = new Mapping {
+        ["qoveryPublic"] = new Mapping {
+          ["accessLog"] = new Mapping {
+            when (!accessLogFormat.isBlank) {
+              ["format"] = accessLogFormat.base64
+            }
+          }
+          ["provider"] = new Mapping {
+            ["kubernetes"] = new Mapping {
+              ["envoyHpa"] = new Mapping {
+                when (minReplicas != null) {
+                  ["minReplicas"] = minReplicas
+                }
+                when (maxReplicas != null) {
+                  ["maxReplicas"] = maxReplicas
+                }
+                ["metrics"] = hpaMetrics(profileConfig)
+              }
+            }
+          }
+        }
+      }
+    }
+
+local function hpaMetrics(profileConfig: Mapping): List<Mapping> =
+  metric("cpu", profile.optionalNumber(profileConfig, "envoy.hpa.cpu_average_utilization_percentage_threshold"))
+    + metric("memory", profile.optionalNumber(profileConfig, "envoy.hpa.memory_average_utilization_percentage_threshold"))
+
+local function metric(resourceName: String, target: Int?): List<Mapping> =
+  if (target == null)
+    List()
+  else
+    List(new Mapping {
+      ["type"] = "Resource"
+      ["resource"] = new Mapping {
+        ["name"] = resourceName
+        ["target"] = new Mapping { ["type"] = "Utilization"; ["averageUtilization"] = target }
+      }
+    })
+
+local function trustedCidrs(profileConfig: Mapping): List<String> =
+  profile.string(profileConfig, "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs", "")
+    .split(",")
+    .map((cidr) -> cidr.trim())
+    .filter((cidr) -> !cidr.isBlank)
+    .toList()
+
+local function clientValidationCaCertificates(profileConfig: Mapping): List<Mapping> =
+  let (certificates = profile.clientValidationCaCertificates(profileConfig))
+    if (certificates == null)
+      List()
+    else
+      certificates.toList()
+        .map((certificate) ->
+          let (certificateMapping = certificate as Mapping)
+            new Mapping {
+              ["name"] = "envoy-client-validation-\(certificateMapping["name"] as String)"
+              ["namespace"] = "qovery"
+              ["caCrt"] = certificateMapping["ca_crt"] as String
+            }
+        )
+        .toList()
+
+fragment: sdkHelm.Fragment = (scope) -> compile(scope.config, scope.inputs)

@@ -48,6 +48,18 @@ components:
   - name: cert-manager-configs
     chart: cert-manager-configs # Qovery-authored issuer and Certificate chart
     version: v1
+  - name: envoy-gateway-crd
+    chart: gateway-crds-helm # frozen Envoy Gateway CRD chart; upstream Chart.yaml identity
+    version: v1
+  - name: envoy-gateway
+    chart: gateway-helm # frozen Envoy Gateway controller chart; upstream Chart.yaml identity
+    version: v1
+  - name: qovery-gateway-class
+    chart: qovery-gateway-class # Qovery-authored GatewayClass and EnvoyProxy configuration
+    version: v1
+  - name: qovery-cluster-gateway
+    chart: qovery-cluster-gateway # Qovery-authored public cluster Gateway
+    version: v1
 
   # Publish Karpenter artifacts ahead of template activation.
   - name: karpenter-crd
@@ -95,6 +107,14 @@ charts:
     path: lib-engine/lib/aws/bootstrap/charts/karpenter
   - name: karpenter-custom-resources
     path: lib-engine/lib/aws/bootstrap/charts/karpenter-custom-resources
+  - name: gateway-crds-helm
+    path: lib-engine/lib/common/bootstrap/charts/envoy-gateway-crd
+  - name: gateway-helm
+    path: lib-engine/lib/common/bootstrap/charts/envoy-gateway
+  - name: qovery-gateway-class
+    path: lib-engine/lib/common/bootstrap/charts/qovery-gateway-class
+  - name: qovery-cluster-gateway
+    path: lib-engine/lib/common/bootstrap/charts/qovery-cluster-gateway
 
 # Root platform template releases are generic OCI artifacts, published last
 # after every referenced config bundle and chart has been verified.

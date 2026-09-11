@@ -1,0 +1,60 @@
+# Source 1 — public and private Qovery GatewayClass defaults from the legacy demo chart values.
+gatewayClass:
+  qoveryPublic:
+    enable: true
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 1
+      targetCPUUtilizationPercentage: null
+      targetMemoryUtilizationPercentage: null
+    accessLog:
+      format: ""
+    affinity: {}
+    topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+        whenUnsatisfiable: ScheduleAnyway
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: kubernetes.io/hostname
+        maxSkew: 1
+        whenUnsatisfiable: ScheduleAnyway
+    tolerations: []
+    pdb:
+      enabled: true
+      minAvailable: null
+      maxUnavailable: 1
+  qoveryPrivate:
+    enable: true
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 1
+      targetCPUUtilizationPercentage: null
+      targetMemoryUtilizationPercentage: null
+    accessLog:
+      format: ""
+    affinity: {}
+    topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+        whenUnsatisfiable: ScheduleAnyway
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: kubernetes.io/hostname
+        maxSkew: 1
+        whenUnsatisfiable: ScheduleAnyway
+    tolerations: []
+    pdb:
+      enabled: true
+      minAvailable: null
+      maxUnavailable: 1

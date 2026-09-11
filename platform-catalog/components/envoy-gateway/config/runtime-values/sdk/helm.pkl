@@ -1,0 +1,46 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.helm
+
+import "settings.pkl"
+
+// Helm values are produced per setting: each fragment receives the evaluation scope (resolved
+// configuration, cluster, inputs) and returns the chart values it owns. Fragments are deep-merged
+// in declaration order, which is also the key order of the compiled values. Two fragments writing
+// the same leaf is an authoring error, never a silent override: the question "which setting owns
+// this Helm key?" must always have exactly one answer.
+
+typealias Fragment = (settings.Scope) -> Mapping
+
+// The fragment of a feature that owns no chart value; written explicitly, never assumed.
+none: Fragment = (_) -> new Mapping {}
+
+function compile(fragments: List<Fragment>, scope: settings.Scope): Mapping =
+  fragments.fold(new Mapping {}, (merged, fragment) -> merge(merged, fragment.apply(scope), ""))
+
+function merge(base: Mapping, overlay: Mapping, path: String): Mapping =
+  let (conflict = firstConflict(base, overlay, path))
+    if (conflict != null)
+      throw("Helm fragments conflict on \(conflict): a chart value must be owned by exactly one setting")
+    else
+      new Mapping {
+        for (key, value in base) {
+          [key] = if (overlay.containsKey(key)) merge(value as Mapping, overlay[key] as Mapping, "\(path)\(key).") else value
+        }
+        for (key, value in overlay) {
+          when (!base.containsKey(key)) {
+            [key] = value
+          }
+        }
+      }
+
+// Checked eagerly: Mapping entries are lazy, so a conflict buried in an entry would only surface
+// when q-core renders that entry. The scan forces every shared key first.
+local function firstConflict(base: Mapping, overlay: Mapping, path: String): String? =
+  base.keys.toList().filter((key) -> overlay.containsKey(key)).fold(null, (found, key) ->
+    if (found != null)
+      found
+    else if (base[key] is Mapping && overlay[key] is Mapping)
+      firstConflict(base[key], overlay[key], "\(path)\(key).")
+    else
+      "\(path)\(key)"
+  )

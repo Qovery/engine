@@ -1,0 +1,29 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryClusterGateway.profile
+
+// Optional profile values stay null when omitted so compilation preserves the reviewed static
+// chart defaults. A non-null result always has the exact type expected by the Helm adapter.
+function optionalNumber(config: Mapping, key: String): Int? =
+  let (value = config.getOrNull(key))
+    if (value is Int) value else null
+
+function optionalString(config: Mapping, key: String): String? =
+  let (value = config.getOrNull(key))
+    if (value is String) value else null
+
+function string(config: Mapping, key: String, defaultValue: String): String =
+  let (value = config.getOrNull(key) ?? defaultValue)
+    if (value is String) value else defaultValue
+
+function clientValidationCaCertificates(config: Mapping): Listing? =
+  let (value = config.getOrNull("envoy.client_validation.ca_certificates"))
+    if (value is Listing) value else null
+
+function boolean(config: Mapping, key: String, defaultValue: Boolean): Boolean =
+  let (value = config.getOrNull(key) ?? defaultValue)
+    if (value is Boolean) value else defaultValue
+
+// Omission uses Envoy Gateway's default; null identifies a present value with the wrong type.
+function escapedSlashesAction(config: Mapping): String? =
+  let (value = config.getOrNull("envoy.gateway_api.path.escaped_slashes_action") ?? "UnescapeAndRedirect")
+    if (value is String) value else null

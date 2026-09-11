@@ -1,0 +1,29 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.envoyGateway.configuration.dependencies
+
+import "../contract.pkl"
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/validate.pkl" as sdkValidate
+
+rules: List<sdkRules.Rule> = List(
+  new sdkRules.FieldRule {
+    code = sdkValidate.valueOutOfRangeCode
+    fieldPath = "envoy.vcpu.limit_in_milli_cpu"
+    message = "CPU limit must be greater than or equal to CPU request"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (minimum = scope.config.getOrNull("envoy.vcpu.request_in_milli_cpu") as Int?)
+      let (maximum = scope.config.getOrNull("envoy.vcpu.limit_in_milli_cpu") as Int?)
+        minimum != null && maximum != null && minimum > maximum
+  },
+  new sdkRules.FieldRule {
+    code = sdkValidate.valueOutOfRangeCode
+    fieldPath = "envoy.memory.limit_in_mib"
+    message = "Memory limit must be greater than or equal to memory request"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (minimum = scope.config.getOrNull("envoy.memory.request_in_mib") as Int?)
+      let (maximum = scope.config.getOrNull("envoy.memory.limit_in_mib") as Int?)
+        minimum != null && maximum != null && minimum > maximum
+  },
+)

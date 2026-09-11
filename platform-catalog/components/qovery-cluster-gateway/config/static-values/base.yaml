@@ -1,0 +1,66 @@
+# Source 1 — provider-neutral Qovery public Gateway configuration.
+certManagerNamespace: qovery
+
+gateway:
+  qoveryPublic:
+    enable: true
+    annotations: {}
+    enableProxyProtocol: false
+    proxyProtocol:
+      optional: true
+    withUnderscoresAction: DropHeader
+    xForwardedFor:
+      numberTrustedHops: null
+      trustedCIDRs: []
+    clientValidation:
+      caCertificates: []
+    timeout:
+      http:
+        streamIdleTimeoutSeconds: null
+    path:
+      disableMergeSlashes: false
+      escapedSlashesAction: UnescapeAndRedirect
+    customHttpErrors:
+      default: null
+    compression:
+      enable: true
+    defaultBackend:
+      enable: false
+      image: null
+      tag: null
+
+envoyProxy:
+  qoveryPublic:
+    accessLog:
+      format: ""
+    provider:
+      kubernetes:
+        envoyDeployment:
+          pod:
+            affinity: {}
+            topologySpreadConstraints:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: proxy
+                topologyKey: topology.kubernetes.io/zone
+                maxSkew: 1
+                whenUnsatisfiable: ScheduleAnyway
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: proxy
+                topologyKey: kubernetes.io/hostname
+                maxSkew: 1
+                whenUnsatisfiable: ScheduleAnyway
+            tolerations: []
+        envoyHpa: {}
+        envoyPDB:
+          maxUnavailable: 1
+        envoyService:
+          annotations: {}
+
+metrics:
+  enabled: false
+  podMonitor:
+    enabled: false
+    additionalLabels:
+      release: kube-prometheus-stack

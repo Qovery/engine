@@ -1,0 +1,196 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/settings.pkl"
+import "../config/runtime-values/configuration/profile.pkl"
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+
+local function evaluate(operation: contract.Operation, profileConfig: Mapping, inputs: Mapping): contract.EvaluationResult =
+  sdkEvaluate.evaluate(settings.component, sdkRequest.build(operation, profileConfig, null, inputs, List()))
+
+facts {
+  ["COMPILE derives a wildcard hostname from the managed root domain"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {}, new Mapping { ["dns.managedDomain"] = "example.com" }))
+      result.violations.isEmpty
+        && (((result.helmValues as Mapping)["dns"] as Mapping)["domain"] == "*.example.com")
+  }
+
+  ["COMPILE requires the managed root domain"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {}, new Mapping {}))
+      result.helmValues == null
+        && result.violations.any((violation) -> violation.fieldPath == "clusterInputs.dns.managedDomain")
+  }
+
+  ["RESOLVE_REQUIREMENTS requests the managed root domain without requiring its value"] {
+    let (result = evaluate(contract.resolveRequirementsOperation, new Mapping {}, new Mapping {}))
+      result.violations.isEmpty
+        && result.requiredInputs.map((input) -> input.key).toList() == List("dns.managedDomain")
+  }
+
+  ["COMPILE applies Envoy Gateway profile fields"] {
+    let (result = evaluate(
+      contract.compileOperation,
+      new Mapping {
+        ["envoy.gateway_api.http_stream_idle_timeout_seconds"] = 60
+        ["envoy.enable_compression"] = false
+        ["envoy.hpa.min_number_instances"] = 2
+        ["envoy.hpa.max_number_instances"] = 5
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.isEmpty
+        && (((((result.helmValues as Mapping)["gateway"] as Mapping)["qoveryPublic"] as Mapping)["timeout"] as Mapping)["http"] as Mapping)["streamIdleTimeoutSeconds"] == 60
+        && ((((((result.helmValues as Mapping)["envoyProxy"] as Mapping)["qoveryPublic"] as Mapping)["provider"] as Mapping)["kubernetes"] as Mapping)["envoyHpa"] as Mapping)["maxReplicas"] == 5
+  }
+
+  ["VALIDATE rejects an inverted Envoy HPA range"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { ["envoy.hpa.min_number_instances"] = 5; ["envoy.hpa.max_number_instances"] = 2 },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) -> violation.fieldPath == "envoy.hpa.max_number_instances")
+  }
+
+  ["VALIDATE reports a non-integer HPA value without aborting"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { ["envoy.hpa.min_number_instances"] = "two" },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) -> violation.fieldPath == "envoy.hpa.min_number_instances")
+  }
+
+  ["VALIDATE skips X-Forwarded-For mode checks when CIDRs have an invalid type"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping {
+        ["envoy.client_ip_detection.x_forwarded_for.number_trusted_hops"] = 1
+        ["envoy.client_ip_detection.x_forwarded_for.trusted_cidrs"] = 10
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) ->
+        violation.code == "INVALID_TYPE"
+          && violation.fieldPath == "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs"
+      )
+        && !result.violations.any((violation) -> violation.code == "VALUE_NOT_ALLOWED")
+  }
+
+  ["VALIDATE rejects malformed trusted CIDRs"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { ["envoy.client_ip_detection.x_forwarded_for.trusted_cidrs"] = "not-a-cidr" },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) ->
+        violation.code == "INPUT_PATTERN_MISMATCH"
+          && violation.fieldPath == "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs"
+      )
+  }
+
+  ["PROFILE falls back to the default boolean for malformed values"] {
+    profile.boolean(new Mapping { ["envoy.enable_compression"] = "yes" }, "envoy.enable_compression", true) == true
+  }
+
+  ["VALIDATE rejects malformed custom HTTP errors"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { ["envoy.custom_http_errors.default"] = "404,not-a-status" },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) -> violation.fieldPath == "envoy.custom_http_errors.default")
+  }
+
+  ["VALIDATE rejects duplicate client-validation CA certificate names"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping {
+        ["envoy.client_validation.ca_certificates"] = new Listing {
+          new Mapping { ["name"] = "partner-ca"; ["ca_crt"] = "first-certificate" }
+          new Mapping { ["name"] = "partner-ca"; ["ca_crt"] = "second-certificate" }
+        }
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) ->
+        violation.fieldPath == "envoy.client_validation.ca_certificates"
+          && violation.message == "Client-validation CA certificate names must be unique"
+      )
+  }
+
+  ["VALIDATE reports the invalid client-validation CA certificate index"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping {
+        ["envoy.client_validation.ca_certificates"] = new Listing {
+          new Mapping { ["name"] = ""; ["ca_crt"] = "first-certificate" }
+          new Mapping { ["name"] = "second-ca"; ["ca_crt"] = "" }
+        }
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) -> violation.fieldPath == "envoy.client_validation.ca_certificates[0].name")
+        && result.violations.any((violation) -> violation.fieldPath == "envoy.client_validation.ca_certificates[1].ca_crt")
+  }
+
+  ["VALIDATE reports client-validation CA certificate field type errors"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping {
+        ["envoy.client_validation.ca_certificates"] = new Listing {
+          new Mapping { ["name"] = 1; ["ca_crt"] = 2 }
+        }
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) ->
+        violation.code == "INVALID_TYPE"
+          && violation.fieldPath == "envoy.client_validation.ca_certificates[0].name"
+      )
+        && result.violations.any((violation) ->
+          violation.code == "INVALID_TYPE"
+            && violation.fieldPath == "envoy.client_validation.ca_certificates[0].ca_crt"
+        )
+  }
+
+  ["VALIDATE explains the certificate name limit imposed by managed Secret names"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping {
+        ["envoy.client_validation.ca_certificates"] = new Listing {
+          new Mapping { ["name"] = "a".repeat(230); ["ca_crt"] = "certificate" }
+        }
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.any((violation) ->
+        violation.fieldPath == "envoy.client_validation.ca_certificates[0].name"
+          && violation.message.contains("at most 229 characters")
+      )
+  }
+
+  ["COMPILE preserves the static access-log default when no format is configured"] {
+    let (result = evaluate(
+      contract.compileOperation,
+      new Mapping {},
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      (((((result.helmValues as Mapping)["envoyProxy"] as Mapping)["qoveryPublic"] as Mapping)["accessLog"] as Mapping).getOrNull("format") == null)
+  }
+
+  ["COMPILE creates managed client-validation certificate Secrets"] {
+    let (result = evaluate(
+      contract.compileOperation,
+      new Mapping {
+        ["envoy.client_validation.ca_certificates"] = new Listing {
+          new Mapping { ["name"] = "partner-ca"; ["ca_crt"] = "-----BEGIN CERTIFICATE-----\\n..." }
+        }
+      },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.isEmpty
+        && ((((((result.helmValues as Mapping)["gateway"] as Mapping)["qoveryPublic"] as Mapping)["clientValidation"] as Mapping)["caCertificates"] as List<Mapping>)[0]["name"] == "envoy-client-validation-partner-ca")
+  }
+}

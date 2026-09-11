@@ -1,0 +1,39 @@
+amends "pkl:test"
+
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
+import "../config/runtime-values/settings.pkl"
+import "../config/runtime-values/configuration/profile.pkl"
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
+
+local function evaluate(operation: contract.Operation, profileConfig: Mapping): contract.EvaluationResult =
+  sdkEvaluate.evaluate(settings.component, sdkRequest.build(operation, profileConfig, null, new Mapping {}, List()))
+
+facts {
+  ["COMPILE selects a pre-provisioned TLS Secret without exposing key material"] {
+    let (result = evaluate(
+      contract.compileOperation,
+      new Mapping { [profile.existingSecretNameKey] = profile.gatewayCertificateSecretName },
+    ))
+    let (certificate = (result.helmValues as Mapping)["userProvidedCertificate"] as Mapping)
+      result.violations.isEmpty && certificate["existingSecretName"] == profile.gatewayCertificateSecretName
+  }
+
+  ["VALIDATE rejects a TLS Secret name the Gateway cannot reference"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { [profile.existingSecretNameKey] = "another-secret" },
+    ))
+      result.violations.any((violation) -> violation.fieldPath == profile.existingSecretNameKey)
+  }
+
+  ["VALIDATE rejects a non-text TLS Secret name"] {
+    let (result = evaluate(
+      contract.validateOperation,
+      new Mapping { [profile.existingSecretNameKey] = 1 },
+    ))
+      result.violations.any((violation) ->
+        violation.code == "INVALID_TYPE" && violation.fieldPath == profile.existingSecretNameKey
+      )
+  }
+}

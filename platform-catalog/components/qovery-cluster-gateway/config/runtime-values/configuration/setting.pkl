@@ -1,0 +1,143 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryClusterGateway.configuration.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+
+// These names intentionally mirror the legacy cluster advanced-settings keys. Keeping one
+// vocabulary means a platform profile can be migrated without a lossy translation layer.
+settings: List<sdkSettings.Setting> = List(
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.min_number_instances"
+    label = "Data-plane HPA minimum replicas"
+    description = "Minimum replicas for the public Envoy data plane."
+    default = null
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.max_number_instances"
+    label = "Data-plane HPA maximum replicas"
+    description = "Maximum replicas for the public Envoy data plane."
+    default = null
+    min = 1
+    max = null
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.cpu_average_utilization_percentage_threshold"
+    label = "Data-plane HPA CPU target"
+    description = "CPU utilization target percentage for the Envoy data-plane HPA."
+    default = null
+    min = 1
+    max = 100
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.hpa.memory_average_utilization_percentage_threshold"
+    label = "Data-plane HPA memory target"
+    description = "Memory utilization target percentage for the Envoy data-plane HPA."
+    default = null
+    min = 1
+    max = 100
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.gateway_api.http_stream_idle_timeout_seconds"
+    label = "HTTP stream idle timeout"
+    description = "Maximum idle time in seconds for downstream HTTP streams. Leave unset to use Envoy Gateway's default."
+    default = null
+    min = 0
+    max = null
+  },
+  new sdkSettings.BoolSetting {
+    key = "envoy.gateway_api.path.disable_merge_slashes"
+    label = "Preserve duplicate path slashes"
+    description = "Disables path normalization that merges repeated slashes."
+  },
+  new sdkSettings.EnumSetting {
+    key = "envoy.gateway_api.path.escaped_slashes_action"
+    required = false
+    default = "UnescapeAndRedirect"
+    label = "Escaped slash handling"
+    description = "How the Gateway handles encoded path slashes (%2F)."
+    options = List("KeepUnchanged", "RejectRequest", "UnescapeAndForward", "UnescapeAndRedirect").map((choice) -> new sdkSettings.Option { value = choice })
+  },
+  new sdkSettings.IntSetting {
+    key = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops"
+    label = "Trusted X-Forwarded-For hops"
+    description = "Number of trusted proxies at the end of the X-Forwarded-For chain. Do not combine with trusted CIDRs."
+    default = null
+    min = 0
+    max = 255
+  },
+  new sdkSettings.StringSetting {
+    key = "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs"
+    required = false
+    default = ""
+    label = "Trusted X-Forwarded-For CIDRs"
+    description = "Comma-separated trusted proxy CIDRs used for client IP detection. Do not combine with trusted hop count."
+  },
+  new sdkSettings.ArraySetting {
+    key = "envoy.client_validation.ca_certificates"
+    required = false
+    label = "Client-validation CA certificates"
+    description = "Trust anchors required for mutual TLS client validation. Each certificate becomes a managed Secret in the qovery namespace."
+    maxItems = 8
+    items = new sdkSettings.ObjectSetting {
+      key = "certificate"
+      label = "Certificate"
+      fields = List(
+        new sdkSettings.StringSetting {
+          key = "name"
+          required = true
+          label = "Certificate name"
+          description = "DNS-1123 suffix used to create the managed Kubernetes Secret."
+          pattern = "^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$"
+        },
+        new sdkSettings.StringSetting {
+          key = "ca_crt"
+          required = true
+          label = "CA certificate PEM"
+          description = "PEM-encoded CA certificate used to validate client certificates."
+        },
+      )
+    }
+  },
+  new sdkSettings.StringSetting {
+    key = "envoy.access_log.format"
+    required = false
+    default = ""
+    label = "Envoy access log format"
+    description = "Optional raw JSON access-log format applied to the public Envoy data plane. Do not base64-encode it."
+  },
+  new sdkSettings.StringSetting {
+    key = "envoy.custom_http_errors.default"
+    required = false
+    // Leave omitted values out of Helm so the chart keeps its own default.
+    default = null
+    label = "Default custom HTTP errors"
+    description = "Comma-separated HTTP status codes served by the default custom-error backend, for example 404,500,502,503."
+    pattern = "^$|^[1-5][0-9]{2}(,[1-5][0-9]{2})*$"
+  },
+  new sdkSettings.BoolSetting {
+    key = "envoy.enable_compression"
+    label = "Enable response compression"
+    description = "Enables gzip and Brotli compression for the public Gateway."
+  },
+  new sdkSettings.BoolSetting {
+    key = "envoy.default_backend.enable"
+    label = "Enable default backend"
+    description = "Deploys the configurable default backend for unmatched requests."
+  },
+  new sdkSettings.StringSetting {
+    key = "envoy.default_backend.image"
+    required = false
+    default = null
+    label = "Default backend image"
+    description = "Container image used by the default backend when it is enabled."
+  },
+  new sdkSettings.StringSetting {
+    key = "envoy.default_backend.tag"
+    required = false
+    default = null
+    label = "Default backend image tag"
+    description = "Container image tag used by the default backend when it is enabled."
+  },
+)

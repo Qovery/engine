@@ -1,0 +1,19 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryGatewayClass.configuration.dependencies
+
+import "../contract.pkl"
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/validate.pkl" as sdkValidate
+
+rules: List<sdkRules.Rule> = List(
+  new sdkRules.FieldRule {
+    code = sdkValidate.valueOutOfRangeCode
+    fieldPath = "envoy.hpa.max_number_instances"
+    message = "Envoy HPA maximum replicas must be greater than or equal to minimum replicas"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      let (minimum = scope.config.getOrNull("envoy.hpa.min_number_instances") as Int?)
+      let (maximum = scope.config.getOrNull("envoy.hpa.max_number_instances") as Int?)
+        minimum != null && maximum != null && minimum > maximum
+  },
+)

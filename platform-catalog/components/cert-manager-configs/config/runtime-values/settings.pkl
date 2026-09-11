@@ -1,0 +1,16 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.certManagerConfigs.settings
+
+import "sdk/evaluate.pkl" as sdkEvaluate
+import "configuration/setting.pkl" as configurationSetting
+import "configuration/helm.pkl" as configurationHelm
+
+component: sdkEvaluate.Component = new {
+  label = "cert-manager configs"
+  inputs = List()
+  features = List(new sdkEvaluate.Feature {
+    settings = configurationSetting.settings
+    rules = List()
+    fragment = configurationHelm.fragment
+  })
+}

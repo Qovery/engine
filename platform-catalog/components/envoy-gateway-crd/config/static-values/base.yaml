@@ -1,0 +1,7 @@
+# Install Gateway API standard-channel CRDs (including v1 TLSRoute and ListenerSet) and Envoy Gateway CRDs before their consumers.
+crds:
+  gatewayAPI:
+    enabled: true
+    channel: standard
+  envoyGateway:
+    enabled: true
