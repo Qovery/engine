@@ -15,6 +15,16 @@ rules:
       - create
       - get
       - list
+      - patch
+  # Worker PDBs are owned by their Jobs and garbage-collected with them.
+  # The operator does not delete or list PDBs; it retrieves them by Job name.
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - create
+      - get
   - apiGroups:
       - ""
     resources:
