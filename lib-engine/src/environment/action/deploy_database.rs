@@ -43,8 +43,8 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const DB_READY_STATE: &str = "available";
-const DB_STOPPED_STATE: &str = "stopped";
+pub(super) const DB_READY_STATE: &str = "available";
+pub(super) const DB_STOPPED_STATE: &str = "stopped";
 
 #[derive(Deserialize, Default)]
 struct CacheCluster {
@@ -84,7 +84,7 @@ struct DocDbClustersResponse {
     pub db_cluster: Vec<DocDbCluster>,
 }
 
-fn get_managed_database_status(
+pub(super) fn get_managed_database_status(
     db_type: service::DatabaseType,
     db_id: &str,
     credentials: &[(&str, &str)],
@@ -208,7 +208,7 @@ fn managed_db_instance_id<'a>(
     }
 }
 
-fn start_stop_managed_database(
+pub(super) fn start_stop_managed_database(
     db_type: service::DatabaseType,
     db_id: &str,
     credentials: &[(&str, &str)],
@@ -259,7 +259,7 @@ fn start_stop_managed_database(
     }
 }
 
-fn await_db_state(
+pub(super) fn await_db_state(
     timeout: Duration,
     db_type: service::DatabaseType,
     db_id: &str,
