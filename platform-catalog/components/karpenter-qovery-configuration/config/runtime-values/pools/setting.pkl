@@ -1,36 +1,57 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.karpenterQoveryConfiguration.pools.setting
 
+import "../sdk/referenceData.pkl" as sdkReferenceData
 import "../sdk/settings.pkl" as sdkSettings
 
-settings: List<sdkSettings.Setting> = List(
-  new sdkSettings.ObjectSetting {
-    key = "instanceRequirements"
-    label = "Shared instance requirements"
-    fields = List(
-      (stringList("architectures", "Architectures")) {
-        maxItems = 2
-        items = new sdkSettings.EnumSetting {
-          key = "architecture"
-          label = "Architecture"
-          options = List(new sdkSettings.Option { value = "amd64" }, new sdkSettings.Option { value = "arm64" })
-        }
-      },
-      stringList("families", "Instance families"),
-      stringList("sizes", "Instance sizes"),
-    )
-  },
-  new sdkSettings.IntSetting {
-    key = "diskSizeGiB"
-    label = "Shared disk size (GiB)"
-    required = true
-    default = 50
-    // KubernetesProviderDomain.QOVERY_MIN_DISK_SIZE; the Console legacy preset is 50 GiB.
-    min = 20
-  },
-  pool("default", "Default pool"),
-  pool("stable", "Stable pool"),
-)
+function settings(instances: List<sdkReferenceData.ComputeInstance>): List<sdkSettings.Setting> =
+  List(
+    new sdkSettings.ObjectSetting {
+      key = "instanceRequirements"
+      label = "Shared instance requirements"
+      fields =
+        List(
+          (stringList("architectures", "Architectures")) {
+            maxItems = 2
+            items = new sdkSettings.EnumSetting {
+              key = "architecture"
+              label = "Architecture"
+              options =
+                List(
+                  new sdkSettings.Option { value = "amd64" },
+                  new sdkSettings.Option { value = "arm64" },
+                )
+            }
+          },
+          (stringList("families", "Instance families")) {
+            items =
+              sdkReferenceData.choice(
+                "family",
+                "Instance family",
+                instances.map((instance) -> instance.family),
+              )
+          },
+          (stringList("sizes", "Instance sizes")) {
+            items =
+              sdkReferenceData.choice(
+                "size",
+                "Instance size",
+                instances.map((instance) -> instance.size),
+              )
+          },
+        )
+    },
+    new sdkSettings.IntSetting {
+      key = "diskSizeGiB"
+      label = "Shared disk size (GiB)"
+      required = true
+      default = 50
+      // KubernetesProviderDomain.QOVERY_MIN_DISK_SIZE; the Console legacy preset is 50 GiB.
+      min = 20
+    },
+    pool("default", "Default pool"),
+    pool("stable", "Stable pool"),
+  )
 
 local function stringList(name: String, title: String): sdkSettings.ArraySetting = new {
   key = name
@@ -50,10 +71,11 @@ local function stringList(name: String, title: String): sdkSettings.ArraySetting
 local function pool(name: String, title: String): sdkSettings.ObjectSetting = new {
   key = name
   label = title
-  fields = List(new sdkSettings.BoolSetting {
-    key = "spotEnabled"
-    label = "Allow Spot with On-Demand fallback"
-    required = true
-    default = false
-  })
+  fields =
+    List(new sdkSettings.BoolSetting {
+      key = "spotEnabled"
+      label = "Allow Spot with On-Demand fallback"
+      required = true
+      default = false
+    })
 }

@@ -127,10 +127,19 @@ fn demo_template_contains_only_the_legacy_demo_components() {
         .and_then(Value::as_sequence)
         .expect("demo template must declare layers");
     assert_eq!(layers.len(), 3);
-    assert!(layers.iter().all(|layer| {
-        yaml_path(layer, &["mandatory"]).and_then(Value::as_bool) == Some(true)
-            && yaml_path(layer, &["enabledByDefault"]).and_then(Value::as_bool) == Some(true)
-    }));
+    for layer in layers {
+        let key = yaml_string(layer, &["key"]).expect("demo layer must declare its key");
+        assert_eq!(
+            yaml_path(layer, &["mandatory"]).and_then(Value::as_bool),
+            Some(key != "gateway-api"),
+            "only the demo gateway layer is optional"
+        );
+        assert_eq!(
+            yaml_path(layer, &["enabledByDefault"]).and_then(Value::as_bool),
+            Some(true),
+            "demo layer {key} must remain enabled by default"
+        );
+    }
     assert!(!contains_component(&template, "loki"));
     assert!(!contains_component(&template, "alloy"));
     assert!(!contains_component(&template, "qovery-engine"));
@@ -138,12 +147,30 @@ fn demo_template_contains_only_the_legacy_demo_components() {
 }
 
 #[test]
-fn gateway_components_declare_their_execution_dependencies() {
+fn gateway_layer_is_optional_and_keeps_its_execution_dependencies() {
     for template_path in [
         "platform-catalog/templates/qovery-cluster-v0/template.yaml",
         "platform-catalog/templates/qovery-demo-v0/template.yaml",
     ] {
         let template = parse_yaml_file(repository_path(template_path));
+        let gateway_layer = yaml_path(&template, &["platformTemplateRelease", "layers"])
+            .and_then(Value::as_sequence)
+            .and_then(|layers| {
+                layers
+                    .iter()
+                    .find(|layer| yaml_string(layer, &["key"]) == Some("gateway-api"))
+            })
+            .expect("template must declare the gateway API layer");
+        assert_eq!(
+            yaml_path(gateway_layer, &["mandatory"]).and_then(Value::as_bool),
+            Some(false),
+            "{template_path} must allow disabling the gateway API layer"
+        );
+        assert_eq!(
+            yaml_path(gateway_layer, &["enabledByDefault"]).and_then(Value::as_bool),
+            Some(true),
+            "{template_path} must keep the gateway API layer enabled by default"
+        );
         let cluster_gateway = component(&template, "qovery-cluster-gateway");
         let dependencies = yaml_path(cluster_gateway, &["dependsOn"])
             .and_then(Value::as_sequence)

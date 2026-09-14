@@ -54,7 +54,8 @@
   "clusterContext": {
     "mode": "CUSTOMER_MANAGED",
     "provider": "AWS",
-    "kubernetesVersion": "1.34"
+    "kubernetesVersion": "1.34",
+    "region": "eu-west-3"
   },
   "clusterInputs": {
     "aws.eksClusterName": "customer-eks",
@@ -64,5 +65,27 @@
   "componentOutputs": {},
   "enabledComponents": [
     "karpenter-configuration"
-  ]
+  ],
+  "referenceData": {
+    "computeInstances": [
+      {
+        "name": "c7i-flex.large",
+        "architecture": "amd64",
+        "family": "c7i-flex",
+        "size": "large"
+      },
+      {
+        "name": "c7i.metal-24xl",
+        "architecture": "amd64",
+        "family": "c7i",
+        "size": "metal-24xl"
+      },
+      {
+        "name": "m7i.large",
+        "architecture": "amd64",
+        "family": "m7i",
+        "size": "large"
+      }
+    ]
+  }
 }

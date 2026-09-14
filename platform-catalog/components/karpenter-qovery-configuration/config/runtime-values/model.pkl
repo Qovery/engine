@@ -1,11 +1,13 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.karpenterQoveryConfiguration.model
 
-import "settings.pkl"
 import "sdk/evaluate.pkl" as sdkEvaluate
 import "sdk/request.pkl" as sdkRequest
+import "settings.pkl"
+
+local request = sdkRequest.decode(read("prop:request"))
 
 output {
-  value = sdkEvaluate.evaluate(settings.component, sdkRequest.decode(read("prop:request")))
+  value = sdkEvaluate.evaluate(settings.component(request), request)
   renderer = new JsonRenderer {}
 }

@@ -681,3 +681,32 @@ fn one_custom_pool_activates_aws_requirements_and_cannot_compile_an_incomplete_r
     req["profileConfig"] = json!({"nodePools":[{"name":"extra", "instanceTypes":["m7i.large"]}]});
     assert_eq!(rendered_configuration(&req).len(), 2);
 }
+
+#[test]
+fn regional_reference_data_supplies_choices_and_rejects_unknown_instance_types() {
+    let mut req = request("configuration");
+    req["operation"] = json!("RESOLVE_REQUIREMENTS");
+    let result = evaluate(&req);
+    let instance_types = result["fields"][0]["itemFields"][0]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["key"] == "instanceTypes")
+        .unwrap();
+    assert_eq!(
+        instance_types["items"]["constraints"]["allowedValues"],
+        json!(["c7i-flex.large", "c7i.metal-24xl", "m7i.large"])
+    );
+
+    req["referenceData"]["computeInstances"] = json!([
+        {"name": "m5.large", "architecture": "amd64", "family": "m5", "size": "large"}
+    ]);
+    for operation in ["RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE"] {
+        req["operation"] = json!(operation);
+        let result = evaluate(&req);
+        assert!(result["violations"].as_array().unwrap().iter().any(|violation| {
+            violation["code"] == "VALUE_NOT_ALLOWED" && violation["fieldPath"] == "nodePools[0].instanceTypes[0]"
+        }));
+        assert!(result.get("helmValues").is_none());
+    }
+}

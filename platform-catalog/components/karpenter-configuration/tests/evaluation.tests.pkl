@@ -10,7 +10,7 @@ local request = sdkRequest.decode(read("../../../examples/karpenter-v0/configura
 local draft = request["profileConfig"] as Mapping
 
 local function evaluateRequest(value: Mapping) =
-  sdkEvaluate.evaluate(settings.component(sdkRequest.clusterInputs(value), sdkRequest.profileConfig(value)), value)
+  sdkEvaluate.evaluate(settings.component(value), value)
 
 local function evaluate(config: Mapping, operation: contract.Operation): contract.EvaluationResult =
   evaluateRequest((request) { ["profileConfig"] = config; ["operation"] = operation })
@@ -31,6 +31,45 @@ local function rejects(config: Mapping, path: String): Boolean =
       && compiled.helmValues == null
 
 facts {
+  ["regional choices are exposed on every row without selecting or rewriting values"] {
+    let (result = evaluateRequest((request) { ["operation"] = "RESOLVE_REQUIREMENTS" }))
+    let (pools = result.fields[0] as contract.ArrayField)
+      pools.itemFields!!.every((fields) ->
+        (fields.find((field) -> field.key == "instanceTypes") as contract.ArrayField)
+          .items
+          .constraints
+          .allowedValues
+          == List("c7i-flex.large", "c7i.metal-24xl", "m7i.large")
+      )
+    evaluateRequest(request).helmValues!!["pools"][0]["nodePoolSpec"]["template"]["spec"]["requirements"][0]["values"]
+      == draft["nodePools"][0]["instanceTypes"]
+  }
+  ["well formed types outside the regional reference are rejected consistently"] {
+    for (operation in List("RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE")) {
+      let (
+        changed = pool((value) -> (value) { ["instanceTypes"] = new Listing { "invented.large" } })
+      )
+      let (result = evaluate(changed, operation))
+        result.helmValues == null
+          && result.violations.any((entry) ->
+            entry.code == "VALUE_NOT_ALLOWED" && entry.fieldPath == "nodePools[1].instanceTypes[0]"
+          )
+    }
+  }
+  ["missing reference data fails closed for pools but preserves context free describe and empty custom config"] {
+    for (operation in List("RESOLVE_REQUIREMENTS", "VALIDATE", "COMPILE")) {
+      let (
+        result = evaluateRequest((request) { ["operation"] = operation; ["referenceData"] = null })
+      )
+        result.helmValues == null
+          && result.violations.any((entry) -> entry.code == "COMPUTE_REFERENCE_DATA_UNAVAILABLE")
+    }
+    evaluateRequest(new Mapping { ["operation"] = "DESCRIBE" }).violations.isEmpty
+    evaluateRequest((request) { ["referenceData"] = null; ["profileConfig"] = new Mapping {} })
+      .violations
+      .isEmpty
+  }
+
   ["absent optional settings use the accepted defaults without requiring draft rewriting"] {
     let (
       minimal = new Mapping {

@@ -27,7 +27,8 @@
   "clusterContext": {
     "mode": "CUSTOMER_MANAGED",
     "provider": "AWS",
-    "kubernetesVersion": "1.35"
+    "kubernetesVersion": "1.35",
+    "region": "eu-west-3"
   },
   "clusterInputs": {
     "aws.eksClusterName": "example-eks",
@@ -42,5 +43,21 @@
     "karpenter-crd",
     "karpenter",
     "karpenter-qovery-configuration"
-  ]
+  ],
+  "referenceData": {
+    "computeInstances": [
+      {
+        "name": "m6i.large",
+        "architecture": "amd64",
+        "family": "m6i",
+        "size": "large"
+      },
+      {
+        "name": "m6g.xlarge",
+        "architecture": "arm64",
+        "family": "m6g",
+        "size": "xlarge"
+      }
+    ]
+  }
 }

@@ -188,7 +188,7 @@ platformTemplateRelease:
     - key: gateway-api
       applicability:
         modes: [CUSTOMER_MANAGED]
-      mandatory: true
+      mandatory: false
       enabledByDefault: true
       components:
         - key: envoy-gateway-crd

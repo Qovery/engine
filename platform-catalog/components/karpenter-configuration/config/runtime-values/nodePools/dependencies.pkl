@@ -23,26 +23,29 @@ rules: List<sdkRules.Rule> =
       fieldPath = "clusterContext"
       message = "This catalogue model requires customer-managed AWS EKS"
       violated = (scope) ->
-        setting.hasPools(scope.config) && (scope.cluster.provider != "AWS" || scope.cluster.mode != "CUSTOMER_MANAGED")
+        setting.hasPools(scope.config)
+          && (scope.cluster.provider != "AWS" || scope.cluster.mode != "CUSTOMER_MANAGED")
     },
     new sdkRules.FieldRule {
       code = "KUBERNETES_VERSION_REQUIRED"
       fieldPath = "clusterContext.kubernetesVersion"
       message = "Supply the cluster Kubernetes version through the evaluation context"
-      violated = (scope) -> setting.hasPools(scope.config) && scope.cluster.kubernetesVersion == null
+      violated = (scope) ->
+        setting.hasPools(scope.config) && scope.cluster.kubernetesVersion == null
     },
     new sdkRules.FieldRule {
       code = "UNSUPPORTED_KUBERNETES_VERSION"
       fieldPath = "clusterContext.kubernetesVersion"
       message = "This Karpenter 1.10.0 demo is bounded to Kubernetes 1.30–1.35"
       violated = (scope) ->
-        setting.hasPools(scope.config) && scope.cluster.kubernetesVersion != null
+        setting.hasPools(scope.config)
+          && scope.cluster.kubernetesVersion != null
           && !scope.cluster.kubernetesVersion!!.matches(Regex("1[.]3[0-5]"))
     },
   )
 
 local function rows(scope: sdkSettings.Scope): List =
-  ((scope.config.getOrNull(setting.setting.key) as Listing?) ?? new Listing {}).toList()
+  ((scope.config.getOrNull("nodePools") as Listing?) ?? new Listing {}).toList()
 
 local function duplicateNames(scope: sdkSettings.Scope): List<String> =
   rows(scope)
@@ -59,7 +62,7 @@ local function duplicateNames(scope: sdkSettings.Scope): List<String> =
       )
         List(
           sdkValidate.fieldPath(
-            sdkValidate.indexPath(setting.setting.key, index),
+            sdkValidate.indexPath("nodePools", index),
             setting.poolName.key,
           ),
         )
@@ -90,7 +93,7 @@ local function duplicateTaints(scope: sdkSettings.Scope): List<String> =
                 List(
                   sdkValidate.indexPath(
                     sdkValidate.fieldPath(
-                      sdkValidate.indexPath(setting.setting.key, index),
+                      sdkValidate.indexPath("nodePools", index),
                       "taints",
                     ),
                     taintIndex,

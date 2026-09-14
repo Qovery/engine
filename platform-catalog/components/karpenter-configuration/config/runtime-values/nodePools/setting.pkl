@@ -1,16 +1,20 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.karpenterConfiguration.nodePools.setting
 
+import "../sdk/referenceData.pkl" as sdkReferenceData
 import "../sdk/settings.pkl" as sdkSettings
 
 // A list of independently configured node pools (D11's `karpenter-configuration` fragment). Each
 // row is described on its own values: a custom AMI exposes its ID and family, custom subnets
 // expose their IDs while automatic discovery exposes the tag to match.
 
-setting: sdkSettings.ArraySetting = new {
+function forCluster(
+  name: String?,
+  instances: List<sdkReferenceData.ComputeInstance>,
+): sdkSettings.ArraySetting = new {
   key = "nodePools"
   label = "NodePools"
-  items = pool(null)
+  items = pool(name, instances)
 }
 
 // The pool name identifies a pool across the collection (see dependencies.pkl).
@@ -23,9 +27,10 @@ poolName: sdkSettings.StringSetting = new {
   pattern = "[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?"
 }
 
-function forClusterName(name: String?): sdkSettings.ArraySetting = (setting) { items = pool(name) }
-
-local function pool(eksClusterName: String?): sdkSettings.ObjectSetting = new {
+local function pool(
+  eksClusterName: String?,
+  instances: List<sdkReferenceData.ComputeInstance>,
+): sdkSettings.ObjectSetting = new {
   key = "pool"
   label = "Node pool"
   fields =
@@ -33,17 +38,16 @@ local function pool(eksClusterName: String?): sdkSettings.ObjectSetting = new {
       poolName,
       new sdkSettings.ArraySetting {
         key = "instanceTypes"
-        label = "instanceTypes"
+        label = "Instance types"
         required = true
         minItems = 1
         uniqueItems = true
-        // Format only, not an instance catalogue: hyphens occur in both family and size names.
-        // The item key names the item in messages: "Karpenter instance type does not match ...".
-        items = new sdkSettings.StringSetting {
-          key = "instance type"
-          label = "Instance type"
-          pattern = "[a-z0-9]+(-[a-z0-9]+)*[.][a-z0-9]+(-[a-z0-9]+)*"
-        }
+        items =
+          sdkReferenceData.choice(
+            "instance type",
+            "Instance type",
+            instances.map((instance) -> instance.name),
+          )
       },
       new sdkSettings.BoolSetting {
         key = "spotEnabled"

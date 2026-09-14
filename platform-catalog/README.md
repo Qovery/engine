@@ -82,6 +82,30 @@ import arbitrary filesystem, package, or network modules, and it cannot read env
 files, or network resources. Only the bundle modules, Pkl standard library, and `prop:request` are
 enabled by q-core.
 
+### Regional compute choices
+
+q-core supplies `clusterContext.region` and server-owned `referenceData.computeInstances` in the
+internal Pkl evaluation request. Each record contains `name`, `architecture`, `family` and `size`,
+projected from the same packaged regional JSON as the legacy instance API. This is reference data,
+not an editable cluster input and not an extra field in the public configuration HTTP request.
+
+`sdk/referenceData.pkl` decodes the records and builds ordinary `EnumSetting` declarations. Karpenter
+custom pools expose instance names; Qovery pools expose distinct families and sizes. The existing
+`ArrayField.items.constraints.allowedValues` response drives the current Console dropdowns. Choices
+are not defaults: no instance is automatically selected and the persisted configuration shape is unchanged.
+The same enum declarations reject unknown values during resolution, validation and compilation.
+
+Deploy the supporting q-core version before publishing these Karpenter bundles. Context-free
+DESCRIBE remains possible; configuring pools without regional reference data returns
+`COMPUTE_REFERENCE_DATA_UNAVAILABLE`. Empty custom pools remain valid without this input.
+Existing selections are never silently removed or substituted. The reference is an instance
+snapshot, not a guarantee of live AWS capacity or compatibility with a custom AMI.
+
+The bundle digest pins the rules, while the running q-core build supplies the regional snapshot.
+There is no new remote fetch or mutable cache. Any future independently refreshed reference source
+must include its version in the keys of cached evaluation results. The pre-creation region transport
+and the rich legacy picker are outside this first version.
+
 Each component artifact remains independently pullable and digest-pinned, so it cannot import a
 contract from another artifact. `platform-catalog/pkl/` is therefore the single source of truth
 for the shared Pkl authoring SDK: `pkl/contract.pkl` is vendored as `runtime-values/contract.pkl`

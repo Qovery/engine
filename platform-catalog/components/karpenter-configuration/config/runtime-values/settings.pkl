@@ -6,17 +6,29 @@ import "nodePools/helm.pkl" as nodePoolsHelm
 import "nodePools/inputs.pkl" as nodePoolsInputs
 import "nodePools/setting.pkl" as nodePoolsSetting
 import "sdk/evaluate.pkl" as sdkEvaluate
+import "sdk/referenceData.pkl" as sdkReferenceData
+import "sdk/request.pkl" as sdkRequest
 
 // Draft-dependent input declarations and discovery defaults; validation stays in the shared SDK.
-function component(clusterInputs: Mapping, profileConfig: Mapping): sdkEvaluate.Component =
-  let (name = clusterInputs.getOrNull("aws.eksClusterName"))
+function component(request: Mapping): sdkEvaluate.Component =
+  let (profileConfig = sdkRequest.profileConfig(request))
+  let (name = sdkRequest.clusterInputs(request).getOrNull("aws.eksClusterName"))
+  let (instances = sdkReferenceData.computeInstances(request))
     new {
       label = "Karpenter configuration"
       inputs = if (nodePoolsSetting.hasPools(profileConfig)) nodePoolsInputs.inputs else List()
       features =
         List(new sdkEvaluate.Feature {
-          settings = List(nodePoolsSetting.forClusterName(if (name is String) name else null))
-          rules = nodePoolsDependencies.rules
+          settings =
+            List(
+              nodePoolsSetting.forCluster(if (name is String) name else null, instances ?? List()),
+            )
+          rules =
+            nodePoolsDependencies.rules
+              + if (nodePoolsSetting.hasPools(profileConfig))
+                List(sdkReferenceData.required(instances))
+              else
+                List()
           fragment = nodePoolsHelm.fragment
         })
     }

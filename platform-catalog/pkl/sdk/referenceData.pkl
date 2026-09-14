@@ -1,0 +1,42 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.referenceData
+
+import "rules.pkl"
+import "settings.pkl"
+
+// Server-owned facts arrive through prop:request, never through editable clusterInputs.
+class ComputeInstance {
+  name: String
+  architecture: String
+  family: String
+  size: String
+}
+
+function computeInstances(request: Mapping): List<ComputeInstance>? =
+  let (data = request.getOrNull("referenceData") as Mapping?)
+  let (instances = data?.getOrNull("computeInstances") as Listing?)
+    instances
+      ?.toList()
+      ?.map((instance) -> new ComputeInstance {
+        name = instance["name"] as String
+        architecture = instance["architecture"] as String
+        family = instance["family"] as String
+        size = instance["size"] as String
+      })
+
+function choice(key: String, label: String, values: List<String>): settings.EnumSetting =
+  let (fieldKey = key)
+  let (fieldLabel = label)
+    new {
+      key = fieldKey
+      label = fieldLabel
+      options = values.distinct.sort().map((name) -> new settings.Option { value = name })
+    }
+
+function required(instances: List<ComputeInstance>?): rules.FieldRule = new {
+  code = "COMPUTE_REFERENCE_DATA_UNAVAILABLE"
+  fieldPath = "clusterContext.region"
+  message =
+    "Regional instance choices are unavailable; use a cluster with a known region and a q-core version supporting compute reference data"
+  violated = (scope) -> instances == null || instances.isEmpty
+}
