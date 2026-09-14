@@ -52,6 +52,25 @@ impl<T> TerraformServiceDeploymentReporter<T> {
         }
     }
 
+    /// For actions that run no terraform job: there is no pod, so nothing to stream.
+    pub fn without_terraform_job(
+        chart: &impl TerraformServiceTrait,
+        deployment_target: &DeploymentTarget,
+        action: Action,
+    ) -> Self {
+        Self {
+            long_id: *chart.long_id(),
+            logger: deployment_target.env_logger(chart, action.to_environment_step()),
+            metrics_registry: deployment_target.metrics_registry.clone(),
+            action,
+            kube_client: deployment_target.kube.client(),
+            namespace: deployment_target.environment.namespace().to_string(),
+            pod_recv: None,
+            skip_terraform_job_execution: true,
+            _phantom: Default::default(),
+        }
+    }
+
     pub fn new_with_skip_terraform_job_execution(
         chart: &impl TerraformServiceTrait,
         deployment_target: &DeploymentTarget,
@@ -75,7 +94,7 @@ impl<T> TerraformServiceDeploymentReporter<T> {
 
 pub struct ReporterState {
     pod_api: Api<Pod>,
-    pod_recv: mpsc::Receiver<Pod>,
+    pod_recv: Option<mpsc::Receiver<Pod>>,
     log_lines: Option<BoxStream<'static, Result<String, std::io::Error>>>,
     metrics_registry: Arc<dyn MetricsRegistry>,
 }
@@ -86,8 +105,11 @@ impl ReporterState {
         mut long_id_opt: Option<Uuid>,
     ) -> &mut BoxStream<'static, Result<String, std::io::Error>> {
         self.log_lines.get_or_insert_with(|| {
-            // Wait for the pod sent by deployer thread
-            let pod = self.pod_recv.recv().unwrap_or_default();
+            // Wait for the pod sent by deployer thread; absent when the action runs no terraform job.
+            let pod = match &self.pod_recv {
+                Some(recv) => recv.recv().unwrap_or_default(),
+                None => Pod::default(),
+            };
             let log_params = LogParams {
                 follow: true,
                 ..Default::default()
@@ -122,11 +144,7 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
         ReporterState {
             pod_api,
             log_lines: None,
-            pod_recv: self
-                .pod_recv
-                .take()
-                .and_then(|m| m.into_inner().ok())
-                .expect("pod_recv is already taken"),
+            pod_recv: self.pod_recv.take().and_then(|m| m.into_inner().ok()),
             metrics_registry: self.metrics_registry.clone(),
         }
     }

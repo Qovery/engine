@@ -230,6 +230,27 @@ pub struct ManagedDbConnectivity {
     pub publicly_accessible: bool,
     pub database_id: String,
     pub database_long_id: Uuid,
+    /// Adopted instance, so pausing this service can stop it and resuming can start it again. Present
+    /// only once the database row is gone: sending it *is* the handover, since until then the database
+    /// service still drives stop/start and both acting on one instance would collide.
+    #[serde(default)]
+    pub instance_identifier: Option<String>,
+    /// Which cloud command stops the adopted instance. Without it pause/resume is skipped.
+    #[serde(default)]
+    pub database_kind: Option<AdoptedDatabaseKind>,
+}
+
+/// Engines outlive the core that talks to them, so an unrecognised kind must disable pause/resume for
+/// one service rather than fail the whole environment payload.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AdoptedDatabaseKind {
+    Postgresql,
+    Mysql,
+    Mongodb,
+    Redis,
+    #[serde(other)]
+    Unsupported,
 }
 
 impl TerraformService {
