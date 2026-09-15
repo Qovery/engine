@@ -722,3 +722,46 @@ fn component_dependency_graph_has_no_cycles() {
         assert!(completed.len() > before, "cycle in the full enabled catalogue dependency graph");
     }
 }
+
+#[test]
+fn publication_preserves_configuration_presentation_without_changing_helm_ownership() {
+    let fixture = RenderFixture::new();
+    fixture.write_outputs();
+    let output = fixture.render("0.1.0");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rendered = parse_yaml_file(&fixture.destination);
+    let components = yaml_path(&rendered, &["platformTemplateRelease", "layers"])
+        .and_then(YamlValue::as_sequence)
+        .expect("layers")
+        .iter()
+        .flat_map(|layer| {
+            yaml_path(layer, &["components"])
+                .and_then(YamlValue::as_sequence)
+                .expect("components")
+        })
+        .map(|component| component.as_mapping().expect("component mapping"))
+        .collect::<Vec<_>>();
+    let crd = components
+        .iter()
+        .find(|c| mapping_string(c, "key") == Some("karpenter-crd"))
+        .expect("CRD component");
+    assert_eq!(
+        yaml_path(&YamlValue::Mapping((**crd).clone()), &["configurationSections"]),
+        Some(
+            &serde_yaml::from_str::<YamlValue>(
+                "- sourceComponentKey: karpenter-configuration\n  fieldKeys: [resources]"
+            )
+            .expect("valid sections")
+        )
+    );
+    let owner = components
+        .iter()
+        .find(|c| mapping_string(c, "key") == Some("karpenter-configuration"))
+        .expect("owner component");
+    let owner = YamlValue::Mapping((**owner).clone());
+    assert_eq!(
+        yaml_string(&owner, &["release", "name"]),
+        Some("karpenter-custom-configuration")
+    );
+    assert_eq!(yaml_string(&owner, &["chart", "name"]), Some("karpenter-custom-resources"));
+}

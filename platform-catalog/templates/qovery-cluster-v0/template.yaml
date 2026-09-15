@@ -88,6 +88,9 @@ platformTemplateRelease:
       components:
         - key: karpenter-crd
           kind: HELM
+          configurationSections:
+            - sourceComponentKey: karpenter-configuration
+              fieldKeys: [resources]
           release:
             name: karpenter-crd
             namespace: kube-system
