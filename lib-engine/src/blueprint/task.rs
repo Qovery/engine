@@ -15,6 +15,7 @@ use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stag
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::Action;
 use crate::io_models::aws_apn_id::AwsApnId;
+use crate::io_models::blueprint::BlueprintVariable;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{BlueprintEngineRequest, CloudProviderOptions};
 use crate::log_file_writer::LogFileWriter;
@@ -99,39 +100,50 @@ impl BlueprintTask {
     }
 
     fn get_secrets(request: &BlueprintEngineRequest) -> Vec<String> {
-        let mut secrets = vec![];
+        Self::mask_list(&request.target_environment.variables, &request.cloud_provider.options)
+    }
 
-        request.target_environment.variables.iter().for_each(|var| {
-            if var.is_secret {
-                secrets.push(var.value.clone());
-            }
-        });
+    /// Values to obfuscate in every log line: user secrets plus provider credentials.
+    fn mask_list(variables: &[BlueprintVariable], options: &CloudProviderOptions) -> Vec<String> {
+        variables
+            .iter()
+            .filter(|var| var.is_secret)
+            .map(|var| var.value.clone())
+            .chain(Self::cloud_provider_secrets(options))
+            // Blank entry builds an empty regex, which matches everywhere and masks the whole log
+            .filter(|secret| !secret.trim().is_empty())
+            .collect()
+    }
 
-        // Cloud provider secrets
-        match &request.cloud_provider.options {
-            CloudProviderOptions::Aws { secret_access_key, .. } => {
-                secrets.push(secret_access_key.to_string());
-            }
+    /// Every credential the provider options carry: whatever reaches a log line gets masked.
+    fn cloud_provider_secrets(options: &CloudProviderOptions) -> Vec<String> {
+        match options {
+            CloudProviderOptions::Aws {
+                secret_access_key,
+                session_token,
+                vsphere_password,
+                ..
+            } => std::iter::once(secret_access_key.to_string())
+                .chain(session_token.iter().chain(vsphere_password.iter()).cloned())
+                .collect(),
+            CloudProviderOptions::AwsVsphere {
+                secret_access_key,
+                session_token,
+                vsphere_password,
+                ..
+            } => std::iter::once(vsphere_password.to_string())
+                .chain(secret_access_key.iter().chain(session_token.iter()).cloned())
+                .collect(),
             CloudProviderOptions::Scaleway {
                 scaleway_secret_key, ..
-            } => {
-                secrets.push(scaleway_secret_key.to_string());
-            }
-            CloudProviderOptions::Gcp { gcp_credentials } => {
-                secrets.push(gcp_credentials.private_key.to_string());
-                if let Ok(json_credentials_raw) = gcp_credentials.try_raw() {
-                    secrets.push(json_credentials_raw);
-                }
-            }
-            CloudProviderOptions::GcpAccessToken { access_token, .. } => {
-                secrets.push(access_token.to_string());
-            }
-            CloudProviderOptions::Azure { .. } => {}
-            CloudProviderOptions::OnPremise { .. } => {}
-            CloudProviderOptions::AwsVsphere { .. } => {}
-        };
-
-        secrets
+            } => vec![scaleway_secret_key.to_string()],
+            CloudProviderOptions::Gcp { gcp_credentials } => std::iter::once(gcp_credentials.private_key.to_string())
+                .chain(gcp_credentials.try_raw().ok())
+                .collect(),
+            CloudProviderOptions::GcpAccessToken { access_token, .. } => vec![access_token.to_string()],
+            CloudProviderOptions::Azure { client_secret, .. } => vec![client_secret.to_string()],
+            CloudProviderOptions::OnPremise { .. } => vec![],
+        }
     }
 
     /// Clone the blueprint repository and return the path + parsed tag info.
@@ -577,4 +589,75 @@ impl Task for BlueprintTask {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::BlueprintTask;
+    use crate::io_models::blueprint::BlueprintVariable;
+    use crate::io_models::engine_request::CloudProviderOptions;
+
+    #[test]
+    fn aws_sts_credentials_are_all_masked() {
+        let secrets = BlueprintTask::cloud_provider_secrets(&CloudProviderOptions::Aws {
+            access_key_id: "ASIAEXAMPLE".to_string(),
+            secret_access_key: "secret-key".to_string(),
+            session_token: Some("session-token".to_string()),
+            vsphere_user: None,
+            vsphere_password: Some("vsphere-password".to_string()),
+        });
+
+        assert_eq!(secrets, vec!["secret-key", "session-token", "vsphere-password"]);
+    }
+
+    #[test]
+    fn aws_vsphere_credentials_are_all_masked() {
+        let secrets = BlueprintTask::cloud_provider_secrets(&CloudProviderOptions::AwsVsphere {
+            access_key_id: Some("ASIAEXAMPLE".to_string()),
+            secret_access_key: Some("secret-key".to_string()),
+            session_token: Some("session-token".to_string()),
+            vsphere_user: "vsphere-user".to_string(),
+            vsphere_password: "vsphere-password".to_string(),
+        });
+
+        assert_eq!(secrets, vec!["vsphere-password", "secret-key", "session-token"]);
+    }
+
+    #[test]
+    fn azure_client_secret_is_masked() {
+        let secrets = BlueprintTask::cloud_provider_secrets(&CloudProviderOptions::Azure {
+            client_id: "client-id".to_string(),
+            client_secret: "client-secret".to_string(),
+            tenant_id: "tenant-id".to_string(),
+            subscription_id: "subscription-id".to_string(),
+        });
+
+        assert_eq!(secrets, vec!["client-secret"]);
+    }
+
+    #[test]
+    fn blank_credentials_never_reach_the_mask_list() {
+        let variables = vec![
+            BlueprintVariable {
+                name: "db_password".to_string(),
+                value: "  ".to_string(),
+                is_secret: true,
+            },
+            BlueprintVariable {
+                name: "db_name".to_string(),
+                value: "app".to_string(),
+                is_secret: false,
+            },
+        ];
+
+        let secrets = BlueprintTask::mask_list(
+            &variables,
+            &CloudProviderOptions::Aws {
+                access_key_id: "ASIAEXAMPLE".to_string(),
+                secret_access_key: "".to_string(),
+                session_token: Some("".to_string()),
+                vsphere_user: None,
+                vsphere_password: None,
+            },
+        );
+
+        assert!(secrets.is_empty());
+    }
+}
