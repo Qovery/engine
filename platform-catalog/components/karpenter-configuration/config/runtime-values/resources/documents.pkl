@@ -1,0 +1,66 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.resources.documents
+
+import "pkl:yaml"
+
+// Parsing runs during VALIDATE and COMPILE only. q-core recovers indexed syntax violations via DESCRIBE.
+// No cluster access or template execution.
+local parser = new yaml.Parser { useMapping = true; maxCollectionAliases = 32 }
+
+function rows(config: Mapping): List =
+  ((config.getOrNull("resources") as Listing?) ?? new Listing {}).toList()
+
+function parse(row: Any): Any =
+  if (row is Mapping && row.getOrNull("manifest") is String)
+    let (manifest = row["manifest"] as String)
+      if (manifest.length > 0 && manifest.length <= 65536)
+        let (documents = parser.parseAll(manifest))
+          if (documents.length == 1) documents[0] else null
+      else
+        null
+  else
+    null
+
+function name(document: Mapping): String? =
+  let (metadata = document.getOrNull("metadata"))
+    if (metadata is Mapping && metadata.getOrNull("name") is String) metadata["name"] else null
+
+function valid(document: Any): Boolean =
+  document is Mapping
+    && (
+      (
+        document.getOrNull("apiVersion") == "karpenter.sh/v1"
+          && document.getOrNull("kind") == "NodePool"
+      )
+        || (
+          document.getOrNull("apiVersion") == "karpenter.k8s.aws/v1"
+            && document.getOrNull("kind") == "EC2NodeClass"
+        )
+    )
+    && document.keys.every((key) -> List("apiVersion", "kind", "metadata", "spec").contains(key))
+    && name(document) != null
+    && name(document)!!.length <= 253
+    && name(document)!!.matches(
+      Regex("[a-z0-9]([-a-z0-9]*[a-z0-9])?([.][a-z0-9]([-a-z0-9]*[a-z0-9])?)*"),
+    )
+    && (document["metadata"] as Mapping).keys.every((key) ->
+      List("name", "labels", "annotations").contains(key)
+    )
+    && document.getOrNull("spec") is Mapping
+
+function collides(document: Mapping, previous: List, config: Mapping): Boolean =
+  let (resourceName = name(document))
+    (document["kind"] == "NodePool" && List("default", "stable").contains(resourceName))
+      || (document["kind"] == "EC2NodeClass" && resourceName == "default")
+      || previous.any((other) ->
+        other is Mapping
+          && other.getOrNull("kind") == document["kind"]
+          && name(other) == resourceName
+      )
+      || ((config.getOrNull("nodePools") as Listing?) ?? new Listing {})
+        .toList()
+        .any((pool) ->
+          pool is Mapping
+            && pool.getOrNull("name") is String
+            && resourceName == "qovery-\(pool["name"])"
+        )

@@ -5,6 +5,9 @@ import "nodePools/dependencies.pkl" as nodePoolsDependencies
 import "nodePools/helm.pkl" as nodePoolsHelm
 import "nodePools/inputs.pkl" as nodePoolsInputs
 import "nodePools/setting.pkl" as nodePoolsSetting
+import "resources/dependencies.pkl" as resourcesDependencies
+import "resources/helm.pkl" as resourcesHelm
+import "resources/setting.pkl" as resourcesSetting
 import "sdk/evaluate.pkl" as sdkEvaluate
 import "sdk/referenceData.pkl" as sdkReferenceData
 import "sdk/request.pkl" as sdkRequest
@@ -18,17 +21,24 @@ function component(request: Mapping): sdkEvaluate.Component =
       label = "Karpenter configuration"
       inputs = if (nodePoolsSetting.hasPools(profileConfig)) nodePoolsInputs.inputs else List()
       features =
-        List(new sdkEvaluate.Feature {
-          settings =
-            List(
-              nodePoolsSetting.forCluster(if (name is String) name else null, instances ?? List()),
-            )
-          rules =
-            nodePoolsDependencies.rules
-              + if (nodePoolsSetting.hasPools(profileConfig))
-                List(sdkReferenceData.required(instances))
-              else
-                List()
-          fragment = nodePoolsHelm.fragment
-        })
+        List(
+          new sdkEvaluate.Feature {
+            settings =
+              List(
+                nodePoolsSetting.forCluster(if (name is String) name else null, instances ?? List()),
+              )
+            rules =
+              nodePoolsDependencies.rules
+                + if (nodePoolsSetting.hasPools(profileConfig))
+                  List(sdkReferenceData.required(instances))
+                else
+                  List()
+            fragment = nodePoolsHelm.fragment
+          },
+          new sdkEvaluate.Feature {
+            settings = List(resourcesSetting.resources)
+            rules = resourcesDependencies.rules
+            fragment = resourcesHelm.fragment
+          },
+        )
     }

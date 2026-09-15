@@ -201,6 +201,8 @@ class BoolSetting extends ScalarSetting {
 }
 
 class StringSetting extends ScalarSetting {
+  format: contract.FieldFormat? = null
+  templates: List<contract.FieldTemplate>?(this == null || format != null) = null
   default: String?
   minLength: Int?
   maxLength: Int?
@@ -297,7 +299,8 @@ class ObjectSetting extends Setting {
 // values, so two rows may expose different members. Like an absent object, an absent array is an
 // empty one: structured defaults are outside the contract.
 class ArraySetting extends Setting {
-  items: Setting(nestable(List(this)))
+  // YAML editors carry templates on a named Field, so use ObjectSetting rows for them.
+  items: Setting(nestable(List(this)), !(this is StringSetting) || format == null)
   minItems: Int?
   maxItems: Int?
   uniqueItems: Boolean = false
@@ -403,6 +406,8 @@ function field(setting: Setting, operation: contract.Operation, scope: Scope): c
       description = describe(setting, operation, scope)
       sensitive = setting.sensitive
       constraints = setting.constraints(scope)
+      format = if (setting is StringSetting) setting.format else null
+      templates = if (setting is StringSetting) setting.templates else null
     }
   else
     throw("Unsupported setting \(setting.key)")

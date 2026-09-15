@@ -1,0 +1,37 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/settings.pkl"
+
+local context = settings.scope(new Mapping {}, null, new Mapping {}, List())
+local plain: settings.StringSetting = new { key = "name"; label = "Name" }
+local yamlField: settings.StringSetting = new {
+  key = "manifest"
+  label = "Manifest"
+  format = "kubernetes-resource-yaml"
+  templates =
+    List(new contract.FieldTemplate { id = "example"; label = "Example"; value = "kind: Example" })
+}
+local renderer = new JsonRenderer { omitNullProperties = true }
+
+facts {
+  ["ordinary scalar descriptors do not acquire editor metadata"] {
+    renderer.renderValue(settings.field(plain, contract.describeOperation, context))
+      == renderer.renderValue(new Mapping {
+        ["key"] = "name"
+        ["type"] = "string"
+        ["required"] = false
+        ["label"] = "Name"
+        ["sensitive"] = false
+        ["constraints"] = new Mapping {}
+      })
+  }
+  ["editor templates are suggestions, never configuration defaults"] {
+    settings.resolve(List(yamlField), new Mapping {})["manifest"] == null
+    settings.resolve(List(yamlField), new Mapping { ["manifest"] = "saved yaml" })["manifest"]
+      == "saved yaml"
+    settings.field(yamlField, contract.describeOperation, context).format
+      == "kubernetes-resource-yaml"
+    settings.field(yamlField, contract.describeOperation, context).templates == yamlField.templates
+  }
+}

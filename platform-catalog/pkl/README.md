@@ -193,3 +193,17 @@ The reusable [karpenter-v1 fixtures](tests/fixtures/karpenter-v1/README.md) iden
 pairs, isolated bundle root and validation commands. The 16 [scalar-v1 baseline exchanges](tests/fixtures/scalar-v1/exchanges.json)
 were captured from unmodified Engine `bc6142c261eacfb605c08c4d26fb311018dd0541` before this extension;
 they cover all four operations for cluster-agent, qovery-operator, Loki defaults and Loki AWS S3.
+
+
+### Optional YAML editor metadata
+
+`StringSetting` can declare `format = "kubernetes-resource-yaml"` and an optional
+`templates: List<FieldTemplate>` (`id`, `label`, `value`). They are projected onto the existing
+scalar `Field`; other fields omit both properties. Template IDs must be unique and templates
+require a format. Format selects the editor, templates only offer starting text. They are never
+configuration defaults. For collections, use `ArraySetting` with `ObjectSetting` rows containing
+a named `StringSetting`; a scalar array item has no editor metadata.
+
+Readers must understand these new optional properties before a catalogue exposing them is
+activated. This metadata does not itself validate YAML or a CRD schema. The Karpenter component
+provides the first implementation; other components can opt into the same format deliberately.

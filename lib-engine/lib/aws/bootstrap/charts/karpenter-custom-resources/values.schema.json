@@ -39,6 +39,79 @@
           }
         }
       }
+    },
+    "resources": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "required": [
+          "apiVersion",
+          "kind",
+          "metadata",
+          "spec"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 253
+              },
+              "labels": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "annotations": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "spec": {
+            "type": "object"
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "apiVersion": {
+                "const": "karpenter.sh/v1"
+              },
+              "kind": {
+                "const": "NodePool"
+              }
+            }
+          },
+          {
+            "properties": {
+              "apiVersion": {
+                "const": "karpenter.k8s.aws/v1"
+              },
+              "kind": {
+                "const": "EC2NodeClass"
+              }
+            }
+          }
+        ]
+      }
     }
   }
 }

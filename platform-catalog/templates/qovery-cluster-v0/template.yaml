@@ -199,7 +199,7 @@ platformTemplateRelease:
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: karpenter-custom-resources
-            version: 0.1.0
+            version: 0.2.0
           dependsOn:
             - component: karpenter-crd
               kind: requires

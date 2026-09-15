@@ -1,0 +1,49 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.resources.starters
+
+import "../contract.pkl"
+
+// Curated incomplete skeletons for the pinned Karpenter 1.10.0 CRDs. No runtime resource
+// reads: templates travel inside the digest-pinned Pkl bundle and never become defaults.
+// cty 2.6.0 --minimal was evaluated but emitted status and incomplete selector structures.
+values: List<contract.FieldTemplate> =
+  List(
+    new contract.FieldTemplate {
+      id = "nodepool"
+      label = "NodePool"
+      value =
+        """
+        apiVersion: karpenter.sh/v1
+        kind: NodePool
+        metadata:
+          name: "" # Choose a unique name; default/stable belong to Qovery.
+        spec:
+          template:
+            spec:
+              nodeClassRef:
+                group: karpenter.k8s.aws
+                kind: EC2NodeClass
+                name: "" # Name of a new or existing EC2NodeClass.
+              requirements: [] # Add constraints for the instances this pool may provision.
+        """
+    },
+    new contract.FieldTemplate {
+      id = "ec2nodeclass"
+      label = "EC2NodeClass"
+      value =
+        """
+        apiVersion: karpenter.k8s.aws/v1
+        kind: EC2NodeClass
+        metadata:
+          name: "" # Choose a unique name; default belongs to Qovery.
+        spec:
+          role: "" # Existing node IAM role name. Use instanceProfile instead if needed, never both.
+          amiSelectorTerms:
+            - alias: "" # Supply a verified AMI alias. Selecting by id also requires amiFamily.
+          subnetSelectorTerms:
+            - id: "" # Existing subnet ID; alternatively use tags.
+          securityGroupSelectorTerms:
+            - id: "" # Existing security group ID; alternatively use tags.
+        """
+    },
+  )

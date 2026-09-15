@@ -1,0 +1,66 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.resources.dependencies
+
+import "../sdk/rules.pkl" as sdkRules
+import "documents.pkl"
+
+rules: List<sdkRules.Rule> =
+  List(
+    new sdkRules.RowRule {
+      // Resolve must return input requirements even when the YAML draft is incomplete.
+      operations = List("VALIDATE", "COMPILE")
+      code = "INVALID_RESOURCE"
+      message =
+        "Supply one NodePool (karpenter.sh/v1) or EC2NodeClass (karpenter.k8s.aws/v1), with metadata.name and spec; omit status, namespace and runtime metadata"
+      paths = (scope) ->
+        documents
+          .rows(scope.config)
+          .take(32)
+          .mapIndexed((index, row) ->
+            if (!documents.valid(documents.parse(row)))
+              List("resources[\(index)].manifest")
+            else
+              List()
+          )
+          .flatMap((paths) -> paths)
+    },
+    new sdkRules.RowRule {
+      // Resolve must return input requirements even when the YAML draft is incomplete.
+      operations = List("VALIDATE", "COMPILE")
+      code = "RESOURCE_NAME_CONFLICT"
+      message =
+        "This resource name is already used by another YAML resource, a guided pool or a Qovery pool"
+      paths = (scope) ->
+        let (parsed = documents.rows(scope.config).take(32).map((row) -> documents.parse(row)))
+          parsed
+            .mapIndexed((index, document) ->
+              if (
+                documents.valid(document)
+                  && documents.collides(document as Mapping, parsed.take(index), scope.config)
+              )
+                List("resources[\(index)].manifest")
+              else
+                List()
+            )
+            .flatMap((paths) -> paths)
+    },
+    new sdkRules.FieldRule {
+      code = "UNSUPPORTED_CLUSTER"
+      fieldPath = "clusterContext"
+      message = "This catalogue model requires customer-managed AWS EKS"
+      violated = (scope) ->
+        !documents.rows(scope.config).isEmpty
+          && (scope.cluster.provider != "AWS" || scope.cluster.mode != "CUSTOMER_MANAGED")
+    },
+    new sdkRules.FieldRule {
+      code = "UNSUPPORTED_KUBERNETES_VERSION"
+      fieldPath = "clusterContext.kubernetesVersion"
+      message = "Supply a Kubernetes version in the supported 1.30–1.35 range"
+      violated = (scope) ->
+        !documents.rows(scope.config).isEmpty
+          && (
+            scope.cluster.kubernetesVersion == null
+              || !scope.cluster.kubernetesVersion!!.matches(Regex("1[.]3[0-5]"))
+          )
+    },
+  )

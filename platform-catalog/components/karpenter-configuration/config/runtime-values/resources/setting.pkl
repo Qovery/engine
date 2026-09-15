@@ -1,0 +1,27 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.resources.setting
+
+import "../sdk/settings.pkl" as sdkSettings
+import "starters.pkl"
+
+resources: sdkSettings.ArraySetting = new {
+  key = "resources"
+  label = "YAML resources"
+  description =
+    "Additional NodePool and EC2NodeClass resources. Changes apply on the next cluster deployment. Removing or renaming a resource deletes the previous object."
+  maxItems = 32
+  items = new sdkSettings.ObjectSetting {
+    key = "resource"
+    label = "Resource"
+    fields =
+      List(new sdkSettings.StringSetting {
+        key = "manifest"
+        label = "YAML manifest"
+        required = true
+        minLength = 1
+        maxLength = 65536
+        format = "kubernetes-resource-yaml"
+        templates = starters.values
+      })
+  }
+}

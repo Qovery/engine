@@ -48,8 +48,21 @@ abstract class StructuredField {
   sensitive: Boolean = false
 }
 
+// Optional editor metadata. Null properties are omitted by the standard JSON renderer,
+// preserving descriptors for existing consumers when a field does not opt in.
+typealias FieldFormat = "kubernetes-resource-yaml"
+class FieldTemplate {
+  id: String(!isEmpty)
+  label: String(!isEmpty)
+  value: String
+}
+
 // The existing scalar API, including string-encoded defaults and scalar-only logical inputs.
 class Field {
+  format: FieldFormat?(this == null || type == "string") = null
+  templates: List<FieldTemplate>?(
+    this == null || (format != null && map((entry) -> entry.id).isDistinct),
+  ) = null
   key: String
   type: FieldType
   required: Boolean

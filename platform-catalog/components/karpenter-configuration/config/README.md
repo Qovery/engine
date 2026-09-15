@@ -1,7 +1,7 @@
 # Karpenter custom pool configuration model
 
 This bundle compiles the accepted Source 2 pool profile into values for the new
-`karpenter-custom-resources` chart, version `0.1.0`, targeting Karpenter `1.10.0`.
+`karpenter-custom-resources` chart, version `0.2.0`, targeting Karpenter `1.10.0`.
 It does not use or modify the legacy `karpenter-configuration` chart.
 
 `model.pkl` decodes the request and calls the canonical SDK evaluator. `settings.pkl`
@@ -80,7 +80,7 @@ The custom release remains `kube-system/karpenter-custom-configuration`, distinc
 Qovery release `kube-system/karpenter-configuration`. Per-component activation is future work.
 Controller and Qovery fields remain required when enabling the layer.
 
-An absent `nodePools` field or `nodePools: []` is valid and compiles `pools: []`, rendering
+When `resources` is also absent or empty, an absent `nodePools` field or `nodePools: []` is valid and compiles `pools: []`, rendering
 no Kubernetes resource. It exposes no custom AWS requirements and does not validate unused
 AWS values or cluster/version admission. The model's component factory conditions its logical
 input declarations on the draft; scalar/row validation and the compile gate stay in the
@@ -91,3 +91,73 @@ Malformed arrays and incomplete rows are still rejected.
 An empty desired state removes resources previously owned by this custom Helm release.
 It is not a preserve-existing-resources switch. Retain all desired pools in the configuration
 before updating an existing release; no automatic migration or restoration is provided.
+
+
+## Optional raw YAML resources
+
+The existing `karpenter-configuration` component accepts an optional `resources` array alongside
+`nodePools`. Each row contains a `manifest` string with exactly one YAML document:
+
+```yaml
+resources:
+  - manifest: |
+      apiVersion: karpenter.sh/v1
+      kind: NodePool
+      metadata:
+        name: custom-arm
+      spec:
+        template:
+          spec:
+            nodeClassRef:
+              group: karpenter.k8s.aws
+              kind: EC2NodeClass
+              name: existing-class
+            requirements:
+              - key: kubernetes.io/arch
+                operator: In
+                values: [arm64]
+```
+
+The descriptor for `resources.items.fields.manifest` declares
+`format: kubernetes-resource-yaml`. This explicit format opts into a YAML editor; the optional
+`templates` list supplies the `NodePool` and `EC2NodeClass` starter choices. A consumer must use
+the **format**, not the presence of templates or a hard-coded component key, to select the editor.
+Templates never supply an applied default or replace a saved manifest.
+
+The two curated skeletons live in `runtime-values/resources/starters.pkl`, inside the pinned
+bundle. They correspond to the vendored Karpenter **1.10.0** CRDs and intentionally require users
+to fill names and AWS selectors. `cty` 2.6.0 (`generate crd --minimal --comments --no-random`)
+was evaluated: its NodePool output included runtime status and arbitrary values, and its
+EC2NodeClass output had an incorrect selector structure. We therefore use the documented
+curated fallback, without a new generator or CI binary. Review skeletons with CRD upgrades;
+tests compare their structure and required fields with the vendored schemas. Pkl imports these
+strings from the bundle, with no external file reads or cluster calls.
+
+Validation is deliberately limited in this stage:
+
+- At most 32 rows, each manifest at most 65,536 characters.
+- One mapping per document: `karpenter.sh/v1` NodePool or `karpenter.k8s.aws/v1` EC2NodeClass,
+  with `metadata.name` and an object `spec`. Only name, labels and annotations are accepted in
+  metadata; no namespace, status or runtime ownership fields.
+- Duplicate kind/name pairs, collisions with the final guided names (`qovery-<name>`), NodePool
+  `default`/`stable` and EC2NodeClass `default` are rejected with indexed field violations.
+- Raw-only drafts do not require the guided AWS logical inputs or regional instance reference
+  data. They still require the supported customer-managed AWS context and Kubernetes version.
+- EC2NodeClass references may be shared or point to an existing class. No cluster lookup,
+  resource adoption or full CRD schema/CEL validation is performed.
+
+Pkl parses YAML as data into Helm `resources`. The chart uses `toYaml`, never `tpl`, preserving
+complete specs and literal template-looking strings. All custom resources share the existing
+`kube-system/karpenter-custom-configuration` release. Removing or renaming an item changes the
+release's desired resource inventory: Helm can delete the previous resource. Preserve desired
+objects explicitly; this does not migrate resources from another release.
+
+**Consumer rollout prerequisite:** do not publish/activate this descriptor on current strict
+q-core readers until they accept optional `format` and `templates`. The q-core companion change validates declared YAML fields before returning compilation results.
+If Pkl parsing fails during VALIDATE or COMPILE, q-core obtains DESCRIBE for the same draft
+and returns indexed syntax violations. DESCRIBE and RESOLVE_REQUIREMENTS must remain independent
+of manifest parsing: resolution preserves AWS input requirements even for malformed YAML. Resource
+identity and collision checks run during VALIDATE and COMPILE. This avoids a second evaluation
+on valid requests. Its syntax limits include one mapping document and at
+most 32 collection aliases, matching this model. The console then renders the format and template choices through
+the generated client contract. `kubectl-validate` and full CRD validation remain a later step.

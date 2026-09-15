@@ -1,0 +1,12 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.karpenterConfiguration.resources.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "documents.pkl"
+
+// Only called after validation succeeds. Preserve the complete spec and user metadata.
+fragment: sdkHelm.Fragment = (scope) -> new Mapping {
+  when (!documents.rows(scope.config).isEmpty) {
+    ["resources"] = documents.rows(scope.config).map((row) -> documents.parse(row)).toListing()
+  }
+}

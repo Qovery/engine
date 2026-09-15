@@ -710,3 +710,256 @@ fn regional_reference_data_supplies_choices_and_rejects_unknown_instance_types()
         assert!(result.get("helmValues").is_none());
     }
 }
+
+fn raw_pool(name: &str) -> Value {
+    json!({
+        "apiVersion": "karpenter.sh/v1", "kind": "NodePool", "metadata": {"name": name},
+        "spec": {
+            "template": {"spec": {
+                "nodeClassRef": {"group": "karpenter.k8s.aws", "kind": "EC2NodeClass", "name": "shared-class"},
+                "requirements": [{"key": "kubernetes.io/arch", "operator": "In", "values": ["arm64"]}]
+            }},
+            "disruption": {"consolidationPolicy": "WhenEmpty", "consolidateAfter": "5m"}
+        }
+    })
+}
+
+fn with_resources(mut req: Value, resources: &[Value]) -> Value {
+    req["profileConfig"]["resources"] = json!(
+        resources
+            .iter()
+            .map(|value| { json!({"manifest": serde_yaml::to_string(value).unwrap()}) })
+            .collect::<Vec<_>>()
+    );
+    req
+}
+
+#[test]
+fn raw_resources_preserve_specs_and_literal_helm_text_alongside_guided_pools() {
+    let pool = raw_pool("yaml-pool");
+    let class = json!({
+        "apiVersion": "karpenter.k8s.aws/v1", "kind": "EC2NodeClass",
+        "metadata": {"name": "shared-class", "annotations": {"example.com/note": "{{ .Release.Name }}"}},
+        "spec": {
+            "role": "existing-node-role", "amiSelectorTerms": [{"alias": "al2023@v20260814"}],
+            "subnetSelectorTerms": [{"tags": {"custom": "discovery"}}],
+            "securityGroupSelectorTerms": [{"id": "sg-0123456789abcdef0"}],
+            "userData": "#!/bin/bash\necho '{{ literal user data }}'\n",
+            "kubelet": {"maxPods": 40}
+        }
+    });
+    let req = with_resources(request("configuration"), &[pool.clone(), class.clone()]);
+    let docs = rendered_configuration(&req);
+    assert_eq!(docs.len(), 6);
+    assert_eq!(resource(&docs, "NodePool", "yaml-pool"), &pool);
+    assert_eq!(resource(&docs, "EC2NodeClass", "shared-class"), &class);
+    for original in rendered_configuration(&request("configuration")) {
+        assert!(docs.contains(&original), "guided resource changed: {original}");
+    }
+}
+
+#[test]
+fn raw_only_configuration_needs_no_guided_aws_inputs_or_reference_data() {
+    let mut req = request("configuration");
+    req["profileConfig"] = json!({});
+    req["clusterInputs"] = json!({});
+    req["referenceData"] = Value::Null;
+    // Sharing a class does not require it to be created in this draft.
+    let req = with_resources(req, &[raw_pool("first"), raw_pool("second")]);
+    let result = evaluate(&req);
+    assert_eq!(result["requiredInputs"], json!([]));
+    assert_eq!(rendered_configuration(&req).len(), 2);
+}
+
+#[test]
+fn yaml_editor_metadata_exposes_incomplete_starters_without_defaulting_resources() {
+    let mut req = request("configuration");
+    req["profileConfig"] = json!({});
+    req["operation"] = json!("DESCRIBE");
+    let result = evaluate(&req);
+    let manifest = &result["fields"][1]["items"]["fields"][0];
+    assert_eq!(manifest["format"], "kubernetes-resource-yaml");
+    assert!(manifest.get("defaultValue").is_none());
+    let templates = manifest["templates"].as_array().unwrap();
+    assert_eq!(templates.len(), 2);
+    for template in templates {
+        let skeleton: Value = serde_yaml::from_str(template["value"].as_str().unwrap()).unwrap();
+        assert_eq!(skeleton["metadata"], json!({"name": ""}));
+        assert!(skeleton.get("status").is_none());
+        assert!(skeleton["spec"].is_object());
+        let crd_file = match template["id"].as_str().unwrap() {
+            "nodepool" => "karpenter.sh_nodepools.yaml",
+            "ec2nodeclass" => "karpenter.k8s.aws_ec2nodeclasses.yaml",
+            other => panic!("unexpected template: {other}"),
+        };
+        let crd: Value = serde_yaml::from_slice(
+            &fs::read(repository_path(format!(
+                "lib-engine/lib/aws/bootstrap/charts/karpenter/crds/{crd_file}"
+            )))
+            .unwrap(),
+        )
+        .unwrap();
+        let version = crd["spec"]["versions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|v| v["name"] == "v1")
+            .unwrap();
+        assert_eq!(skeleton["apiVersion"], format!("{}/v1", crd["spec"]["group"].as_str().unwrap()));
+        assert_eq!(skeleton["kind"], crd["spec"]["names"]["kind"]);
+        assert_skeleton_structure(
+            &skeleton["spec"],
+            &version["schema"]["openAPIV3Schema"]["properties"]["spec"],
+            "spec",
+        );
+
+        let mut incomplete = with_resources(request("configuration"), &[skeleton]);
+        incomplete["operation"] = json!("COMPILE");
+        let rejected = evaluate(&incomplete);
+        assert!(rejected.get("helmValues").is_none(), "starter must require editing");
+    }
+    req["operation"] = json!("COMPILE");
+    assert_eq!(compiled(&req), json!({"pools": []}));
+    assert!(rendered_configuration(&req).is_empty());
+}
+
+#[test]
+fn resource_collisions_fail_before_rendering_with_indexed_errors() {
+    for (documents, path) in [
+        (vec![raw_pool("default")], "resources[0].manifest"),
+        (vec![raw_pool("stable")], "resources[0].manifest"),
+        (vec![raw_pool("qovery-general")], "resources[0].manifest"),
+        (vec![raw_pool("same"), raw_pool("same")], "resources[1].manifest"),
+        (
+            vec![
+                json!({"apiVersion":"karpenter.k8s.aws/v1", "kind":"EC2NodeClass", "metadata":{"name":"default"}, "spec":{}}),
+            ],
+            "resources[0].manifest",
+        ),
+    ] {
+        let result = evaluate(&with_resources(request("configuration"), &documents));
+        assert!(result.get("helmValues").is_none(), "{result}");
+        assert!(
+            result["violations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| { v["code"] == "RESOURCE_NAME_CONFLICT" && v["fieldPath"] == path }),
+            "{result}"
+        );
+    }
+    // Identity includes kind: a pool and a class may legitimately share a name.
+    let same_name =
+        json!({"apiVersion":"karpenter.k8s.aws/v1", "kind":"EC2NodeClass", "metadata":{"name":"pair"}, "spec":{}});
+    assert_eq!(
+        compiled(&with_resources(request("configuration"), &[raw_pool("pair"), same_name]))["resources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn raw_document_shape_and_bounds_fail_closed_without_crd_validation() {
+    let mut namespaced = raw_pool("test");
+    namespaced["metadata"]["namespace"] = json!("kube-system");
+    let mut runtime = raw_pool("test");
+    runtime["status"] = json!({});
+    let mut missing_spec = raw_pool("test");
+    missing_spec.as_object_mut().unwrap().remove("spec");
+    for document in [
+        json!([]),
+        json!(null),
+        json!({"apiVersion":"v1", "kind":"Secret", "metadata":{"name":"test"}, "spec":{}}),
+        namespaced,
+        runtime,
+        missing_spec,
+    ] {
+        let result = evaluate(&with_resources(request("configuration"), &[document]));
+        assert!(result.get("helmValues").is_none());
+        assert!(
+            result["violations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v["code"] == "INVALID_RESOURCE" && v["fieldPath"] == "resources[0].manifest"),
+            "{result}"
+        );
+    }
+    for manifest in ["---\n---\n".to_owned(), " ".repeat(65537)] {
+        let mut req = request("configuration");
+        req["profileConfig"]["resources"] = json!([{"manifest":manifest}]);
+        let result = evaluate(&req);
+        assert!(result.get("helmValues").is_none(), "{result}");
+    }
+    let resources: Vec<_> = (0..33).map(|i| raw_pool(&format!("pool-{i}"))).collect();
+    let result = evaluate(&with_resources(request("configuration"), &resources));
+    assert!(result.get("helmValues").is_none());
+    assert!(
+        result["violations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v["code"] == "LENGTH_OUT_OF_RANGE" && v["fieldPath"] == "resources")
+    );
+}
+
+// Starter values are intentionally incomplete; only check required field structure and known
+// properties against the pinned schemas, not scalar validity, selectors or CEL admission rules.
+fn assert_skeleton_structure(value: &Value, schema: &Value, path: &str) {
+    if let Some(fields) = value.as_object() {
+        if let Some(required) = schema["required"].as_array() {
+            for key in required {
+                assert!(fields.contains_key(key.as_str().unwrap()), "missing {path}.{key}");
+            }
+        }
+        for (key, child) in fields {
+            let child_schema = schema["properties"]
+                .get(key)
+                .unwrap_or_else(|| panic!("unknown starter field {path}.{key}"));
+            assert_skeleton_structure(child, child_schema, &format!("{path}.{key}"));
+        }
+    } else if let Some(items) = value.as_array() {
+        for child in items {
+            assert_skeleton_structure(child, &schema["items"], &format!("{path}[]"));
+        }
+    }
+}
+
+#[test]
+fn malformed_yaml_resolves_guided_pool_inputs_without_parsing_resources() {
+    let mut req = request("configuration");
+    req["operation"] = json!("RESOLVE_REQUIREMENTS");
+    let expected = evaluate(&req);
+    assert_eq!(expected["requiredInputs"].as_array().unwrap().len(), 3);
+    req["profileConfig"]["resources"] = json!([{"manifest": "spec: [unterminated"}]);
+    let resolved = evaluate(&req);
+    assert_eq!(resolved["requiredInputs"], expected["requiredInputs"]);
+    assert_eq!(resolved["fields"][1]["itemFields"][0][0]["format"], "kubernetes-resource-yaml");
+    assert!(resolved.get("helmValues").is_none());
+}
+
+#[test]
+fn malformed_yaml_still_describes_the_editor_but_cannot_compile() {
+    let mut req = request("configuration");
+    req["profileConfig"]["resources"] = json!([{"manifest": "spec: [unterminated"}]);
+    req["operation"] = json!("DESCRIBE");
+    let described = evaluate(&req);
+    assert_eq!(described["fields"][1]["itemFields"][0][0]["format"], "kubernetes-resource-yaml");
+    // Until q-core adds indexed syntax prevalidation this intentionally fails evaluation closed.
+    req["operation"] = json!("COMPILE");
+    let isolated = tempdir().unwrap();
+    copy_bundle(
+        &repository_path("platform-catalog/components/karpenter-configuration/config/runtime-values"),
+        isolated.path(),
+    );
+    let output = Command::new(std::env::var_os("PKL_BIN").unwrap_or_else(|| "pkl".into()))
+        .args(["eval", "--allowed-resources=^prop:request$", "-p"])
+        .arg(format!("request={req}"))
+        .arg(isolated.path().join("model.pkl"))
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "no partial Helm values may escape");
+}
