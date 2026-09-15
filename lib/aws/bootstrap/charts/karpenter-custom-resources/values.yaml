@@ -1,2 +1,5 @@
 # The model compiles one pair per entry. Empty input creates no legacy default pools.
 pools: []
+
+# Optional complete custom resources, rendered as data (never evaluated as Helm templates).
+resources: []
