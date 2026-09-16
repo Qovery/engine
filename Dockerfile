@@ -4,6 +4,11 @@
 ARG KUBECTL_VERSION="1.35.4"
 ARG HELM_VERSION="3.20.0-1"
 ARG TERRAFORM_VERSION="1.9.7"
+# Blueprint preview only. The default above is pinned to what the cluster and managed-database modules
+# require exactly, while catalog modules declare lower bounds, so the preview needs a newer binary to
+# plan them. Keep in step with BLUEPRINT_TERRAFORM_BINARY / BLUEPRINT_OPENTOFU_BINARY in cmd/terraform.rs.
+ARG BLUEPRINT_TERRAFORM_VERSION="1.13.3"
+ARG BLUEPRINT_OPENTOFU_VERSION="1.12.6"
 ARG HELM_DIFF_VERSION="v3.15.7"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
@@ -283,6 +288,21 @@ RUN curl -fsSLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFO
   unzip -o terraform.zip terraform && \
   mv terraform /usr/bin/ && \
   rm -rf terraform.zip 
+
+ARG BLUEPRINT_TERRAFORM_VERSION
+ARG BLUEPRINT_OPENTOFU_VERSION
+
+# Version-named so a bump is visible in the image and in `docker history`, and so the default
+# `terraform` on PATH stays the one every infrastructure module pins.
+RUN curl -fsSLo blueprint-terraform.zip https://releases.hashicorp.com/terraform/${BLUEPRINT_TERRAFORM_VERSION}/terraform_${BLUEPRINT_TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
+  unzip -o blueprint-terraform.zip terraform && \
+  mv terraform /usr/bin/terraform-${BLUEPRINT_TERRAFORM_VERSION} && \
+  rm -rf blueprint-terraform.zip
+
+RUN curl -fsSLo tofu.zip https://github.com/opentofu/opentofu/releases/download/v${BLUEPRINT_OPENTOFU_VERSION}/tofu_${BLUEPRINT_OPENTOFU_VERSION}_linux_$(dpkg --print-architecture).zip && \
+  unzip -o tofu.zip tofu && \
+  mv tofu /usr/bin/tofu-${BLUEPRINT_OPENTOFU_VERSION} && \
+  rm -rf tofu.zip
 
 RUN groupadd -g 1000 qovery && \
   useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \

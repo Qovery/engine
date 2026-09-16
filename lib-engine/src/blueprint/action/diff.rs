@@ -15,8 +15,10 @@
 //! is a pinned reference, so a catalog tag bump's changes are fully expressed by the wrapper.
 
 use crate::blueprint::models::error::BlueprintError;
+use crate::blueprint::models::spec::TerraformFlavor;
 use crate::cmd::terraform::{
-    TerraformOutput, TerraformTimeBounds, terraform_init_validate_lock_free_bounded, terraform_plan_internal_bounded,
+    BLUEPRINT_OPENTOFU_BINARY, BLUEPRINT_TERRAFORM_BINARY, TerraformOutput, TerraformTimeBounds,
+    terraform_init_validate_lock_free_bounded, terraform_plan_internal_bounded,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
@@ -64,9 +66,11 @@ pub fn diff_underlying_terraform(
     cloud_envs: &[(&str, &str)],
     kubeconfig_path: &Path,
     timeout_sec: u64,
+    flavor: TerraformFlavor,
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<String, Box<EngineError>> {
+    let binary = diff_binary(flavor);
     let backend = resolve_backend_decision(request)
         .map_err(|e| Box::new(EngineError::new_blueprint_error(event_details.clone(), e)))?;
 
@@ -161,8 +165,19 @@ pub fn diff_underlying_terraform(
         event_details.clone(),
         EventMessage::new("Running terraform init + validate on underlying module".to_string(), None),
     ));
-    terraform_init_validate_lock_free_bounded(&dir, &envs, &TerraformValidators::Default, Some(bounds))
-        .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
+    terraform_init_validate_lock_free_bounded(&dir, &envs, &TerraformValidators::Default, Some(bounds), binary)
+        .map_err(|e| {
+            // Named explicitly: a catalog requiring a newer terraform than this binary fails here, and
+            // the message is the only thing that says so -- the preview carries no execution id to trace.
+            logger.log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new(
+                    format!("terraform init failed using `{binary}` on the underlying module"),
+                    Some(format!("{e:?}")),
+                ),
+            ));
+            Box::new(EngineError::new_terraform_error(event_details.clone(), e))
+        })?;
 
     logger.log(EngineEvent::Info(
         event_details.clone(),
@@ -170,10 +185,20 @@ pub fn diff_underlying_terraform(
     ));
     // Preview is read-only — disable state locking so it never blocks a real deploy
     let plan_output =
-        terraform_plan_internal_bounded(&dir, &envs, &TerraformValidators::Default, false, false, Some(bounds))
+        terraform_plan_internal_bounded(&dir, &envs, &TerraformValidators::Default, false, false, Some(bounds), binary)
             .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(truncate_diff_payload(&plan_output))
+}
+
+/// Which binary plans a catalog module. Not the engine's default one: that is pinned to the version
+/// the cluster and managed-database modules require exactly, while catalog modules declare lower
+/// bounds only — so one sufficiently new binary per flavor plans every published version.
+fn diff_binary(flavor: TerraformFlavor) -> &'static str {
+    match flavor {
+        TerraformFlavor::Terraform => BLUEPRINT_TERRAFORM_BINARY,
+        TerraformFlavor::OpenTofu => BLUEPRINT_OPENTOFU_BINARY,
+    }
 }
 
 /// How the diff run wires terraform state, derived from the request.
@@ -501,5 +526,22 @@ mod tests {
             env_kube_name: "env-ns".into(),
             backend_type: None,
         }
+    }
+
+    use crate::cmd::terraform::DEFAULT_TERRAFORM_BINARY;
+
+    #[test]
+    fn diff_uses_a_binary_new_enough_for_catalog_modules() {
+        // Not the engine default: that one is pinned to 1.9.7 for the infrastructure modules, and
+        // catalog modules requiring >= 1.11 cannot be planned with it.
+        assert_eq!(diff_binary(TerraformFlavor::Terraform), BLUEPRINT_TERRAFORM_BINARY);
+        assert_ne!(diff_binary(TerraformFlavor::Terraform), DEFAULT_TERRAFORM_BINARY);
+    }
+
+    #[test]
+    fn diff_uses_tofu_for_opentofu_blueprints() {
+        // Was diffed with `terraform` before, a binary the image did not even ship for OpenTofu.
+        assert_eq!(diff_binary(TerraformFlavor::OpenTofu), BLUEPRINT_OPENTOFU_BINARY);
+        assert!(diff_binary(TerraformFlavor::OpenTofu).starts_with("tofu"));
     }
 }

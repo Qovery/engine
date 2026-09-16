@@ -446,6 +446,7 @@ impl Task for BlueprintTask {
                         &cloud_envs,
                         &kubeconfig_path,
                         tf_spec.timeout_sec,
+                        tf_spec.flavor.clone(),
                         &event_details,
                         self.logger.as_ref(),
                     )?;

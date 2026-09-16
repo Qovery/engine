@@ -4,8 +4,8 @@ pub mod diff;
 
 use crate::blueprint::models::error::BlueprintError;
 use crate::cmd::terraform::{
-    TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate, terraform_init_validate_bounded,
-    terraform_plan_internal, terraform_plan_internal_bounded,
+    DEFAULT_TERRAFORM_BINARY, TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate,
+    terraform_init_validate_bounded, terraform_plan_internal, terraform_plan_internal_bounded,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
@@ -156,7 +156,16 @@ pub(crate) fn render_and_diff(
         EventMessage::new("Running terraform plan".to_string(), None),
     ));
     let plan_output =
-        terraform_plan_internal_bounded(&dir, &envs, &TerraformValidators::Default, false, false, Some(bounds))
+        // The wrapper module, not a catalog one: it declares no version constraint, so the default binary.
+        terraform_plan_internal_bounded(
+            &dir,
+            &envs,
+            &TerraformValidators::Default,
+            false,
+            false,
+            Some(bounds),
+            DEFAULT_TERRAFORM_BINARY,
+        )
             .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(diff::truncate_diff_payload(&plan_output))
