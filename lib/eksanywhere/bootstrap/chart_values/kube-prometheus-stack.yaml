@@ -72,13 +72,66 @@ kube-state-metrics:
           - gateways
           - httproutes
         verbs: [ "list", "watch" ]
+      - apiGroups: [ "cert-manager.io" ]
+        resources:
+          - certificates
+        verbs: [ "list", "watch" ]
 
-  # Enable custom resource monitoring for HTTPRoute
+  # Enable custom resource monitoring for HTTPRoute and cert-manager Certificates
   customResourceState:
     enabled: true
     config:
       spec:
         resources:
+          - groupVersionKind:
+              group: cert-manager.io
+              version: v1
+              kind: Certificate
+            metricNamePrefix: kube_certmanager_certificate
+            labelsFromPath:
+              name: [ metadata, name ]
+              namespace: [ metadata, namespace ]
+              qovery_com_service_id: [ metadata, labels, qovery.com/service-id ]
+              qovery_com_service_type: [ metadata, labels, qovery.com/service-type ]
+              qovery_com_router_name: [ metadata, labels, qovery.com/router-name ]
+              qovery_com_associated_service_id: [ metadata, labels, qovery.com/associated-service-id ]
+              qovery_com_associated_service_type: [ metadata, labels, qovery.com/associated-service-type ]
+              qovery_com_environment_id: [ metadata, labels, qovery.com/environment-id ]
+              qovery_com_project_id: [ metadata, labels, qovery.com/project-id ]
+            metrics:
+              - name: condition
+                help: "Certificate status conditions"
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [ status, conditions ]
+                    labelsFromPath:
+                      condition: [ type ]
+                    valueFrom: [ status ]
+              - name: renewal_timestamp_seconds
+                help: "Certificate renewal timestamp"
+                errorLogV: 10
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [ status ]
+                    valueFrom: [ renewalTime ]
+              - name: expiration_timestamp_seconds
+                help: "Certificate expiration timestamp"
+                errorLogV: 10
+                each:
+                  type: Gauge
+                  gauge:
+                    path: [ status ]
+                    valueFrom: [ notAfter ]
+              - name: dns_names
+                help: "Certificate DNS names"
+                each:
+                  type: Info
+                  info:
+                    path: [ spec, dnsNames ]
+                    labelsFromPath:
+                      domain: []
           - groupVersionKind:
               group: gateway.networking.k8s.io
               version: v1
