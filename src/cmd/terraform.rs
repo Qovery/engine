@@ -1029,8 +1029,9 @@ fn manage_common_issues(
     err: &TerraformError,
     validators: &TerraformValidators,
     lock: bool,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_plugins_failed_load(root_dir, err, terraform_provider_lock, validators, lock)?;
+    terraform_plugins_failed_load(root_dir, err, terraform_provider_lock, validators, lock, binary)?;
 
     Ok(TerraformOutput::default())
 }
@@ -1041,6 +1042,7 @@ fn terraform_plugins_failed_load(
     terraform_provider_lock: &str,
     validators: &TerraformValidators,
     lock: bool,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
     let output = TerraformOutput::default();
 
@@ -1062,11 +1064,11 @@ fn terraform_plugins_failed_load(
             });
         };
         thread::sleep(sleep_time);
-        return terraform_init(root_dir, &[], validators, lock);
+        return terraform_init_bounded(root_dir, &[], validators, lock, None, binary);
     }
 
     if error_string.contains("Plugin reinitialization required") {
-        return terraform_init(root_dir, &[], validators, lock);
+        return terraform_init_bounded(root_dir, &[], validators, lock, None, binary);
     }
 
     Ok(output)
@@ -1110,16 +1112,28 @@ fn terraform_init(
     validators: &TerraformValidators,
     lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_init_bounded(root_dir, envs, validators, lock, None)
+    terraform_init_bounded(root_dir, envs, validators, lock, None, DEFAULT_TERRAFORM_BINARY)
 }
 
 /// `bounds` caps the whole init — provider lock, init, retries included — not each attempt.
+/// Binary every terraform invocation spawns unless a caller overrides it. Pinned to the version the
+/// cluster and managed-database modules require exactly (`required_version = "1.9.7"`), so it must not
+/// move without migrating their state.
+pub const DEFAULT_TERRAFORM_BINARY: &str = "terraform";
+
+/// Binaries the blueprint preview uses instead: catalog modules declare lower bounds only, so one
+/// sufficiently new binary per flavor plans them all. Kept in step with the Dockerfile ARGs of the
+/// same name.
+pub const BLUEPRINT_TERRAFORM_BINARY: &str = "terraform-1.13.3";
+pub const BLUEPRINT_OPENTOFU_BINARY: &str = "tofu-1.12.6";
+
 fn terraform_init_bounded(
     root_dir: &str,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
     lock: bool,
     bounds: Option<TerraformTimeBounds>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
     // issue with provider lock since 0.14 and CI, need to manage terraform lock
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", root_dir);
@@ -1135,7 +1149,14 @@ fn terraform_init_bounded(
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec_bounded(root_dir, terraform_providers_lock_args.clone(), envs, validators, bounds) {
+        match terraform_exec_bounded(
+            root_dir,
+            terraform_providers_lock_args.clone(),
+            envs,
+            validators,
+            bounds,
+            binary,
+        ) {
             Ok(output) => OperationResult::Ok(output),
             // Attempts share one deadline, so a retry past it is killed on spawn — all it adds is
             // the backoff sleep before the same error surfaces.
@@ -1155,11 +1176,11 @@ fn terraform_init_bounded(
     }
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec_bounded(root_dir, terraform_args.clone(), envs, validators, bounds) {
+        match terraform_exec_bounded(root_dir, terraform_args.clone(), envs, validators, bounds, binary) {
             Ok(output) => OperationResult::Ok(output),
             Err(err @ TerraformError::CommandTimeout { .. }) => OperationResult::Err(err),
             Err(err) => {
-                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, lock);
+                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, lock, binary);
                 // Error while trying to run terraform init, retrying...
                 OperationResult::Retry(err)
             }
@@ -1177,7 +1198,7 @@ fn terraform_validate(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_validate_bounded(root_dir, envs, validators, None)
+    terraform_validate_bounded(root_dir, envs, validators, None, DEFAULT_TERRAFORM_BINARY)
 }
 
 fn terraform_validate_bounded(
@@ -1185,6 +1206,7 @@ fn terraform_validate_bounded(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
     bounds: Option<TerraformTimeBounds>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
     let terraform_args = vec!["validate", "-no-color"];
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", root_dir);
@@ -1192,11 +1214,11 @@ fn terraform_validate_bounded(
     // Retry is not needed, fixing it to 1 only for the time being
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // validate config
-        match terraform_exec_bounded(root_dir, terraform_args.clone(), envs, validators, bounds) {
+        match terraform_exec_bounded(root_dir, terraform_args.clone(), envs, validators, bounds, binary) {
             Ok(output) => OperationResult::Ok(output),
             Err(err @ TerraformError::CommandTimeout { .. }) => OperationResult::Err(err),
             Err(err) => {
-                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, true);
+                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, true, binary);
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
@@ -1256,7 +1278,7 @@ pub fn terraform_plan_internal(
     is_destroy: bool,
     lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_plan_internal_bounded(root_dir, envs, validators, is_destroy, lock, None)
+    terraform_plan_internal_bounded(root_dir, envs, validators, is_destroy, lock, None, DEFAULT_TERRAFORM_BINARY)
 }
 
 pub fn terraform_plan_internal_bounded(
@@ -1266,6 +1288,7 @@ pub fn terraform_plan_internal_bounded(
     is_destroy: bool,
     lock: bool,
     bounds: Option<TerraformTimeBounds>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
     // plan
     let lock_arg = format!("-lock={lock}");
@@ -1274,7 +1297,7 @@ pub fn terraform_plan_internal_bounded(
     } else {
         vec!["plan", lock_arg.as_str(), "-no-color", "-out", "tf_plan"]
     };
-    terraform_exec_bounded(root_dir, terraform_args, envs, validators, bounds)
+    terraform_exec_bounded(root_dir, terraform_args, envs, validators, bounds, binary)
 }
 
 fn terraform_apply_internal(
@@ -1297,7 +1320,7 @@ fn terraform_apply_internal_with_options(
         match terraform_exec_with_timeout(root_dir, terraform_args.clone(), envs, validators, options.command_timeout) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
-                let _ = manage_common_issues(root_dir, "", &err, validators, true);
+                let _ = manage_common_issues(root_dir, "", &err, validators, true, DEFAULT_TERRAFORM_BINARY);
 
                 // We have to re-do a plan to update the tf_plan file state
                 let _ = match terraform_plan_internal(root_dir, envs, validators, false, true) {
@@ -1653,7 +1676,7 @@ pub fn terraform_init_validate_lock_free(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_init_validate_lock_free_bounded(root_dir, envs, validators, None)
+    terraform_init_validate_lock_free_bounded(root_dir, envs, validators, None, DEFAULT_TERRAFORM_BINARY)
 }
 
 /// Same as [terraform_init_validate_lock_free], with `bounds` capping init + validate as a whole.
@@ -1663,8 +1686,9 @@ pub fn terraform_init_validate_lock_free_bounded(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
     bounds: Option<TerraformTimeBounds>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_init_validate_inner(root_dir, envs, validators, false, bounds)
+    terraform_init_validate_inner(root_dir, envs, validators, false, bounds, binary)
 }
 
 /// Same as [terraform_init_validate], with `bounds` capping init + validate as a whole.
@@ -1674,7 +1698,7 @@ pub fn terraform_init_validate_bounded(
     validators: &TerraformValidators,
     bounds: Option<TerraformTimeBounds>,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_init_validate_inner(root_dir, envs, validators, true, bounds)
+    terraform_init_validate_inner(root_dir, envs, validators, true, bounds, DEFAULT_TERRAFORM_BINARY)
 }
 
 fn terraform_init_validate_inner(
@@ -1683,9 +1707,10 @@ fn terraform_init_validate_inner(
     validators: &TerraformValidators,
     lock: bool,
     bounds: Option<TerraformTimeBounds>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
-    let mut output = terraform_init_bounded(root_dir, envs, validators, lock, bounds)?;
-    output.extend(terraform_validate_bounded(root_dir, envs, validators, bounds)?);
+    let mut output = terraform_init_bounded(root_dir, envs, validators, lock, bounds, binary)?;
+    output.extend(terraform_validate_bounded(root_dir, envs, validators, bounds, binary)?);
     Ok(output)
 }
 
@@ -1795,7 +1820,7 @@ fn terraform_exec_with_timeout(
     validators: &TerraformValidators,
     command_timeout: Option<time::Duration>,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_exec_inner(root_dir, args, env, validators, command_timeout, None)
+    terraform_exec_inner(root_dir, args, env, validators, command_timeout, None, DEFAULT_TERRAFORM_BINARY)
 }
 
 fn terraform_exec_bounded(
@@ -1804,9 +1829,10 @@ fn terraform_exec_bounded(
     env: &[(&str, &str)],
     validators: &TerraformValidators,
     bounds: Option<TerraformTimeBounds>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
     match bounds {
-        None => terraform_exec(root_dir, args, env, validators),
+        None => terraform_exec_inner(root_dir, args, env, validators, None, None, binary),
         Some(bounds) => terraform_exec_inner(
             root_dir,
             args,
@@ -1814,6 +1840,7 @@ fn terraform_exec_bounded(
             validators,
             Some(bounds.remaining()),
             Some(bounds.kill_grace_period),
+            binary,
         ),
     }
 }
@@ -1825,6 +1852,7 @@ fn terraform_exec_inner(
     validators: &TerraformValidators,
     command_timeout: Option<time::Duration>,
     kill_grace_period: Option<time::Duration>,
+    binary: &str,
 ) -> Result<TerraformOutput, TerraformError> {
     // override if environment variable is set
     let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
@@ -1840,7 +1868,7 @@ fn terraform_exec_inner(
 
     let mut envs = vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())];
     envs.extend(env);
-    let mut cmd = QoveryCommand::new("terraform", &args, &envs);
+    let mut cmd = QoveryCommand::new(binary, &args, &envs);
     cmd.set_current_dir(root_dir);
     if let Some(grace_period) = kill_grace_period {
         cmd.set_kill_grace_period(grace_period);
@@ -1856,8 +1884,9 @@ fn terraform_exec_inner(
 mod tests {
     use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand};
     use crate::cmd::terraform::{
-        DatabaseError, QuotaExceededError, TerraformError, TerraformOutput, manage_common_issues,
-        terraform_exec_from_command, terraform_exec_from_command_with_timeout, terraform_init, terraform_init_validate,
+        BLUEPRINT_OPENTOFU_BINARY, BLUEPRINT_TERRAFORM_BINARY, DEFAULT_TERRAFORM_BINARY, DatabaseError,
+        QuotaExceededError, TerraformError, TerraformOutput, manage_common_issues, terraform_exec_from_command,
+        terraform_exec_from_command_with_timeout, terraform_init, terraform_init_validate,
     };
     use std::fs;
     use std::process::Child;
@@ -1989,6 +2018,57 @@ mod tests {
         );
     }
 
+    /// The engine spawns these by name, so a constant that drifts from the image is a runtime
+    /// "No such file or directory" on every blueprint preview. Cheaper to catch here.
+    fn dockerfile_arg(name: &str) -> String {
+        let dockerfile = include_str!("../../../Dockerfile");
+        dockerfile
+            .lines()
+            .find_map(|l| l.strip_prefix(&format!("ARG {name}=")))
+            .unwrap_or_else(|| panic!("{name} not found in Dockerfile"))
+            .trim_matches('"')
+            .to_string()
+    }
+
+    #[test]
+    fn blueprint_binaries_match_the_versions_the_image_installs() {
+        assert_eq!(
+            BLUEPRINT_TERRAFORM_BINARY,
+            format!("terraform-{}", dockerfile_arg("BLUEPRINT_TERRAFORM_VERSION"))
+        );
+        assert_eq!(
+            BLUEPRINT_OPENTOFU_BINARY,
+            format!("tofu-{}", dockerfile_arg("BLUEPRINT_OPENTOFU_VERSION"))
+        );
+    }
+
+    #[test]
+    fn the_image_installs_the_blueprint_binaries_under_those_names() {
+        let dockerfile = include_str!("../../../Dockerfile");
+        assert!(
+            dockerfile.contains("/usr/bin/terraform-${BLUEPRINT_TERRAFORM_VERSION}"),
+            "Dockerfile must install the blueprint terraform under its version-named path"
+        );
+        assert!(
+            dockerfile.contains("/usr/bin/tofu-${BLUEPRINT_OPENTOFU_VERSION}"),
+            "Dockerfile must install tofu under its version-named path"
+        );
+    }
+
+    /// The infra modules pin `required_version = "1.9.7"` exactly, so the default must keep matching
+    /// what `docker/bin_versions` asserts at boot — moving it means migrating cluster state.
+    #[test]
+    fn default_binary_is_the_one_bin_versions_pins() {
+        assert_eq!(DEFAULT_TERRAFORM_BINARY, "terraform");
+        let bin_versions = include_str!("../../../docker/bin_versions");
+        let pinned = bin_versions
+            .lines()
+            .find_map(|l| l.strip_prefix("TERRAFORM_VERSION="))
+            .expect("TERRAFORM_VERSION in docker/bin_versions")
+            .trim_matches('"');
+        assert_eq!(pinned, dockerfile_arg("TERRAFORM_VERSION"));
+    }
+
     #[test]
     fn test_terraform_managed_errors() {
         let could_not_load_plugin = r#"
@@ -2023,6 +2103,7 @@ in the dependency lock file
             &could_not_load_plugin_error,
             &TerraformValidators::None,
             true,
+            DEFAULT_TERRAFORM_BINARY,
         );
         assert_eq!(result, terraform_init("", &[], &TerraformValidators::Default, true));
     }
