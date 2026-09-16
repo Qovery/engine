@@ -1707,12 +1707,13 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: "12.12-slim".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e
+                apt-get update
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -1944,12 +1945,13 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: "12.12-slim".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e
+                apt-get update
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -2091,12 +2093,13 @@ fn deploy_container_with_storages_on_aws_eks() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: "12.12-slim".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e
+                apt-get update
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -3434,12 +3437,13 @@ fn test_restart_deployment() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: "12.12-slim".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e
+                apt-get update
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -3579,12 +3583,13 @@ fn test_restart_statefulset() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: "12.12-slim".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e
+                apt-get update
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
