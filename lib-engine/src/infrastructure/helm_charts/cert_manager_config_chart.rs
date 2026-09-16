@@ -490,6 +490,10 @@ async fn migrate_certificate_owners_async(
             info!(
                 "Certificate {cert_namespace}/{cert_name}: stale {new_owner_kind} owner detected with no {current_owner_kind} owner, forcing owner repair"
             );
+        } else if cert.spec.secret_name.starts_with("router-tls-") {
+            info!(
+                "Certificate {cert_namespace}/{cert_name}: no {current_owner_kind} or {new_owner_kind} ownerReference found, repairing ownership from secret reference"
+            );
         } else {
             continue;
         }
