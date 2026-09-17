@@ -150,7 +150,7 @@ pub struct YaceResources;
 impl YaceResources {
     pub fn get(profile: ResourceProfile) -> HelmChartResources {
         match profile {
-            ResourceProfile::Low => HelmChartResources::new("150", "150", "256Mi", "256Mi"),
+            ResourceProfile::Low => HelmChartResources::new("150m", "150m", "256Mi", "256Mi"),
             ResourceProfile::Normal => HelmChartResources::new("250m", "250m", "512Mi", "512Mi"),
             ResourceProfile::High => HelmChartResources::new("500m", "500m", "768Mi", "768Mi"),
         }
@@ -222,5 +222,15 @@ mod tests {
 
         let high = PrometheusAdapterResources::get(ResourceProfile::High);
         assert_eq!(high.request_memory.unwrap().to_string(), "512Mi");
+    }
+
+    #[test]
+    fn test_yace_resources_low() {
+        let resources = YaceResources::get(ResourceProfile::Low);
+
+        assert_eq!(resources.request_cpu.unwrap().to_string(), "150m");
+        assert_eq!(resources.limit_cpu.unwrap().to_string(), "150m");
+        assert_eq!(resources.request_memory.unwrap().to_string(), "256Mi");
+        assert_eq!(resources.limit_memory.unwrap().to_string(), "256Mi");
     }
 }
