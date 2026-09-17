@@ -30,6 +30,20 @@ local function rejects(config: Mapping, path: String): Boolean =
       && compiled.violations == validated.violations
       && compiled.helmValues == null
 
+local function rejectsWith(config: Mapping, path: String, code: String): Boolean =
+  let (validated = evaluate(config, "VALIDATE"))
+  let (compiled = evaluate(config, "COMPILE"))
+    validated.violations.any((entry) -> entry.fieldPath == path && entry.code == code)
+      && compiled.violations == validated.violations
+      && compiled.helmValues == null
+
+local function resourceConfig(manifest: String): Mapping = new Mapping {
+  ["resources"] = new Listing { new Mapping { ["manifest"] = manifest } }
+}
+
+local function annotatedNodePool(annotationKey: String, annotationValue: String): String =
+  "apiVersion: karpenter.sh/v1\nkind: NodePool\nmetadata:\n  name: raw-annotations\n  annotations:\n    \(annotationKey): \(annotationValue)\nspec:\n  template:\n    spec:\n      nodeClassRef:\n        group: karpenter.k8s.aws\n        kind: EC2NodeClass\n        name: existing-class\n"
+
 facts {
   ["regional choices are exposed on every row without selecting or rewriting values"] {
     let (result = evaluateRequest((request) { ["operation"] = "RESOLVE_REQUIREMENTS" }))
@@ -68,6 +82,34 @@ facts {
     evaluateRequest((request) { ["referenceData"] = null; ["profileConfig"] = new Mapping {} })
       .violations
       .isEmpty
+  }
+  ["raw YAML resources reject Helm reserved annotations before compilation"] {
+    for (
+      key in
+        List(
+          "helm.sh/hook",
+          "helm.sh/hook-delete-policy",
+          "helm.sh/hook-weight",
+          "helm.sh/resource-policy",
+          "meta.helm.sh/release-name",
+          "meta.helm.sh/release-namespace",
+        )
+    ) {
+      rejectsWith(
+        resourceConfig(annotatedNodePool(key, "reserved")),
+        "resources[0].manifest",
+        "RESERVED_HELM_ANNOTATION",
+      )
+    }
+  }
+  ["raw YAML resources preserve ordinary application annotations"] {
+    let (
+      result =
+        evaluate(resourceConfig(annotatedNodePool("example.com/team", "platform")), "COMPILE")
+    )
+      result.violations.isEmpty
+        && result.helmValues!!["resources"][0]["metadata"]["annotations"]["example.com/team"]
+          == "platform"
   }
 
   ["absent optional settings use the accepted defaults without requiring draft rewriting"] {

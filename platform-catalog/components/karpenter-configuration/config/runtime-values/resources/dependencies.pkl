@@ -25,6 +25,27 @@ rules: List<sdkRules.Rule> =
           .flatMap((paths) -> paths)
     },
     new sdkRules.RowRule {
+      operations = List("VALIDATE", "COMPILE")
+      code = "RESERVED_HELM_ANNOTATION"
+      message =
+        "Remove Helm lifecycle and ownership annotations: helm.sh/hook*, helm.sh/resource-policy, meta.helm.sh/release-name and meta.helm.sh/release-namespace"
+      paths = (scope) ->
+        documents
+          .rows(scope.config)
+          .take(32)
+          .mapIndexed((index, row) ->
+            let (document = documents.parse(row))
+              if (
+                documents.valid(document)
+                  && documents.hasReservedHelmAnnotation(document as Mapping)
+              )
+                List("resources[\(index)].manifest")
+              else
+                List()
+          )
+          .flatMap((paths) -> paths)
+    },
+    new sdkRules.RowRule {
       // Resolve must return input requirements even when the YAML draft is incomplete.
       operations = List("VALIDATE", "COMPILE")
       code = "RESOURCE_NAME_CONFLICT"

@@ -141,6 +141,9 @@ Validation is deliberately limited in this stage:
   metadata; no namespace, status or runtime ownership fields.
 - Duplicate kind/name pairs, collisions with the final guided names (`qovery-<name>`), NodePool
   `default`/`stable` and EC2NodeClass `default` are rejected with indexed field violations.
+- Helm lifecycle and ownership annotations are rejected before compilation:
+  `helm.sh/hook*`, `helm.sh/resource-policy`, `meta.helm.sh/release-name` and
+  `meta.helm.sh/release-namespace`. Ordinary application annotations are preserved.
 - Raw-only drafts do not require the guided AWS logical inputs or regional instance reference
   data. They still require the supported customer-managed AWS context and Kubernetes version.
 - EC2NodeClass references may be shared or point to an existing class. No cluster lookup,

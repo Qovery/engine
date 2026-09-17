@@ -7,6 +7,9 @@ import "pkl:yaml"
 // No cluster access or template execution.
 local parser = new yaml.Parser { useMapping = true; maxCollectionAliases = 32 }
 
+local reservedOwnershipAnnotations =
+  List("meta.helm.sh/release-name", "meta.helm.sh/release-namespace")
+
 function rows(config: Mapping): List =
   ((config.getOrNull("resources") as Listing?) ?? new Listing {}).toList()
 
@@ -47,6 +50,20 @@ function valid(document: Any): Boolean =
       List("name", "labels", "annotations").contains(key)
     )
     && document.getOrNull("spec") is Mapping
+
+function reservedHelmAnnotation(key: String): Boolean =
+  key.startsWith("helm.sh/hook")
+    || key == "helm.sh/resource-policy"
+    || reservedOwnershipAnnotations.contains(key)
+
+function hasReservedHelmAnnotation(document: Mapping): Boolean =
+  let (metadata = document.getOrNull("metadata"))
+    if (metadata is Mapping)
+      let (annotations = metadata.getOrNull("annotations"))
+        annotations is Mapping
+          && annotations.keys.any((key) -> key is String && reservedHelmAnnotation(key as String))
+    else
+      false
 
 function collides(document: Mapping, previous: List, config: Mapping): Boolean =
   let (resourceName = name(document))
