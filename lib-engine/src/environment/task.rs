@@ -221,8 +221,14 @@ impl EnvironmentTask {
             None => return Ok(()), // this case should not happen as we filter on buildable services
         };
 
-        // If image already exists in the registry, skip the build
+        // If image already exists in the registry, skip the build.
+        // The Skip record is what makes a cache hit distinguishable from a service that had
+        // nothing to build, so the build-avoidance rate stays measurable.
         if !option.force_build && cr_registry.image_exists(&build.image) {
+            let build_record =
+                metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
+            build_record.stop(StepStatus::Skip);
+
             let image_name = build.image.full_image_name_with_tag();
             let msg = format!("✅ Container image {image_name} already exists and ready to use");
             logger.send_success(msg);
