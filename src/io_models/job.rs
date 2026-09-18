@@ -226,6 +226,9 @@ pub struct Job {
     pub cpu_architecture: Option<CpuArchitecture>,
     #[serde(default)]
     pub build_settings: Option<BuildSettings>,
+    /// Dockerfile `ARG` names parsed by the core. `None` when the core did not send them.
+    #[serde(default)]
+    pub tag_build_args: Option<BTreeSet<String>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -354,6 +357,7 @@ impl Job {
             ephemeral_storage_in_gib: bs.ephemeral_storage_in_gib,
             registries: self.container_registries.registries.clone(),
             dockerfile_fragment: None, // Jobs don't support dockerfile fragments
+            tag_build_args: self.tag_build_args.clone(),
         };
 
         build.compute_image_tag();

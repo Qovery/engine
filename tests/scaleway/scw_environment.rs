@@ -2222,6 +2222,7 @@ fn deploy_job_on_scw_kapsule() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2358,6 +2359,7 @@ fn deploy_cronjob_on_scw_kapsule() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2473,6 +2475,7 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2591,6 +2594,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2720,6 +2724,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();

@@ -672,6 +672,7 @@ impl TerraformService {
                     content: content.clone(),
                 },
             }),
+            tag_build_args: None,
         };
 
         build.compute_image_tag();

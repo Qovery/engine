@@ -314,6 +314,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 cpu_architecture: None,
                 autoscaling: None,
                 build_settings: None,
+                tag_build_args: None,
             };
             environment.applications = vec![app];
         }
@@ -369,6 +370,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
                 cpu_architecture: None,
                 build_settings: None,
+                tag_build_args: None,
             };
             environment.jobs = vec![job];
         }
