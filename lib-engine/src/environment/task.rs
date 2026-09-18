@@ -221,6 +221,11 @@ impl EnvironmentTask {
             None => return Ok(()), // this case should not happen as we filter on buildable services
         };
 
+        // External secret values land in `environment_variables` after the request was parsed
+        // (`handle_service_external_secrets`), so the tag computed at parse time can be stale.
+        // Recompute it here or the check below may match an image built from different values.
+        build.compute_image_tag();
+
         // If image already exists in the registry, skip the build.
         // The Skip record is what makes a cache hit distinguishable from a service that had
         // nothing to build, so the build-avoidance rate stays measurable.

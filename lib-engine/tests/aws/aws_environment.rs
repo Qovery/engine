@@ -2662,6 +2662,7 @@ fn a_working_job() -> Job {
         output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         cpu_architecture: None,
         build_settings: None,
+        tag_build_args: None,
     }
 }
 
@@ -2951,6 +2952,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3069,6 +3071,7 @@ fn deploy_cronjob_on_aws_eks() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3205,6 +3208,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3352,6 +3356,7 @@ fn build_and_deploy_job_on_aws_eks() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3804,6 +3809,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();

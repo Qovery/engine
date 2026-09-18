@@ -1444,6 +1444,7 @@ fn azure_aks_deploy_job() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1585,6 +1586,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1715,6 +1717,7 @@ fn azure_aks_deploy_cronjob() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -1863,6 +1866,7 @@ fn azure_aks_deploy_cronjob_force_trigger() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2022,6 +2026,7 @@ fn azure_aks_build_and_deploy_job() {
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
             cpu_architecture: None,
             build_settings: None,
+            tag_build_args: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {

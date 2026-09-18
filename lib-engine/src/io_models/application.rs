@@ -517,6 +517,9 @@ pub struct Application {
     pub external_secrets: BTreeMap<String, ExternalSecret>,
     #[serde(default)]
     pub build_settings: Option<BuildSettings>,
+    /// Dockerfile `ARG` names parsed by the core. `None` when the core did not send them.
+    #[serde(default)]
+    pub tag_build_args: Option<BTreeSet<String>>,
 }
 
 fn default_root_path_value() -> String {
@@ -847,6 +850,7 @@ impl Application {
             ephemeral_storage_in_gib: bs.ephemeral_storage_in_gib,
             registries: self.container_registries.clone(),
             dockerfile_fragment: None, // Applications don't support dockerfile fragments
+            tag_build_args: self.tag_build_args.clone(),
         };
 
         build.compute_image_tag();
@@ -918,6 +922,25 @@ mod tests {
     fn ephemeral_storage_in_gib_defaults_to_none_when_absent() {
         let app: Application = serde_json::from_str(MINIMAL_APP_JSON).unwrap();
         assert_eq!(app.ephemeral_storage_in_gib, None);
+    }
+
+    #[test]
+    fn deserializes_tag_build_args_when_present() {
+        let json = format!(
+            r#"{{"tag_build_args": ["NODE_ENV", "A_SECRET"], {}}}"#,
+            &MINIMAL_APP_JSON[1..MINIMAL_APP_JSON.len() - 1]
+        );
+        let app: Application = serde_json::from_str(&json).unwrap();
+        let args = app.tag_build_args.expect("build args should be parsed");
+        assert!(args.contains("NODE_ENV"));
+        assert!(args.contains("A_SECRET"));
+        assert_eq!(args.len(), 2);
+    }
+
+    #[test]
+    fn tag_build_args_defaults_to_none_when_absent() {
+        let app: Application = serde_json::from_str(MINIMAL_APP_JSON).unwrap();
+        assert_eq!(app.tag_build_args, None);
     }
 
     #[test]

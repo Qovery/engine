@@ -181,14 +181,7 @@ impl LocalDocker {
             });
         }
 
-        // Keep only the env variables we want for our build
-        // and force re-compute the image tag.
-        // Secret mount ids are kept too: `compute_image_tag` hashes values, so a rotated secret
-        // yields a new tag and therefore a rebuild instead of being skipped as already-present.
-        build
-            .environment_variables
-            .retain(|k, _| dockerfile_args.contains(k) || secret_mounts.ids.contains(k));
-        build.compute_image_tag();
+        build.resolve_image_tag_from_dockerfile(&dockerfile_args, &secret_mounts.ids);
 
         // Prepare image we want to build
         let image_to_build = ContainerImage::new(

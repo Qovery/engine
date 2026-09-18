@@ -270,6 +270,7 @@ impl AgenticWorkflow {
             dockerfile_fragment: Some(BuildDockerfileFragment::Inline {
                 content: self.docker_fragment.clone(),
             }),
+            tag_build_args: None,
         };
         build.compute_image_tag();
 
@@ -885,6 +886,7 @@ mod tests {
             dockerfile_fragment: Some(BuildDockerfileFragment::Inline {
                 content: workflow.docker_fragment.clone(),
             }),
+            tag_build_args: None,
         };
         build.compute_image_tag();
 

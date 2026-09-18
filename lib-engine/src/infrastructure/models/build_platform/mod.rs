@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::cmd::docker::DockerError;
 use crate::environment::report::logger::EnvLogger;
@@ -152,6 +152,9 @@ pub struct Build {
     // registries used by the build where we need to login to pull image
     pub registries: Vec<Registry>,
     pub dockerfile_fragment: Option<DockerfileFragment>,
+    /// Dockerfile `ARG` names as parsed by the core, when it knows them. Lets the tag be computed
+    /// before the repository is cloned; `None` falls back to hashing every variable.
+    pub tag_build_args: Option<BTreeSet<String>>,
 }
 
 impl Build {
@@ -170,14 +173,43 @@ impl Build {
         }
     }
 
+    /// Variables the tag is hashed from. `tag_build_args` narrows the hash only; it never removes
+    /// a variable from the build itself, so getting it wrong costs a cache miss, not a broken build.
+    fn variables_to_hash(&self) -> BTreeMap<String, String> {
+        match &self.tag_build_args {
+            None => self.environment_variables.clone(),
+            Some(tag_build_args) => self
+                .environment_variables
+                .iter()
+                .filter(|(name, _)| tag_build_args.contains(*name))
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect(),
+        }
+    }
+
+    /// Adopt the Dockerfile the engine just read as the source of truth for the tag. One call so
+    /// the three steps can never drift apart and leave the tag describing a state that never was.
+    /// Secret mount ids are kept: their values are hashed, so a rotated secret forces a rebuild.
+    pub fn resolve_image_tag_from_dockerfile(
+        &mut self,
+        arg_names: &HashSet<String>,
+        secret_mount_ids: &HashSet<String>,
+    ) {
+        self.environment_variables
+            .retain(|name, _| arg_names.contains(name) || secret_mount_ids.contains(name));
+        self.tag_build_args = None;
+        self.compute_image_tag();
+    }
+
     pub fn compute_image_tag(&mut self) {
+        let variables = self.variables_to_hash();
         self.image.tag = match &self.source {
             BuildSource::Git(repository) => compute_image_tag(
                 &repository.root_path,
                 &repository.dockerfile_path,
                 &repository.dockerfile_content,
                 &repository.extra_files_to_inject,
-                &self.environment_variables,
+                &variables,
                 &repository.commit_id,
                 &repository.docker_target_build_stage,
                 &self.dockerfile_fragment,
@@ -190,7 +222,7 @@ impl Build {
                 &Some(PathBuf::from(SYNTHESIZED_DOCKERFILE_NAME)),
                 &Some(content.clone()),
                 &[],
-                &self.environment_variables,
+                &variables,
                 "",
                 &None,
                 &self.dockerfile_fragment,
@@ -411,6 +443,7 @@ mod tests {
             ephemeral_storage_in_gib: None,
             registries: vec![],
             dockerfile_fragment: None,
+            tag_build_args: None,
         }
     }
 
@@ -440,5 +473,94 @@ mod tests {
     #[test]
     fn test_dropping_a_build_variable_changes_the_image_tag() {
         assert_ne!(image_tag_for(&[("A_SECRET", "value")]), image_tag_for(&[]));
+    }
+
+    fn image_tag_for_narrowed(environment_variables: &[(&str, &str)], tag_build_args: &[&str]) -> String {
+        let mut build = build_with(
+            environment_variables
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.to_string()))
+                .collect(),
+        );
+        build.tag_build_args = Some(tag_build_args.iter().map(|name| name.to_string()).collect());
+        build.compute_image_tag();
+        build.image.tag
+    }
+
+    /// The reason `tag_build_args` exists: with it the tag can be computed before the repository is
+    /// cloned, and it must equal the tag `build_image_with_docker` computes after narrowing the
+    /// variables itself. Any other outcome leaves the early registry check useless.
+    #[test]
+    fn test_correct_tag_build_args_predict_the_tag_computed_after_the_clone() {
+        let predicted =
+            image_tag_for_narrowed(&[("A_SECRET", "value"), ("DATABASE_URL", "postgres://x")], &["A_SECRET"]);
+        let computed_after_narrowing = image_tag_for(&[("A_SECRET", "value")]);
+
+        assert_eq!(predicted, computed_after_narrowing);
+    }
+
+    #[test]
+    fn test_a_narrowed_tag_ignores_variables_the_dockerfile_never_reads() {
+        let before =
+            image_tag_for_narrowed(&[("A_SECRET", "value"), ("DATABASE_URL", "postgres://old")], &["A_SECRET"]);
+        let after = image_tag_for_narrowed(&[("A_SECRET", "value"), ("DATABASE_URL", "postgres://new")], &["A_SECRET"]);
+
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn test_a_narrowed_tag_still_changes_when_a_narrowed_variable_is_rotated() {
+        let before = image_tag_for_narrowed(&[("A_SECRET", "old-value")], &["A_SECRET"]);
+        let after = image_tag_for_narrowed(&[("A_SECRET", "new-value")], &["A_SECRET"]);
+
+        assert_ne!(before, after);
+    }
+
+    /// `tag_build_args` disagreeing with the Dockerfile costs a cache miss and nothing else.
+    #[test]
+    fn test_wrong_tag_build_args_predict_a_tag_that_no_build_pushes() {
+        let predicted =
+            image_tag_for_narrowed(&[("A_SECRET", "value"), ("DATABASE_URL", "postgres://x")], &["DATABASE_URL"]);
+        let computed_after_narrowing = image_tag_for(&[("A_SECRET", "value")]);
+
+        assert_ne!(predicted, computed_after_narrowing);
+    }
+
+    /// External secrets are injected into `environment_variables` after the request is parsed, so
+    /// a tag computed at parse time describes an env map that no longer exists. Whoever relies on
+    /// the tag has to recompute it first.
+    #[test]
+    fn test_a_variable_injected_after_the_first_tag_changes_it() {
+        let mut build = build_with(BTreeMap::new());
+        build.tag_build_args = Some(BTreeSet::from(["A_SECRET".to_string()]));
+        build.compute_image_tag();
+        let before_injection = build.image.tag.clone();
+
+        build
+            .environment_variables
+            .insert("A_SECRET".to_string(), "resolved-later".to_string());
+        build.compute_image_tag();
+
+        assert_ne!(before_injection, build.image.tag);
+    }
+
+    #[test]
+    fn test_empty_tag_build_args_hash_no_variable() {
+        let with_a_value = image_tag_for_narrowed(&[("A_SECRET", "value")], &[]);
+        let with_another_value = image_tag_for_narrowed(&[("A_SECRET", "other")], &[]);
+
+        assert_eq!(with_a_value, with_another_value);
+    }
+
+    /// `Some(empty)` and `None` are different answers: the core parsed and found no `ARG`, versus
+    /// the core could not tell us. Only the second one keeps every variable in the hash.
+    #[test]
+    fn test_absent_tag_build_args_hash_every_variable() {
+        let absent_with_a_value = image_tag_for(&[("A_SECRET", "value")]);
+        let absent_with_another_value = image_tag_for(&[("A_SECRET", "other")]);
+        let empty_set = image_tag_for_narrowed(&[("A_SECRET", "value")], &[]);
+
+        assert_ne!(absent_with_a_value, absent_with_another_value);
+        assert_ne!(absent_with_a_value, empty_set);
     }
 }
