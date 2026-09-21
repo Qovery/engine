@@ -4,6 +4,7 @@ use crate::utilities::{is_valid_k8s_label_value, is_valid_k8s_qualified_name};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use retry::{Error, OperationResult};
+use std::cell::RefCell;
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -37,6 +38,30 @@ pub enum DockerError {
 
     #[error("Buildkit builder pod was terminated unexpectedly: {raw_error_message:?}")]
     BuilderPodTerminated { raw_error_message: String },
+
+    #[error("Docker builder cannot be scheduled because of insufficient {resource}: {scheduler_message}")]
+    BuilderInsufficientResources {
+        resource: BuilderResource,
+        scheduler_message: String,
+    },
+}
+
+/// A Kubernetes resource that prevented the Docker builder pod from being scheduled.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum BuilderResource {
+    Cpu,
+    Memory,
+    EphemeralStorage,
+}
+
+impl Display for BuilderResource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BuilderResource::Cpu => f.write_str("CPU"),
+            BuilderResource::Memory => f.write_str("memory"),
+            BuilderResource::EphemeralStorage => f.write_str("ephemeral storage"),
+        }
+    }
 }
 
 impl DockerError {
@@ -645,13 +670,48 @@ impl Docker {
                         args.push("--bootstrap");
                     }
 
-                    docker_exec(
+                    // `docker_exec` invokes stdout and stderr callbacks synchronously, so each short-lived
+                    // `RefCell` borrow completes before the next callback can inspect or record a shortage.
+                    let scheduler_shortage = RefCell::new(None);
+                    let mut stdout_output = |line: String| {
+                        record_builder_resource_shortage(&scheduler_shortage, &line);
+                        info!("{line}");
+                    };
+                    let mut stderr_output = |line: String| {
+                        record_builder_resource_shortage(&scheduler_shortage, &line);
+                        warn!("{line}");
+                    };
+
+                    let result = docker_exec(
                         &args,
                         &self.get_all_envs(&[]),
-                        &mut |line| info!("{}", line),
-                        &mut |line| info!("{}", line),
+                        &mut stdout_output,
+                        &mut stderr_output,
                         should_abort,
-                    )?;
+                    );
+
+                    if let Err(error) = result {
+                        // Preserve a user-requested cancellation even when the scheduler also reported a shortage.
+                        if error.is_aborted() {
+                            if let Some((resource, scheduler_message)) = scheduler_shortage.take() {
+                                info!(
+                                    "Docker builder provisioning was aborted while Kubernetes reported insufficient {resource}: {scheduler_message}"
+                                );
+                            }
+                            return Err(error);
+                        }
+
+                        // Move the first scheduler diagnosis into the returned error; no clone is necessary because
+                        // the builder-creation attempt ends on every error path below.
+                        if let Some((resource, scheduler_message)) = scheduler_shortage.take() {
+                            return Err(DockerError::BuilderInsufficientResources {
+                                resource,
+                                scheduler_message,
+                            });
+                        }
+
+                        return Err(error);
+                    }
                 }
 
                 info!("Build pod name prefix: {builder_prefix}{exec_id}-<arch> (builder: {builder_name})");
@@ -1201,6 +1261,36 @@ impl Docker {
     }
 }
 
+fn record_builder_resource_shortage(scheduler_shortage: &RefCell<Option<(BuilderResource, String)>>, line: &str) {
+    if scheduler_shortage.borrow().is_some() {
+        return;
+    }
+
+    // Kubernetes scheduler diagnostics use the `Insufficient <resource>` wording for unschedulable pods.
+    let resource = if contains_ascii_case_insensitive(line, "insufficient cpu") {
+        Some(BuilderResource::Cpu)
+    } else if contains_ascii_case_insensitive(line, "insufficient memory") {
+        Some(BuilderResource::Memory)
+    } else if contains_ascii_case_insensitive(line, "insufficient ephemeral-storage") {
+        Some(BuilderResource::EphemeralStorage)
+    } else {
+        None
+    };
+
+    if let Some(resource) = resource {
+        scheduler_shortage.replace(Some((resource, line.to_string())));
+    }
+}
+
+/// Searches fixed ASCII Kubernetes scheduler diagnostics without allocating a normalized copy of the output line.
+fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    debug_assert!(needle.is_ascii(), "needle must be ASCII for byte-window comparison");
+    haystack
+        .as_bytes()
+        .windows(needle.len())
+        .any(|candidate| candidate.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
 fn docker_exec<F, X>(
     args: &[&str],
     envs: &[(&str, &str)],
@@ -1227,7 +1317,11 @@ where
 
 #[cfg(test)]
 mod builder_placement_tests {
-    use crate::cmd::docker::{Architecture, BuilderPlacement, DockerError, kube_builder_driver_opt};
+    use crate::cmd::docker::{
+        Architecture, BuilderPlacement, BuilderResource, DockerError, kube_builder_driver_opt,
+        record_builder_resource_shortage,
+    };
+    use std::cell::RefCell;
     use std::num::NonZeroUsize;
 
     fn driver_opt_with_placement(placement: &BuilderPlacement) -> String {
@@ -1420,6 +1514,45 @@ mod builder_placement_tests {
                 "tolerations `{tolerations}` should be rejected"
             );
         }
+    }
+
+    #[test]
+    fn detects_insufficient_builder_resources_in_kubernetes_scheduler_output() {
+        let cpu_shortage = RefCell::new(None);
+        record_builder_resource_shortage(
+            &cpu_shortage,
+            "0/3 nodes are available: 3 INSUFFICIENT CPU. preemption: 0/3 nodes are available",
+        );
+        assert_eq!(
+            cpu_shortage.into_inner(),
+            Some((
+                BuilderResource::Cpu,
+                "0/3 nodes are available: 3 INSUFFICIENT CPU. preemption: 0/3 nodes are available".to_string(),
+            ))
+        );
+
+        let memory_shortage = RefCell::new(None);
+        record_builder_resource_shortage(&memory_shortage, "0/5 nodes are available: 5 Insufficient memory.");
+        assert_eq!(
+            memory_shortage.into_inner(),
+            Some((
+                BuilderResource::Memory,
+                "0/5 nodes are available: 5 Insufficient memory.".to_string(),
+            ))
+        );
+
+        let ephemeral_storage_shortage = RefCell::new(None);
+        record_builder_resource_shortage(
+            &ephemeral_storage_shortage,
+            "0/2 nodes are available: 2 Insufficient ephemeral-storage.",
+        );
+        assert_eq!(
+            ephemeral_storage_shortage.into_inner(),
+            Some((
+                BuilderResource::EphemeralStorage,
+                "0/2 nodes are available: 2 Insufficient ephemeral-storage.".to_string(),
+            ))
+        );
     }
 }
 

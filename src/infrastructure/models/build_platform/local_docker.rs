@@ -338,16 +338,6 @@ impl LocalDocker {
         should_abort: &CommandKiller,
     ) -> Result<BuilderHandle, BuildError> {
         let (max_cpu, max_ram) = (build.max_cpu_in_milli, build.max_ram_in_gib);
-
-        env_logger(format!(
-            "🧑‍🏭 Provisioning docker builder with {max_cpu}m CPU and {max_ram}gib RAM for parallel build. This can take some time"
-        ));
-        // Docker has a hardcoded timeout of 1 minute for the builder creation
-        // it may be too short for us, so retry until we reach our deadline
-        // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
-        let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
-
-        // We need to do special handling for insecure registries or http ones.
         let cr = &build.image.registry_url;
         let http_registries = if cr.scheme() == "http" {
             vec![format!(
@@ -374,12 +364,6 @@ impl LocalDocker {
             .map(|arch| docker::Architecture::from(arch))
             .collect();
 
-        let provision_builder = self.metrics_registry.start_record(
-            build.image.service_long_id,
-            StepLabel::Service,
-            StepName::ProvisionBuilder,
-        );
-
         let exec_id = self
             .context
             .execution_id()
@@ -387,8 +371,8 @@ impl LocalDocker {
             .unwrap_or((self.context.execution_id(), ""))
             .0;
 
-        let builder_handle = loop {
-            match self.context.docker.spawn_builder(
+        provision_builder_with(build, self.metrics_registry.as_ref(), env_logger, should_abort, || {
+            self.context.docker.spawn_builder(
                 &format!("{}-{}", exec_id, self.builder_counter.fetch_add(1, Ordering::Relaxed)),
                 build.image.service_long_id.to_string().as_str(),
                 NonZeroUsize::new(1).unwrap(),
@@ -408,33 +392,8 @@ impl LocalDocker {
                     .collect::<Vec<_>>()
                     .as_slice(),
                 true,
-            ) {
-                Ok(build_handle) => break build_handle,
-                Err(err) => {
-                    error!("cannot provision docker builder: {}", err);
-                    if should_abort.should_abort().is_some() {
-                        provision_builder.stop(StepStatus::Cancel);
-                        return Err(BuildError::Aborted {
-                            application: build.image.service_id.clone(),
-                        });
-                    }
-
-                    if err.is_aborted() || Instant::now() >= deadline {
-                        provision_builder.stop(StepStatus::Error);
-                        return Err(BuildError::DockerError {
-                            application: build.image.service_id.clone(),
-                            raw_error: err,
-                        });
-                    }
-
-                    env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
-                    thread::sleep(Duration::from_secs(1));
-                }
-            }
-        };
-        provision_builder.stop(StepStatus::Success);
-
-        Ok(builder_handle)
+            )
+        })
     }
 
     /// Builds an image that has no source repository: the Dockerfile is fully synthesized by the
@@ -618,6 +577,95 @@ impl BuildSecretFiles {
             .map(|(id, path)| (id.as_str(), path.as_path()))
             .collect()
     }
+}
+
+fn provision_builder_with<SpawnBuilder>(
+    build: &Build,
+    metrics_registry: &dyn MetricsRegistry,
+    env_logger: impl Fn(String),
+    should_abort: &CommandKiller,
+    mut spawn_builder: SpawnBuilder,
+) -> Result<BuilderHandle, BuildError>
+where
+    SpawnBuilder: FnMut() -> Result<BuilderHandle, docker::DockerError>,
+{
+    let (max_cpu, max_ram) = (build.max_cpu_in_milli, build.max_ram_in_gib);
+    env_logger(format!(
+        "🧑‍🏭 Provisioning docker builder with {max_cpu}m CPU and {max_ram}GiB RAM for parallel build. This can take some time"
+    ));
+    // Docker has a hardcoded timeout of 1 minute for the builder creation.
+    // It may be too short for us, so retry until we reach our deadline.
+    // https://github.com/docker/buildx/blob/master/driver/kubernetes/driver.go#L116
+    let deadline = Instant::now() + Duration::from_secs(60 * 10); // 10min
+    let provision_builder =
+        metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::ProvisionBuilder);
+
+    let builder_handle = loop {
+        match spawn_builder() {
+            Ok(build_handle) => break build_handle,
+            Err(err) => {
+                error!("cannot provision docker builder: {err}");
+                // These references are used only by the branches below; each branch ends the borrow before
+                // returning or moving `err` into `BuildError::DockerError`.
+                let scheduler_shortage = match &err {
+                    docker::DockerError::BuilderInsufficientResources {
+                        resource,
+                        scheduler_message,
+                    } => Some((resource, scheduler_message)),
+                    _ => None,
+                };
+
+                // A user-requested cancellation takes precedence over every provisioning failure. Preserve the
+                // scheduler diagnosis in the deployment log before returning the cancellation to the caller.
+                if should_abort.should_abort().is_some() {
+                    if let Some((resource, scheduler_message)) = scheduler_shortage {
+                        env_logger(format!(
+                            "Builder provisioning was cancelled while Kubernetes reported insufficient {resource}."
+                        ));
+                        env_logger(format!("Kubernetes scheduler: {scheduler_message}"));
+                    }
+                    provision_builder.stop(StepStatus::Cancel);
+                    return Err(BuildError::Aborted {
+                        application: build.image.service_id.clone(),
+                    });
+                }
+
+                if let Some((resource, scheduler_message)) = scheduler_shortage {
+                    provision_builder.stop(StepStatus::Error);
+                    let requested_resource = match resource {
+                        docker::BuilderResource::Cpu => format!("a {max_cpu}m CPU request"),
+                        docker::BuilderResource::Memory => format!("a {max_ram}GiB RAM request"),
+                        docker::BuilderResource::EphemeralStorage => build.ephemeral_storage_in_gib.map_or_else(
+                            || "its default ephemeral-storage request".to_string(),
+                            |storage| format!("a {storage}GiB ephemeral-storage request"),
+                        ),
+                    };
+                    env_logger(format!(
+                        "🚫 Cannot provision Docker builder: the cluster does not have enough {resource} to schedule a builder with {requested_resource}. Scale the cluster or reduce the build resources, then retry."
+                    ));
+                    env_logger(format!("Kubernetes scheduler: {scheduler_message}"));
+                    return Err(BuildError::DockerError {
+                        application: build.image.service_id.clone(),
+                        raw_error: err,
+                    });
+                }
+
+                if err.is_aborted() || Instant::now() >= deadline {
+                    provision_builder.stop(StepStatus::Error);
+                    return Err(BuildError::DockerError {
+                        application: build.image.service_id.clone(),
+                        raw_error: err,
+                    });
+                }
+
+                env_logger("⚠️ Cannot provision docker builder. Retrying...".to_string());
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+    };
+    provision_builder.stop(StepStatus::Success);
+
+    Ok(builder_handle)
 }
 
 impl BuildPlatform for LocalDocker {
@@ -918,7 +966,131 @@ impl BuildPlatform for LocalDocker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::models::build_platform::Image;
+    use crate::metrics_registry::StdMetricsRegistry;
+    use std::cell::{Cell, RefCell};
+    use std::collections::BTreeMap;
     use tempfile::tempdir;
+
+    fn build_for_provisioning() -> Build {
+        Build {
+            source: BuildSource::Dockerfile {
+                content: "FROM alpine".to_string(),
+            },
+            image: Image {
+                service_id: "service-id".to_string(),
+                service_long_id: Uuid::new_v4(),
+                ..Image::default()
+            },
+            environment_variables: BTreeMap::new(),
+            disable_buildkit_cache: false,
+            timeout: Duration::from_secs(30),
+            architectures: vec![],
+            max_cpu_in_milli: 2_000,
+            max_ram_in_gib: 4,
+            ephemeral_storage_in_gib: Some(20),
+            registries: vec![],
+            dockerfile_fragment: None,
+            tag_build_args: None,
+        }
+    }
+
+    #[test]
+    fn insufficient_resources_stop_builder_provisioning_without_retrying() {
+        let build = build_for_provisioning();
+        let metrics_registry = StdMetricsRegistry::default();
+        let messages = RefCell::new(vec![]);
+        let spawn_attempts = Cell::new(0);
+        let scheduler_message = "0/5 nodes are available: 5 Insufficient ephemeral-storage.";
+
+        let result = provision_builder_with(
+            &build,
+            &metrics_registry,
+            |message| messages.borrow_mut().push(message),
+            &CommandKiller::never(),
+            || {
+                spawn_attempts.set(spawn_attempts.get() + 1);
+                Err(docker::DockerError::BuilderInsufficientResources {
+                    resource: docker::BuilderResource::EphemeralStorage,
+                    scheduler_message: scheduler_message.to_string(),
+                })
+            },
+        );
+
+        assert!(matches!(
+            result,
+            Err(BuildError::DockerError {
+                application,
+                raw_error: docker::DockerError::BuilderInsufficientResources {
+                    resource: docker::BuilderResource::EphemeralStorage,
+                    scheduler_message,
+                },
+            }) if application == "service-id" && scheduler_message == "0/5 nodes are available: 5 Insufficient ephemeral-storage."
+        ));
+        assert_eq!(spawn_attempts.get(), 1);
+        assert_eq!(
+            messages.into_inner(),
+            vec![
+                "🧑‍🏭 Provisioning docker builder with 2000m CPU and 4GiB RAM for parallel build. This can take some time",
+                "🚫 Cannot provision Docker builder: the cluster does not have enough ephemeral storage to schedule a builder with a 20GiB ephemeral-storage request. Scale the cluster or reduce the build resources, then retry.",
+                "Kubernetes scheduler: 0/5 nodes are available: 5 Insufficient ephemeral-storage.",
+            ]
+        );
+        assert_eq!(
+            metrics_registry
+                .get_records(build.image.service_long_id)
+                .into_iter()
+                .find(|record| record.step_name == StepName::ProvisionBuilder)
+                .and_then(|record| record.status),
+            Some(StepStatus::Error)
+        );
+    }
+
+    #[test]
+    fn cancelled_builder_provisioning_logs_the_scheduler_resource_shortage() {
+        let build = build_for_provisioning();
+        let metrics_registry = StdMetricsRegistry::default();
+        let messages = RefCell::new(vec![]);
+        let spawn_attempts = Cell::new(0);
+        let scheduler_message = "0/5 nodes are available: 5 Insufficient memory.";
+        let should_abort = CommandKiller::from_timeout(Duration::ZERO);
+
+        let result = provision_builder_with(
+            &build,
+            &metrics_registry,
+            |message| messages.borrow_mut().push(message),
+            &should_abort,
+            || {
+                spawn_attempts.set(spawn_attempts.get() + 1);
+                Err(docker::DockerError::BuilderInsufficientResources {
+                    resource: docker::BuilderResource::Memory,
+                    scheduler_message: scheduler_message.to_string(),
+                })
+            },
+        );
+
+        assert!(matches!(
+            result,
+            Err(BuildError::Aborted { application }) if application == "service-id"
+        ));
+        assert_eq!(spawn_attempts.get(), 1);
+        assert_eq!(
+            messages.into_inner(),
+            vec![
+                "🧑‍🏭 Provisioning docker builder with 2000m CPU and 4GiB RAM for parallel build. This can take some time",
+                "Builder provisioning was cancelled while Kubernetes reported insufficient memory.",
+                "Kubernetes scheduler: 0/5 nodes are available: 5 Insufficient memory.",
+            ]
+        );
+        assert_eq!(
+            metrics_registry
+                .get_records(build.image.service_long_id)
+                .into_iter()
+                .find(|record| record.step_name == StepName::ProvisionBuilder)
+                .and_then(|record| record.status),
+            Some(StepStatus::Cancel)
+        );
+    }
 
     #[test]
     fn test_inject_fragment_with_file_path() {

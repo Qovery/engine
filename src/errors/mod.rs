@@ -703,6 +703,14 @@ impl From<DockerError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            DockerError::BuilderInsufficientResources {
+                resource,
+                scheduler_message,
+            } => CommandError::new(
+                format!("Docker builder cannot be scheduled because the cluster has insufficient {resource}"),
+                Some(scheduler_message),
+                None,
+            ),
         }
     }
 }
