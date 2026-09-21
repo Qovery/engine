@@ -178,6 +178,54 @@ fn cluster_agent_does_not_receive_the_legacy_loki_url() {
 }
 
 #[test]
+fn cluster_agent_can_read_karpenter_nodeclaims() {
+    let documents = render(
+        "cluster-agent",
+        "lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent",
+        "qovery",
+        &[
+            values("platform-catalog/components/cluster-agent/config/static-values/base.yaml"),
+            values("platform-catalog/components/cluster-agent/config/runtime-values/managed-values.yaml"),
+        ],
+        &[],
+    );
+
+    let cluster_role = document_by_kind_and_name(&documents, "ClusterRole", "qovery-cluster-agent")
+        .expect("cluster-agent ClusterRole must render");
+    let rules = yaml_path(cluster_role, &["rules"])
+        .and_then(Value::as_sequence)
+        .expect("cluster-agent ClusterRole must contain rules");
+    let has_nodeclaims_rule = rules.iter().any(|rule| {
+        let has_karpenter_api_group = yaml_path(rule, &["apiGroups"])
+            .and_then(Value::as_sequence)
+            .map(|api_groups| {
+                api_groups
+                    .iter()
+                    .any(|api_group| api_group.as_str() == Some("karpenter.sh"))
+            })
+            .unwrap_or(false);
+        let has_resources = yaml_path(rule, &["resources"])
+            .and_then(Value::as_sequence)
+            .map(|resources| {
+                resources.iter().any(|resource| resource.as_str() == Some("nodepools"))
+                    && resources.iter().any(|resource| resource.as_str() == Some("nodeclaims"))
+            })
+            .unwrap_or(false);
+        let has_read_verbs = yaml_path(rule, &["verbs"])
+            .and_then(Value::as_sequence)
+            .map(|verbs| {
+                verbs.iter().any(|verb| verb.as_str() == Some("get"))
+                    && verbs.iter().any(|verb| verb.as_str() == Some("list"))
+            })
+            .unwrap_or(false);
+
+        has_karpenter_api_group && has_resources && has_read_verbs
+    });
+
+    assert!(has_nodeclaims_rule);
+}
+
+#[test]
 fn shell_agent_preserves_the_legacy_resource_names() {
     let documents = render(
         "shell-agent",
