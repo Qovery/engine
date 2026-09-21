@@ -69,6 +69,7 @@ rules:
       - karpenter.sh
     resources:
       - nodepools
+      - nodeclaims
     verbs:
       - get
       - list
