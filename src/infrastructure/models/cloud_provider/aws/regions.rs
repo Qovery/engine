@@ -56,6 +56,14 @@ pub enum AwsZone {
     ApSoutheast2A,
     ApSoutheast2B,
     ApSoutheast2C,
+    // Jakarta
+    ApSoutheast3A,
+    ApSoutheast3B,
+    ApSoutheast3C,
+    // Melbourne
+    ApSoutheast4A,
+    ApSoutheast4B,
+    ApSoutheast4C,
     // Toronto
     CaCentral1A,
     CaCentral1B,
@@ -137,6 +145,8 @@ impl AwsZone {
             ApNortheast3A | ApNortheast3B | ApNortheast3C => AwsRegion::ApNortheast3,
             ApSoutheast1A | ApSoutheast1B | ApSoutheast1C => AwsRegion::ApSoutheast1,
             ApSoutheast2A | ApSoutheast2B | ApSoutheast2C => AwsRegion::ApSoutheast2,
+            ApSoutheast3A | ApSoutheast3B | ApSoutheast3C => AwsRegion::ApSoutheast3,
+            ApSoutheast4A | ApSoutheast4B | ApSoutheast4C => AwsRegion::ApSoutheast4,
             CaCentral1A | CaCentral1B | CaCentral1D => AwsRegion::CaCentral1,
             CnNorth1A | CnNorth1B | CnNorth1C => AwsRegion::CnNorth1,
             CnNorthwest1A | CnNorthwest1B | CnNorthwest1C => AwsRegion::CnNorthwest1,
@@ -198,6 +208,12 @@ impl ToCloudProviderFormat for AwsZone {
             ApSoutheast2A => "ap-southeast-2a",
             ApSoutheast2B => "ap-southeast-2b",
             ApSoutheast2C => "ap-southeast-2c",
+            ApSoutheast3A => "ap-southeast-3a",
+            ApSoutheast3B => "ap-southeast-3b",
+            ApSoutheast3C => "ap-southeast-3c",
+            ApSoutheast4A => "ap-southeast-4a",
+            ApSoutheast4B => "ap-southeast-4b",
+            ApSoutheast4C => "ap-southeast-4c",
             CaCentral1A => "ca-central-1a",
             CaCentral1B => "ca-central-1b",
             CaCentral1D => "ca-central-1d",
@@ -295,6 +311,12 @@ impl FromStr for AwsZone {
             "ap-southeast-2a" => Ok(ApSoutheast2A),
             "ap-southeast-2b" => Ok(ApSoutheast2B),
             "ap-southeast-2c" => Ok(ApSoutheast2C),
+            "ap-southeast-3a" => Ok(ApSoutheast3A),
+            "ap-southeast-3b" => Ok(ApSoutheast3B),
+            "ap-southeast-3c" => Ok(ApSoutheast3C),
+            "ap-southeast-4a" => Ok(ApSoutheast4A),
+            "ap-southeast-4b" => Ok(ApSoutheast4B),
+            "ap-southeast-4c" => Ok(ApSoutheast4C),
             "ca-central-1a" => Ok(CaCentral1A),
             "ca-central-1b" => Ok(CaCentral1B),
             "ca-central-1d" => Ok(CaCentral1D),
@@ -363,6 +385,8 @@ pub enum AwsRegion {
     ApNortheast3,
     ApSoutheast1,
     ApSoutheast2,
+    ApSoutheast3,
+    ApSoutheast4,
     CaCentral1,
     CnNorth1,
     CnNorthwest1,
@@ -394,6 +418,8 @@ impl FromStr for AwsRegion {
             "ap-south-2" | "apsouth2" => Ok(AwsRegion::ApSouth2),
             "ap-southeast-1" | "apsoutheast1" => Ok(AwsRegion::ApSoutheast1),
             "ap-southeast-2" | "apsoutheast2" => Ok(AwsRegion::ApSoutheast2),
+            "ap-southeast-3" | "apsoutheast3" => Ok(AwsRegion::ApSoutheast3),
+            "ap-southeast-4" | "apsoutheast4" => Ok(AwsRegion::ApSoutheast4),
             "ca-central-1" | "cacentral1" => Ok(AwsRegion::CaCentral1),
             "eu-central-1" | "eucentral1" => Ok(AwsRegion::EuCentral1),
             "eu-central-2" | "eucentral2" => Ok(AwsRegion::EuCentral2),
@@ -435,6 +461,8 @@ impl ToCloudProviderFormat for AwsRegion {
             AwsRegion::ApNortheast3 => "ap-northeast-3",
             AwsRegion::ApSoutheast1 => "ap-southeast-1",
             AwsRegion::ApSoutheast2 => "ap-southeast-2",
+            AwsRegion::ApSoutheast3 => "ap-southeast-3",
+            AwsRegion::ApSoutheast4 => "ap-southeast-4",
             AwsRegion::CaCentral1 => "ca-central-1",
             AwsRegion::CnNorth1 => "cn-north-1",
             AwsRegion::CnNorthwest1 => "cn-northwest-1",
@@ -503,6 +531,12 @@ impl AwsRegion {
             }
             AwsRegion::ApSoutheast2 => {
                 vec![ApSoutheast2A, ApSoutheast2B, ApSoutheast2C]
+            }
+            AwsRegion::ApSoutheast3 => {
+                vec![ApSoutheast3A, ApSoutheast3B, ApSoutheast3C]
+            }
+            AwsRegion::ApSoutheast4 => {
+                vec![ApSoutheast4A, ApSoutheast4B, ApSoutheast4C]
             }
             AwsRegion::CaCentral1 => {
                 vec![CaCentral1A, CaCentral1B, CaCentral1D]
@@ -634,6 +668,8 @@ mod tests {
                     AwsRegion::ApNortheast3 => "ap-northeast-3",
                     AwsRegion::ApSoutheast1 => "ap-southeast-1",
                     AwsRegion::ApSoutheast2 => "ap-southeast-2",
+                    AwsRegion::ApSoutheast3 => "ap-southeast-3",
+                    AwsRegion::ApSoutheast4 => "ap-southeast-4",
                     AwsRegion::CaCentral1 => "ca-central-1",
                     AwsRegion::CnNorth1 => "cn-north-1",
                     AwsRegion::CnNorthwest1 => "cn-northwest-1",
@@ -695,6 +731,12 @@ mod tests {
                     }
                     AwsRegion::ApSoutheast2 => {
                         vec![AwsZone::ApSoutheast2A, AwsZone::ApSoutheast2B, AwsZone::ApSoutheast2C]
+                    }
+                    AwsRegion::ApSoutheast3 => {
+                        vec![AwsZone::ApSoutheast3A, AwsZone::ApSoutheast3B, AwsZone::ApSoutheast3C]
+                    }
+                    AwsRegion::ApSoutheast4 => {
+                        vec![AwsZone::ApSoutheast4A, AwsZone::ApSoutheast4B, AwsZone::ApSoutheast4C]
                     }
                     AwsRegion::CaCentral1 => {
                         vec![AwsZone::CaCentral1A, AwsZone::CaCentral1B, AwsZone::CaCentral1D]
@@ -764,6 +806,8 @@ mod tests {
                     AwsRegion::ApNortheast3 => "ApNortheast3",
                     AwsRegion::ApSoutheast1 => "ApSoutheast1",
                     AwsRegion::ApSoutheast2 => "ApSoutheast2",
+                    AwsRegion::ApSoutheast3 => "ApSoutheast3",
+                    AwsRegion::ApSoutheast4 => "ApSoutheast4",
                     AwsRegion::CaCentral1 => "CaCentral1",
                     AwsRegion::CnNorth1 => "CnNorth1",
                     AwsRegion::CnNorthwest1 => "CnNorthwest1",
@@ -834,6 +878,12 @@ mod tests {
                     AwsZone::ApSoutheast2A => "ap-southeast-2a",
                     AwsZone::ApSoutheast2B => "ap-southeast-2b",
                     AwsZone::ApSoutheast2C => "ap-southeast-2c",
+                    AwsZone::ApSoutheast3A => "ap-southeast-3a",
+                    AwsZone::ApSoutheast3B => "ap-southeast-3b",
+                    AwsZone::ApSoutheast3C => "ap-southeast-3c",
+                    AwsZone::ApSoutheast4A => "ap-southeast-4a",
+                    AwsZone::ApSoutheast4B => "ap-southeast-4b",
+                    AwsZone::ApSoutheast4C => "ap-southeast-4c",
                     AwsZone::CaCentral1A => "ca-central-1a",
                     AwsZone::CaCentral1B => "ca-central-1b",
                     AwsZone::CaCentral1D => "ca-central-1d",
@@ -906,6 +956,8 @@ mod tests {
                     AwsZone::ApNortheast3A | AwsZone::ApNortheast3B | AwsZone::ApNortheast3C => AwsRegion::ApNortheast3,
                     AwsZone::ApSoutheast1A | AwsZone::ApSoutheast1B | AwsZone::ApSoutheast1C => AwsRegion::ApSoutheast1,
                     AwsZone::ApSoutheast2A | AwsZone::ApSoutheast2B | AwsZone::ApSoutheast2C => AwsRegion::ApSoutheast2,
+                    AwsZone::ApSoutheast3A | AwsZone::ApSoutheast3B | AwsZone::ApSoutheast3C => AwsRegion::ApSoutheast3,
+                    AwsZone::ApSoutheast4A | AwsZone::ApSoutheast4B | AwsZone::ApSoutheast4C => AwsRegion::ApSoutheast4,
                     AwsZone::CaCentral1A | AwsZone::CaCentral1B | AwsZone::CaCentral1D => AwsRegion::CaCentral1,
                     AwsZone::CnNorth1A | AwsZone::CnNorth1B | AwsZone::CnNorth1C => AwsRegion::CnNorth1,
                     AwsZone::CnNorthwest1A | AwsZone::CnNorthwest1B | AwsZone::CnNorthwest1C => AwsRegion::CnNorthwest1,
@@ -965,6 +1017,12 @@ mod tests {
                     AwsZone::ApSoutheast2A => "ap-southeast-2a",
                     AwsZone::ApSoutheast2B => "ap-southeast-2b",
                     AwsZone::ApSoutheast2C => "ap-southeast-2c",
+                    AwsZone::ApSoutheast3A => "ap-southeast-3a",
+                    AwsZone::ApSoutheast3B => "ap-southeast-3b",
+                    AwsZone::ApSoutheast3C => "ap-southeast-3c",
+                    AwsZone::ApSoutheast4A => "ap-southeast-4a",
+                    AwsZone::ApSoutheast4B => "ap-southeast-4b",
+                    AwsZone::ApSoutheast4C => "ap-southeast-4c",
                     AwsZone::CaCentral1A => "ca-central-1a",
                     AwsZone::CaCentral1B => "ca-central-1b",
                     AwsZone::CaCentral1D => "ca-central-1d",
