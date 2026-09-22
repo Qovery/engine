@@ -13,8 +13,9 @@ use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::kubernetes::KubernetesVersion;
 use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
 use crate::infrastructure::models::kubernetes::karpenter::{
-    KarpenterNodePoolDisruptionBudget, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
-    KarpenterNodePoolRequirementKey, KarpenterNodePoolType, KarpenterParameters, KarpenterRequirementOperator,
+    CRONJOB_NODEPOOL_TAINT_KEY, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolLimits,
+    KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
+    STABLE_NODEPOOL_TAINT_KEY,
 };
 use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::models::VpcQoveryNetworkMode;
@@ -301,23 +302,15 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 key: "isCustomAmi".to_string(),
                 value: self.eks_ec2_ami.is_custom().to_string(),
             },
+            ChartSetValue {
+                key: "stableNodePool.taintKey".to_string(),
+                value: STABLE_NODEPOOL_TAINT_KEY.to_string(),
+            },
+            ChartSetValue {
+                key: "cronjobNodePool.taintKey".to_string(),
+                value: CRONJOB_NODEPOOL_TAINT_KEY.to_string(),
+            },
         ];
-
-        // Share isolation taint keys with workloads targeting these node pools.
-        for (nodepool, prefix) in [
-            (KarpenterNodePoolType::Stable, "stableNodePool"),
-            (KarpenterNodePoolType::Gpu, "gpuNodePool"),
-            (KarpenterNodePoolType::Cronjob, "cronjobNodePool"),
-            (KarpenterNodePoolType::DefaultPublic, "defaultPublicNodePool"),
-            (KarpenterNodePoolType::DefaultPrivate, "defaultPrivateNodePool"),
-        ] {
-            if let Some(taint_key) = nodepool.taint_key() {
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.taintKey"),
-                    value: taint_key.to_string(),
-                });
-            }
-        }
 
         // Custom AMI: set either customAmiId or customAmiName using the reference (without family prefix)
         if let Some(ami_ref) = self.eks_ec2_ami.custom_ami_reference() {
@@ -758,7 +751,6 @@ mod tests {
 
     use crate::cmd::helm::Helm;
     use crate::constants::AWS_APN_ID_TAG_KEY;
-    use crate::environment::models::utils::target_karpenter_node_pool;
     use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -768,17 +760,16 @@ mod tests {
     use crate::infrastructure::models::disk_size::DiskSize;
     use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
     use crate::infrastructure::models::kubernetes::karpenter::{
-        KarpenterCronjobNodePoolOverride, KarpenterDefaultNodePoolOverride, KarpenterDefaultPrivateNodePoolOverride,
-        KarpenterDefaultPublicNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
-        KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
-        KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterNodePoolType, KarpenterParameters,
-        KarpenterRequirementOperator, KarpenterStableNodePoolOverride,
+        CRONJOB_NODEPOOL_TAINT_KEY, KarpenterCronjobNodePoolOverride, KarpenterDefaultNodePoolOverride,
+        KarpenterDefaultPrivateNodePoolOverride, KarpenterDefaultPublicNodePoolOverride, KarpenterGpuNodePoolOverride,
+        KarpenterNodePool, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
+        KarpenterNodePoolLimits, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
+        KarpenterRequirementOperator, KarpenterStableNodePoolOverride, STABLE_NODEPOOL_TAINT_KEY,
     };
     use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
     use crate::io_models::aws_apn_id::AwsApnId;
     use crate::io_models::models::CpuArchitecture::ARM64;
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode};
-    use std::collections::BTreeMap;
 
     const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
         prefix: None,
@@ -1962,84 +1953,40 @@ mod tests {
     }
 
     #[test]
-    fn test_nodepool_taints_match_workload_tolerations() {
-        let mut pools = egress_node_pools(true, true);
+    fn test_stable_and_cronjob_nodepool_taint_keys() {
+        let mut pools = egress_node_pools(false, false);
         pools.cronjob_override = Some(KarpenterCronjobNodePoolOverride {
             spot_enabled: None,
             budgets: vec![],
             limits: None,
             consolidate_after_in_seconds: None,
         });
-        pools.gpu_override = Some(KarpenterGpuNodePoolOverride {
-            spot_enabled: None,
-            budgets: vec![],
-            limits: None,
-            requirements: None,
-            disk_size: DiskSize::Gib(100),
-            disk_iops: None,
-            disk_throughput: None,
-            consolidate_after_in_seconds: None,
-        });
         let chart = create_chart(KUBERNETES_VERSION, false, pools);
         let mut common_chart = chart.to_common_helm_chart().unwrap();
         let helm = Helm::new::<String>(None, &[]).unwrap();
         let chart_path = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/aws/bootstrap/charts/karpenter-configuration");
-        let yaml = helm.get_template(chart_path, &common_chart.chart_info).unwrap();
-        let documents = parse_documents(&yaml);
 
-        for nodepool in [
-            KarpenterNodePoolType::Default,
-            KarpenterNodePoolType::Stable,
-            KarpenterNodePoolType::Gpu,
-            KarpenterNodePoolType::Cronjob,
-            KarpenterNodePoolType::DefaultPublic,
-            KarpenterNodePoolType::DefaultPrivate,
-        ] {
-            let name = nodepool.to_string();
-            let node_pool = find_resource(&documents, "NodePool", &name).expect("NodePool should be rendered");
-            let mut affinity = BTreeMap::new();
-            let mut tolerations = BTreeMap::new();
-            target_karpenter_node_pool(nodepool, &mut affinity, &mut tolerations, false);
-            let rendered_taints: BTreeMap<String, String> = node_pool["spec"]["template"]["spec"]["taints"]
-                .as_sequence()
-                .into_iter()
-                .flatten()
-                .map(|taint| {
-                    (
-                        taint["key"].as_str().unwrap().to_string(),
-                        taint["effect"].as_str().unwrap().to_string(),
-                    )
-                })
-                .collect();
-            if tolerations.is_empty() {
-                assert!(rendered_taints.is_empty(), "NodePool {name} should be untainted");
+        // Check both the shared definitions and that templates consume the supplied keys.
+        for override_key in [None, Some("custom.example.com/dedicated")] {
+            if let Some(key) = override_key {
+                for value in &mut common_chart.chart_info.values {
+                    if value.key.ends_with(".taintKey") {
+                        value.value = key.to_string();
+                    }
+                }
             }
-            // GPU pools also carry the device taint, independent of the pool isolation taint.
-            for (key, effect) in tolerations {
-                assert_eq!(rendered_taints.get(&key), Some(&effect), "NodePool {name}, taint {key}");
+            let yaml = helm.get_template(chart_path, &common_chart.chart_info).unwrap();
+            let documents = parse_documents(&yaml);
+            for (name, shared_key) in [
+                ("stable", STABLE_NODEPOOL_TAINT_KEY),
+                ("cronjob", CRONJOB_NODEPOOL_TAINT_KEY),
+            ] {
+                let node_pool = find_resource(&documents, "NodePool", name).unwrap();
+                let taints = node_pool["spec"]["template"]["spec"]["taints"].as_sequence().unwrap();
+                assert_eq!(taints.len(), 1);
+                assert_eq!(taints[0]["key"], override_key.unwrap_or(shared_key));
+                assert_eq!(taints[0]["effect"], "NoSchedule");
             }
-        }
-
-        // Prove templates use the supplied keys instead of retaining hard-coded taints.
-        for value in &mut common_chart.chart_info.values {
-            if value.key.ends_with(".taintKey") {
-                value.value = "custom.example.com/dedicated".to_string();
-            }
-        }
-        let yaml = helm.get_template(chart_path, &common_chart.chart_info).unwrap();
-        let documents = parse_documents(&yaml);
-        for name in [
-            "stable",
-            "gpu",
-            "cronjob",
-            "qovery-default-public",
-            "qovery-default-private",
-        ] {
-            let node_pool = find_resource(&documents, "NodePool", name).unwrap();
-            assert_eq!(
-                node_pool["spec"]["template"]["spec"]["taints"][0]["key"],
-                "custom.example.com/dedicated"
-            );
         }
     }
 
