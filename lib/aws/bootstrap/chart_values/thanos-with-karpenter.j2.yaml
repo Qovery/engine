@@ -1,3 +1,11 @@
+compactor:
+  nodeSelector:
+    karpenter.sh/nodepool: {{ thanos_compactor_nodepool | yaml_encode }}
+  tolerations:
+    - key: {{ thanos_compactor_nodepool_taint | yaml_encode }}
+      operator: "Exists"
+      effect: "NoSchedule"
+
 storegateway:
   affinity:
     nodeAffinity:
