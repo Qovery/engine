@@ -5137,7 +5137,7 @@ dependencies = [
 [[package]]
 name = "rusoto_core"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
@@ -5161,7 +5161,7 @@ dependencies = [
 [[package]]
 name = "rusoto_credential"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5178,7 +5178,7 @@ dependencies = [
 [[package]]
 name = "rusoto_ecr"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5191,7 +5191,7 @@ dependencies = [
 [[package]]
 name = "rusoto_eks"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5205,7 +5205,7 @@ dependencies = [
 [[package]]
 name = "rusoto_s3"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "async-trait",
  "bytes",
@@ -5217,7 +5217,7 @@ dependencies = [
 [[package]]
 name = "rusoto_signature"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -5242,7 +5242,7 @@ dependencies = [
 [[package]]
 name = "rusoto_sts"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
+source = "git+https://github.com/Qovery/rusoto.git?rev=e751cd4a3af75f8302a721e5bc56dc56744b812f#e751cd4a3af75f8302a721e5bc56dc56744b812f"
 dependencies = [
  "async-trait",
  "bytes",
@@ -7226,7 +7226,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

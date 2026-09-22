@@ -94,13 +94,13 @@ duration-str = "0.17.0"
 
 # AWS deps
 tokio = { version = "1.45.0", features = ["full"] }
-rusoto_core = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-rusoto_sts = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-rusoto_credential = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-rusoto_ecr = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-rusoto_eks = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-rusoto_s3 = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-rusoto_signature = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
+rusoto_core = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
+rusoto_sts = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
+rusoto_credential = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
+rusoto_ecr = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
+rusoto_eks = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
+rusoto_s3 = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
+rusoto_signature = { git = "https://github.com/Qovery/rusoto.git", rev = "e751cd4a3af75f8302a721e5bc56dc56744b812f" }
 aws-sdk-elasticloadbalancingv2 = "1.77.0"
 aws-sdk-eks = "1.87.0"
 aws-sdk-rds = "1.87.0"
