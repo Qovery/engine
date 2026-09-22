@@ -627,7 +627,7 @@ fn insert_thanos_compactor_nodepool(context: &mut TeraContext, cronjob_nodepool_
         KarpenterNodePoolType::Stable
     };
     context.insert("thanos_compactor_nodepool", &nodepool.to_string());
-    context.insert("thanos_compactor_nodepool_taint", &format!("nodepool/{nodepool}"));
+    context.insert("thanos_compactor_nodepool_taint", &nodepool.taint_key());
 }
 
 #[derive(Debug, PartialEq)]

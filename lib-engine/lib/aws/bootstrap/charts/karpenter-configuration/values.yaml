@@ -40,6 +40,7 @@ tags:
 global_node_pools:
   terminationGracePeriod: 4h
 stableNodePool:
+  taintKey: nodepool/stable
   consolidationPolicy: WhenEmptyOrUnderutilized
   requirements: []
   consolidateAfter: 30s
@@ -55,6 +56,7 @@ defaultNodePool:
     maxCpu: ""
     maxMemory: ""
 gpuNodePool:
+  taintKey: nodepool/gpu
   enable: false
   consolidateAfter: 30s
   requirements: []
@@ -67,6 +69,7 @@ gpuNodePool:
   diskIops: null
   diskThroughput: null
 cronjobNodePool:
+  taintKey: nodepool/cronjob
   enable: false
   consolidateAfter: 30s
   requirements: []
@@ -78,6 +81,7 @@ cronjobNodePool:
 # Egress-class pools (QOV-2107): opt-in (tainted), disabled unless the cluster
 # receives an explicit override from core AND its network mode allows the pool.
 defaultPublicNodePool:
+  taintKey: nodepool/qovery-default-public
   enable: false
   consolidateAfter: 1m
   requirements: []
@@ -85,6 +89,7 @@ defaultPublicNodePool:
     maxCpu: ""
     maxMemory: ""
 defaultPrivateNodePool:
+  taintKey: nodepool/qovery-default-private
   enable: false
   consolidateAfter: 1m
   requirements: []

@@ -23,7 +23,7 @@ spec:
         kind: EC2NodeClass
         name: qovery-default-private
       taints:
-        - key: nodepool/qovery-default-private
+        - key: {{ .Values.defaultPrivateNodePool.taintKey | quote }}
           effect: NoSchedule
       expireAfter: 720h # 30 * 24h = 720h
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
