@@ -50,17 +50,19 @@ diverge:
 - `QOVERY_ENGINE_WORKER_NODE_SELECTOR` and `QOVERY_ENGINE_WORKER_TOLERATIONS` describe the same
   placement to the Operator binary, which applies it to every worker Job.
 
-Both environment variables use the Engine's `BUILDER_NODE_SELECTOR` / `BUILDER_TOLERATIONS`
-grammar (`lib-engine/src/cmd/docker.rs`, `BuilderPlacement`), so the Operator reuses that parser:
+Both environment variables contain JSON using the Kubernetes `PodSpec` field shapes. The Helm
+adapter serializes the same objects used for the Deployment, and the Operator deserializes them
+into Kubernetes types before validating them:
 
-```
-QOVERY_ENGINE_WORKER_NODE_SELECTOR: "karpenter.sh/nodepool=stable"
-QOVERY_ENGINE_WORKER_TOLERATIONS: "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+```yaml
+QOVERY_ENGINE_WORKER_NODE_SELECTOR: '{"karpenter.sh/nodepool":"stable"}'
+QOVERY_ENGINE_WORKER_TOLERATIONS: '[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"}]'
 ```
 
-The selector is a comma-separated list of `key=value` pairs. The tolerations are semicolon-separated
-specs, each one listing `key`, `operator`, `value` and `effect` in that order, separated by commas.
+The selector is a JSON object of string labels; tolerations are a JSON array of objects.
 An environment variable is emitted only when the corresponding setting is filled in.
+This encoding requires the Operator version that reads JSON placement variables; the former
+comma/semicolon syntax is no longer emitted. The customer-facing settings are unchanged.
 
 A selector matching no node leaves the Operator pod `Pending`: bootstrap shows it immediately and
 the customer re-runs it with corrected values, while a self-update keeps the previous Operator

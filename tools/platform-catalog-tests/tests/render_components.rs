@@ -1,11 +1,14 @@
 use base64::Engine;
 use platform_catalog_tests::{
-    contains_key, contains_string, contains_string_fragment, document_by_kind_and_name, document_kind, helm_template,
-    parse_yaml_documents, parse_yaml_file, repository_path, yaml_path, yaml_string,
+    assert_success, contains_key, contains_string, contains_string_fragment, document_by_kind_and_name, document_kind,
+    helm_template, parse_yaml_documents, parse_yaml_file, repository_path, yaml_path, yaml_string,
 };
+use serde_json::{Value as JsonValue, json};
 use serde_yaml::Value;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 use tempfile::NamedTempFile;
 
 fn values(path: &str) -> PathBuf {
@@ -330,18 +333,29 @@ fn operator_container_environment(documents: &[Value]) -> Vec<Value> {
 /// environment variables the Operator reads.
 #[test]
 fn operator_places_its_deployment_and_its_workers_from_one_placement() {
-    let documents = render_operator(concat!(
-        "nodeSelector:\n",
-        "  karpenter.sh/nodepool: stable\n",
-        "tolerations:\n",
-        "  - key: nodepool/stable\n",
-        "    value: \"\"\n",
-        "    effect: NoSchedule\n",
-        "    operator: Equal\n",
-        "environmentVariables:\n",
-        "  QOVERY_ENGINE_WORKER_NODE_SELECTOR: \"karpenter.sh/nodepool=stable\"\n",
-        "  QOVERY_ENGINE_WORKER_TOLERATIONS: \"key=nodepool/stable,operator=Equal,value=,effect=NoSchedule\"\n",
-    ));
+    let request = json!({
+        "operation": "COMPILE",
+        "profileConfig": {
+            "nodeSelectorKey": "karpenter.sh/nodepool",
+            "nodeSelectorValue": "stable",
+            "tolerations": [{"key": "nodepool/stable", "value": "", "effect": "NoSchedule"}],
+        },
+        "clusterContext": {"mode": "CUSTOMER_MANAGED", "provider": "AWS", "capabilities": []},
+        "clusterInputs": {},
+        "enabledComponents": [],
+    });
+    let output = assert_success(
+        Command::new(env::var_os("PKL_BIN").unwrap_or_else(|| "pkl".into()))
+            .arg("eval")
+            .arg("-p")
+            .arg(format!("request={request}"))
+            .arg(repository_path(
+                "platform-catalog/components/qovery-operator/config/runtime-values/model.pkl",
+            )),
+    );
+    let result: JsonValue = serde_json::from_slice(&output.stdout).expect("catalog must render valid JSON");
+    assert_eq!(result["violations"], json!([]));
+    let documents = render_operator(&result["helmValues"].to_string());
     let deployment = document_by_kind_and_name(&documents, "Deployment", "qovery-operator")
         .expect("qovery-operator Deployment must be rendered");
     let pod_spec = yaml_path(deployment, &["spec", "template", "spec"]).expect("Operator pod spec must be rendered");
@@ -363,14 +377,14 @@ fn operator_places_its_deployment_and_its_workers_from_one_placement() {
     let secret = document_by_kind_and_name(&documents, "Secret", "qovery-operator")
         .expect("qovery-operator Secret must be rendered");
     let environment = operator_container_environment(&documents);
-    for (name, expected) in [
-        ("QOVERY_ENGINE_WORKER_NODE_SELECTOR", "karpenter.sh/nodepool=stable"),
-        (
-            "QOVERY_ENGINE_WORKER_TOLERATIONS",
-            "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule",
-        ),
+    for (name, field) in [
+        ("QOVERY_ENGINE_WORKER_NODE_SELECTOR", "nodeSelector"),
+        ("QOVERY_ENGINE_WORKER_TOLERATIONS", "tolerations"),
     ] {
-        assert_eq!(yaml_string(secret, &["stringData", name]), Some(expected));
+        let encoded = yaml_string(secret, &["stringData", name]).expect("worker placement must reach the Secret");
+        let worker_placement: JsonValue = serde_json::from_str(encoded).expect("worker placement must be JSON");
+        let operator_placement = yaml_path(pod_spec, &[field]).expect("Operator placement must be rendered");
+        assert_eq!(worker_placement, serde_json::to_value(operator_placement).unwrap());
         let entry = environment
             .iter()
             .find(|entry| yaml_string(entry, &["name"]) == Some(name))

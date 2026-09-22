@@ -1,5 +1,7 @@
 amends "pkl:test"
 
+import "pkl:json"
+
 import "../config/runtime-values/contract.pkl"
 import "../config/runtime-values/settings.pkl"
 import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
@@ -21,6 +23,14 @@ local function evaluate(
         List(),
       ),
     )
+
+local jsonParser = new json.Parser { useMapping = true }
+
+local function workerSelector(values: Mapping): Mapping =
+  jsonParser.parse((values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] as String) as Mapping
+
+local function workerTolerations(values: Mapping): Listing =
+  jsonParser.parse((values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_TOLERATIONS"] as String) as Listing
 
 local function environment(result: contract.EvaluationResult): Mapping =
   (result.helmValues as Mapping)["environmentVariables"] as Mapping
@@ -67,6 +77,14 @@ local selectorAndTolerations: Mapping = (selector) {
 }
 
 facts {
+  ["worker JSON decodes to the same placement as the Deployment"] {
+    for (placement in List(selector, tolerationsOnly, selectorAndTolerations)) {
+      let (values = compiled(placement))
+        (!values.containsKey("nodeSelector") || workerSelector(values) == values["nodeSelector"])
+          && (!values.containsKey("tolerations") || workerTolerations(values) == values["tolerations"])
+    }
+  }
+
   ["STANDARD describes the architecture as optional and compiles no demo worker settings"] {
     !evaluate(contract.describeOperation, new Mapping {}, false).fields.first.required
     evaluate(contract.compileOperation, new Mapping {}, false).violations.isEmpty
@@ -116,7 +134,7 @@ facts {
       values["nodeSelector"] == new Mapping { ["karpenter.sh/nodepool"] = "stable" }
         && !values.containsKey("tolerations")
         && (values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_NODE_SELECTOR"]
-          == "karpenter.sh/nodepool=stable"
+          == #"{"karpenter.sh/nodepool":"stable"}"#
         && !(values["environmentVariables"] as Mapping).containsKey("QOVERY_ENGINE_WORKER_TOLERATIONS")
   }
 
@@ -124,7 +142,7 @@ facts {
     (compiled(new Mapping { ["nodeSelectorValue"] = "operators" })["environmentVariables"] as Mapping)[
       "QOVERY_ENGINE_WORKER_NODE_SELECTOR"
     ]
-      == "eks.amazonaws.com/nodegroup=operators"
+      == #"{"eks.amazonaws.com/nodegroup":"operators"}"#
   }
 
   ["tolerations alone tolerate a taint without pinning a node group"] {
@@ -140,7 +158,7 @@ facts {
             }
           }
         && (values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_TOLERATIONS"]
-          == "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+          == #"[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"}]"#
         && !(values["environmentVariables"] as Mapping).containsKey("QOVERY_ENGINE_WORKER_NODE_SELECTOR")
   }
 
@@ -158,12 +176,12 @@ facts {
           }
         && (values["environmentVariables"] as Mapping)
           == new Mapping {
-            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = "karpenter.sh/nodepool=stable"
-            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = #"{"karpenter.sh/nodepool":"stable"}"#
+            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = #"[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"}]"#
           }
   }
 
-  ["several tolerations keep their order and are joined by a semicolon"] {
+  ["several tolerations keep their order in the JSON array"] {
     let (
       values =
         compiled((selector) { ["tolerations"] = new Listing { stableTaint; dedicatedTaint } })
@@ -171,8 +189,8 @@ facts {
       (values["tolerations"] as Listing).toList().map((toleration) -> toleration["key"])
         == List("nodepool/stable", "dedicated")
         && (values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_TOLERATIONS"]
-          == "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
-            + ";key=dedicated,operator=Equal,value=operator,effect=NoExecute"
+          == #"[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"},{"key":"dedicated","value":"operator","effect":"NoExecute","operator":"Equal"}]"#
+        && workerTolerations(values) == values["tolerations"]
   }
 
   ["the architecture reserved by the Engine cannot become the Operator's node selector"] {
@@ -236,8 +254,8 @@ facts {
         && environment(result)
           == new Mapping {
             ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = "ARM64"
-            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = "karpenter.sh/nodepool=stable"
-            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = #"{"karpenter.sh/nodepool":"stable"}"#
+            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = #"[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"}]"#
           }
   }
 }
