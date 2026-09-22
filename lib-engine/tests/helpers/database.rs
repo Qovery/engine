@@ -239,7 +239,8 @@ pub fn environment_3_apps_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
-                dockerfile_path: Some("Dockerfile-11".to_string()),
+                // Use the maintained PostgreSQL client fixture; the database under test remains PostgreSQL 11.
+                dockerfile_path: Some("Dockerfile-18".to_string()),
                 command_args: vec![],
                 entrypoint: None,
                 root_path: "/".to_string(),
@@ -317,7 +318,8 @@ pub fn environment_3_apps_3_databases(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
-                dockerfile_path: Some("Dockerfile-11".to_string()),
+                // Use the maintained PostgreSQL client fixture; the database under test remains PostgreSQL 11.
+                dockerfile_path: Some("Dockerfile-18".to_string()),
                 command_args: vec![],
                 entrypoint: None,
                 root_path: String::from("/"),
@@ -895,10 +897,16 @@ pub fn test_db(
                 // with the full tag. The Bitnami family (<= 8.0) has a plain numeric version (no variant
                 // suffix) and keeps `Dockerfile-<version>`.
                 DatabaseKind::Mongodb if version.contains('-') => Some("Dockerfile-8.3".to_string()),
-                // PostgreSQL 18+ carries the full image tag as `version` (e.g. `18.4-trixie`), but the
-                // test app only has a per-major Dockerfile (`Dockerfile-18`). Key the Dockerfile off the
-                // major while the DB itself still deploys with the full tag. For majors <= 17 the version
-                // already is the major, so this is a no-op there.
+                // Use the maintained PostgreSQL client fixture for legacy database versions; the database
+                // itself still deploys with the requested version.
+                DatabaseKind::Postgresql
+                    if sem_ver
+                        .to_major_version_string()
+                        .parse::<u32>()
+                        .is_ok_and(|major| major < 18) =>
+                {
+                    Some("Dockerfile-18".to_string())
+                }
                 DatabaseKind::Postgresql => Some(format!("Dockerfile-{}", sem_ver.to_major_version_string())),
                 // Redis 8+ carries the full official image tag as `version` (e.g. `8.8-trixie`), which
                 // doesn't match a Dockerfile name. The test app ships `Dockerfile-8.8` (official Redis 8
@@ -907,13 +915,9 @@ pub fn test_db(
                 DatabaseKind::Redis if sem_ver.to_major_version_string().parse::<u32>().is_ok_and(|m| m >= 8) => {
                     Some("Dockerfile-8.8".to_string())
                 }
-                // MySQL 9+ carries the full official image tag as `version` (e.g. `9.7-oracle`), which
-                // doesn't match a Dockerfile name. The test app ships `Dockerfile-9.7` (official MySQL 9
-                // client) for this family; the DB itself still deploys with the full tag. Majors 5/8
-                // keep `Dockerfile-<version>`.
-                DatabaseKind::Mysql if sem_ver.to_major_version_string().parse::<u32>().is_ok_and(|m| m >= 9) => {
-                    Some("Dockerfile-9.7".to_string())
-                }
+                // Use the maintained MySQL client fixture for all database versions; the database itself
+                // still deploys with the requested version.
+                DatabaseKind::Mysql => Some("Dockerfile-9.7".to_string()),
                 _ => Some(format!("Dockerfile-{version}")),
             };
             app.command_args = vec![];

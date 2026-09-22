@@ -1564,7 +1564,6 @@ mod tests {
     use crate::cmd::command::CommandKiller;
     use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError};
     use std::fs;
-    use std::num::NonZeroUsize;
     use std::path::Path;
     use std::time::Duration;
     use url::Url;
@@ -1601,7 +1600,7 @@ mod tests {
         let image = ContainerImage::new(
             Url::parse("https://public.ecr.aws").unwrap(),
             "r3m4q3r9/pub-mirror-debian".to_string(),
-            vec!["11.6-ci".to_string()],
+            vec!["12.12-slim".to_string()],
         );
 
         let ret = docker.pull(
@@ -1687,7 +1686,7 @@ mod tests {
     fn build_secret_context(nonce: &Uuid) -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         let dockerfile = format!(
-            r#"FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:11.6-ci
+            r#"FROM public.ecr.aws/r3m4q3r9/pub-mirror-debian:12.12-slim
 RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
     echo "nonce {nonce}" && \
     test "$(cat /run/secrets/MY_BUILD_SECRET)" = "s3cr3t"
@@ -1823,7 +1822,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
         let image_source = ContainerImage::new(
             Url::parse("https://public.ecr.aws").unwrap(),
             "r3m4q3r9/pub-mirror-debian".to_string(),
-            vec!["11.6-ci".to_string()],
+            vec!["12.12-slim".to_string()],
         );
         let image_dest = ContainerImage::new(
             private_registry_url(),
@@ -1853,6 +1852,8 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
     #[cfg(feature = "test-local-kube")]
     #[test]
     fn test_with_kube_builder() {
+        use std::num::NonZeroUsize;
+
         rustls::crypto::aws_lc_rs::default_provider()
             .install_default()
             .expect("Cannot install rustls crypto provider");

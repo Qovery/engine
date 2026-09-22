@@ -1,6 +1,6 @@
-use crate::helpers::common::Infrastructure;
+use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
 use crate::helpers::utilities::engine_run_test;
-use crate::kube::{TestEnvOption, kube_test_env};
+use crate::kube::{MOUNTED_FILES_JOB_COMMAND, TestEnvOption, kube_test_env};
 use base64::Engine;
 use base64::engine::general_purpose;
 use function_name::named;
@@ -49,8 +49,7 @@ fn should_have_mounted_files_as_volume() {
         cron_job.command_args = vec![
             "/bin/sh".to_string(),
             "-c".to_string(),
-            "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env; test -f $APP_CONFIG; timeout 15 nc -l 8080; exit 0;"
-                .to_string(),
+            MOUNTED_FILES_JOB_COMMAND.to_string(),
         ];
         cron_job.force_trigger = true;
         cron_job.schedule = JobSchedule::Cron {
@@ -63,7 +62,7 @@ fn should_have_mounted_files_as_volume() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
         };
         cron_job.max_nb_restart = 1;
         cron_job.max_duration_in_sec = 120;
