@@ -15,6 +15,7 @@ use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, Secr
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use crate::io_models::context::Features;
 use crate::io_models::metrics::{MetricsConfiguration, MetricsParameters};
 use crate::io_models::models::{NodeGroupsWithDesiredState, VpcQoveryNetworkMode};
@@ -583,6 +584,7 @@ pub fn eks_tera_context(
     let obs_config = compute_observability_config(&options.metrics_parameters);
     context.insert("prometheus_enabled", &obs_config.prometheus_enabled);
     context.insert("thanos_nodepool_stable", &obs_config.thanos_on_stable);
+    insert_thanos_compactor_nodepool(&mut context, kubernetes.is_karpenter_cronjob_nodepool_enabled());
     context.insert("enable_cloudwatch_exporter", &obs_config.enable_cloudwatch_exporter);
 
     // External Secrets Operator
@@ -615,6 +617,17 @@ fn check_odd_subnets(
     }
 
     Ok(subnet_block.len() / 2)
+}
+
+fn insert_thanos_compactor_nodepool(context: &mut TeraContext, cronjob_nodepool_enabled: bool) {
+    // Compaction is a batch workload, regardless of query/store gateway redundancy.
+    let nodepool = if cronjob_nodepool_enabled {
+        KarpenterNodePoolType::Cronjob
+    } else {
+        KarpenterNodePoolType::Stable
+    };
+    context.insert("thanos_compactor_nodepool", &nodepool.to_string());
+    context.insert("thanos_compactor_nodepool_taint", &format!("nodepool/{nodepool}"));
 }
 
 #[derive(Debug, PartialEq)]
@@ -701,6 +714,7 @@ fn compute_secrets_manager_config(accesses: &[SecretsManagerAccess]) -> SecretsM
 mod tests {
     use crate::infrastructure::action::eks::tera_context::{
         ObservabilityConfig, SecretsManagerConfig, compute_observability_config, compute_secrets_manager_config,
+        insert_thanos_compactor_nodepool,
     };
     use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
     use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::{
@@ -711,6 +725,109 @@ mod tests {
     };
     use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
     use crate::io_models::metrics::{CloudWatchExporterConfig, MetricsConfiguration, MetricsParameters};
+    use crate::tera_utils::render_one_off;
+    use serde_json::json;
+    use serde_yaml::Value;
+    use std::io::Write;
+    use std::process::Command;
+    use tempfile::NamedTempFile;
+    use tera::Context as TeraContext;
+
+    const THANOS_KARPENTER_VALUES: &str =
+        include_str!("../../../../../lib/aws/bootstrap/chart_values/thanos-with-karpenter.j2.yaml");
+
+    #[test]
+    fn test_thanos_compactor_nodepool_scheduling() {
+        for (cronjob_nodepool_enabled, expected_nodepool) in [(false, "stable"), (true, "cronjob")] {
+            for thanos_on_stable in [false, true] {
+                let mut context = TeraContext::new();
+                context.insert("thanos_nodepool_stable", &thanos_on_stable);
+                insert_thanos_compactor_nodepool(&mut context, cronjob_nodepool_enabled);
+
+                let rendered = render_one_off(THANOS_KARPENTER_VALUES, &context).unwrap();
+                let values: Value = serde_yaml::from_str(&rendered).unwrap();
+
+                assert_eq!(
+                    values["compactor"],
+                    serde_yaml::to_value(json!({
+                        "nodeSelector": {"karpenter.sh/nodepool": expected_nodepool},
+                        "tolerations": [{
+                            "key": format!("nodepool/{expected_nodepool}"),
+                            "operator": "Exists",
+                            "effect": "NoSchedule"
+                        }]
+                    }))
+                    .unwrap(),
+                    "cronjob enabled: {cronjob_nodepool_enabled}, thanos on stable: {thanos_on_stable}"
+                );
+                assert_eq!(values["query"].is_mapping(), thanos_on_stable);
+                assert_eq!(values["storegateway"]["tolerations"].is_sequence(), thanos_on_stable);
+            }
+        }
+    }
+
+    #[test]
+    fn test_thanos_compactor_nodepool_values_are_yaml_encoded() {
+        let payload = "\"\n  injected: true\n#";
+        let mut context = TeraContext::new();
+        context.insert("thanos_nodepool_stable", &false);
+        context.insert("thanos_compactor_nodepool", &payload);
+        context.insert("thanos_compactor_nodepool_taint", &payload);
+
+        let rendered = render_one_off(THANOS_KARPENTER_VALUES, &context).unwrap();
+        let values: Value = serde_yaml::from_str(&rendered).unwrap();
+
+        assert_eq!(
+            values["compactor"],
+            serde_yaml::to_value(json!({
+                "nodeSelector": {"karpenter.sh/nodepool": payload},
+                "tolerations": [{"key": payload, "operator": "Exists", "effect": "NoSchedule"}]
+            }))
+            .unwrap()
+        );
+        assert!(values.get("injected").is_none());
+    }
+
+    #[test]
+    fn test_thanos_compactor_cronjob_scheduling() {
+        for (cronjob_nodepool_enabled, expected_nodepool) in [(false, "stable"), (true, "cronjob")] {
+            let mut context = TeraContext::new();
+            context.insert("thanos_nodepool_stable", &false);
+            insert_thanos_compactor_nodepool(&mut context, cronjob_nodepool_enabled);
+            let rendered = render_one_off(THANOS_KARPENTER_VALUES, &context).unwrap();
+            let mut values_file = NamedTempFile::new().unwrap();
+            values_file.write_all(rendered.as_bytes()).unwrap();
+
+            let output = Command::new("helm")
+                .args([
+                    "template",
+                    "thanos",
+                    concat!(env!("CARGO_MANIFEST_DIR"), "/lib/common/bootstrap/charts/thanos"),
+                    "--set",
+                    "compactor.enabled=true,compactor.cronJob.enabled=true,objstoreConfig=test",
+                    "--show-only",
+                    "templates/compactor/cronjob.yaml",
+                    "--values",
+                ])
+                .arg(values_file.path())
+                .output()
+                .expect("Helm must be installed to render the Thanos chart");
+            assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+            let manifest: Value = serde_yaml::from_slice(&output.stdout).unwrap();
+            assert_eq!(manifest["kind"], "CronJob");
+            let pod_spec = &manifest["spec"]["jobTemplate"]["spec"]["template"]["spec"];
+            assert_eq!(pod_spec["nodeSelector"]["karpenter.sh/nodepool"], expected_nodepool);
+            assert_eq!(
+                pod_spec["tolerations"],
+                serde_yaml::to_value(json!([{
+                    "key": format!("nodepool/{expected_nodepool}"),
+                    "operator": "Exists",
+                    "effect": "NoSchedule"
+                }]))
+                .unwrap()
+            );
+        }
+    }
 
     #[test]
     fn test_observability_config_when_no_metrics_parameters() {
