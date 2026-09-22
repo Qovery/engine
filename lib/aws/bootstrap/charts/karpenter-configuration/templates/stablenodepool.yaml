@@ -22,7 +22,7 @@ spec:
         kind: EC2NodeClass
         name: default
       taints:
-        - key: nodepool/stable
+        - key: {{ .Values.stableNodePool.taintKey | quote }}
           effect: NoSchedule
       expireAfter: 720h # 30 * 24h = 720h
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}

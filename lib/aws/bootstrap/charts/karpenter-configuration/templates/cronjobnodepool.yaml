@@ -23,7 +23,7 @@ spec:
         kind: EC2NodeClass
         name: default
       taints:
-        - key: nodepool/cronjob
+        - key: {{ .Values.cronjobNodePool.taintKey | quote }}
           effect: NoSchedule
       expireAfter: 720h # 30 * 24h = 720h
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}

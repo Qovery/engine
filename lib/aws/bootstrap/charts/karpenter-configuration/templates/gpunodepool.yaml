@@ -27,7 +27,7 @@ spec:
         kind: EC2NodeClass
         name: gpu
       taints:
-        - key: nodepool/gpu
+        - key: {{ .Values.gpuNodePool.taintKey | quote }}
           effect: NoSchedule
         - key: nvidia.com/gpu
           effect: NoSchedule

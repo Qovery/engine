@@ -74,9 +74,11 @@ pub fn target_karpenter_node_pool(
             .or_insert_with(|| "on-demand".to_string());
     }
 
-    tolerations
-        .entry(format!("nodepool/{karpenter_node_pool_to_target}"))
-        .or_insert_with(|| "NoSchedule".to_string());
+    if let Some(taint_key) = karpenter_node_pool_to_target.taint_key() {
+        tolerations
+            .entry(taint_key.to_string())
+            .or_insert_with(|| "NoSchedule".to_string());
+    }
 }
 
 #[cfg(test)]
