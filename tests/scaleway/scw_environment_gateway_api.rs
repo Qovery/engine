@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::common::Infrastructure;
+use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
 use crate::helpers::scaleway::scw_infra_config;
 use ::function_name::named;
 use k8s_openapi::api::core::v1::ConfigMap;
@@ -3134,11 +3134,11 @@ fn deploy_container_with_cors_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -3340,11 +3340,11 @@ fn deploy_container_with_sticky_session_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -3540,11 +3540,11 @@ fn deploy_container_with_header_sticky_session_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -3738,11 +3738,11 @@ fn deploy_container_with_source_ip_sticky_session_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -3928,11 +3928,11 @@ fn deploy_container_with_ip_whitelist_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -4133,11 +4133,11 @@ fn deploy_container_with_ip_denylist_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -4337,11 +4337,11 @@ fn deploy_container_with_both_whitelist_and_denylist_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -4559,11 +4559,11 @@ fn deploy_container_with_basic_auth_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -4750,11 +4750,11 @@ fn deploy_container_with_rate_limit_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -5020,11 +5020,11 @@ fn deploy_container_with_custom_headers_enabled_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -5273,11 +5273,11 @@ fn deploy_container_with_sticky_session_enabled_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -5475,11 +5475,11 @@ fn deploy_container_with_ip_whitelist_enabled_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -5682,11 +5682,11 @@ fn deploy_container_with_ip_denylist_enabled_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -5888,11 +5888,11 @@ fn deploy_container_with_both_whitelist_and_denylist_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -6112,11 +6112,11 @@ fn deploy_container_with_basic_auth_enabled_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -6305,11 +6305,11 @@ fn deploy_container_with_rate_limit_enabled_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -6577,11 +6577,11 @@ fn deploy_container_with_custom_headers_enabled_on_scw_kapsule_grpc() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:50051,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -7124,11 +7124,11 @@ fn deploy_container_with_force_ssl_redirect_on_scw_kapsule_http() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -10870,11 +10870,11 @@ fn deploy_container_with_custom_http_errors_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
                     .to_string(),
             ],
             entrypoint: None,
@@ -11438,11 +11438,12 @@ fn deploy_container_with_circuit_breaker_on_scw_kapsule() {
                 url: Url::parse("https://public.ecr.scw").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:3000,fork EXEC:/bin/cat".to_string(),
+                "set -e; apt-get update; apt-get install -y socat; socat TCP-LISTEN:3000,fork EXEC:/bin/cat"
+                    .to_string(),
             ],
             entrypoint: None,
             cpu_request_in_milli: 100,

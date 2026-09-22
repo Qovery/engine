@@ -230,7 +230,7 @@ mod tests {
         let image_source = ContainerImage::new(
             Url::parse("https://public.ecr.aws").unwrap(),
             "r3m4q3r9/pub-mirror-debian".to_string(),
-            vec!["11.6-ci".to_string()],
+            vec!["12.12-slim".to_string()],
         );
         let image_dest =
             ContainerImage::new(private_registry_url(), "skopeo/alpine1".to_string(), vec!["mirror".to_string()]);
@@ -275,7 +275,7 @@ mod tests {
         let image_source = ContainerImage::new(
             Url::parse("https://public.ecr.aws").unwrap(),
             "r3m4q3r9/pub-mirror-debian".to_string(),
-            vec!["11.6-ci".to_string()],
+            vec!["12.12-slim".to_string()],
         );
         let image_dest =
             ContainerImage::new(private_registry_url(), "skopeo/alpine2".to_string(), vec!["mirror".to_string()]);

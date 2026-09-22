@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::common::Infrastructure;
+use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::clean_environments;
 use crate::helpers::scaleway::scw_infra_config;
@@ -1677,12 +1677,12 @@ fn deploy_container_with_no_router_on_scw() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -1826,13 +1826,13 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 format!(
                     r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -2172,7 +2172,7 @@ fn deploy_job_on_scw_kapsule() {
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2310,7 +2310,7 @@ fn deploy_cronjob_on_scw_kapsule() {
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             },
             max_nb_restart: 1,
             max_duration_in_sec: 30,
@@ -2426,7 +2426,7 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             },
             max_nb_restart: 1,
             max_duration_in_sec: 30,
@@ -2811,12 +2811,12 @@ fn deploy_container_with_tcp_public_port() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -2995,12 +2995,12 @@ fn scw_deploy_container_with_ndots() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps;
                 echo listening on port 8080;
                 socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
@@ -3137,12 +3137,12 @@ fn scw_deploy_container_with_none_ndots() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps;
                 echo listening on port 8080;
                 socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT

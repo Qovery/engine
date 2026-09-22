@@ -19,6 +19,8 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 
 pub const DEFAULT_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 pub const DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS: u32 = 3600;
+// Keep integration fixtures on a maintained Debian release with live package indexes.
+pub const PUB_MIRROR_DEBIAN_TAG: &str = "12.12-slim";
 
 pub enum RegionActivationStatus {
     Deactivated,

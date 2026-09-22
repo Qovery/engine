@@ -330,7 +330,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
-                dockerfile_path: Some("Dockerfile-11".to_string()),
+                // Use the maintained PostgreSQL client fixture; the database under test remains PostgreSQL 11.
+                dockerfile_path: Some("Dockerfile-18".to_string()),
                 command_args: vec![],
                 entrypoint: None,
                 root_path: String::from("/"),
@@ -408,7 +409,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
-                dockerfile_path: Some("Dockerfile-11".to_string()),
+                // Use the maintained PostgreSQL client fixture; the database under test remains PostgreSQL 11.
+                dockerfile_path: Some("Dockerfile-18".to_string()),
                 command_args: vec![],
                 entrypoint: None,
                 root_path: String::from("/"),

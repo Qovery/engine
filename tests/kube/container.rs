@@ -1,4 +1,4 @@
-use crate::helpers::common::Infrastructure;
+use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
 use crate::helpers::database::StorageSize::Resize;
 use crate::helpers::utilities::engine_run_test;
 use crate::kube::{TestEnvOption, kube_test_env};
@@ -230,11 +230,11 @@ fn should_have_mounted_files_as_volume() {
 
         // Use an app crashing in case file doesn't exists
         container.image = "r3m4q3r9/pub-mirror-debian".to_string();
-        container.tag = "11.6-ci".to_string();
+        container.tag = PUB_MIRROR_DEBIAN_TAG.to_string();
         container.command_args = vec![
             "/bin/sh".to_string(),
             "-c".to_string(),
-            "apt-get update; apt-get install -y netcat-openbsd; echo listening on port $PORT; env ; while test -f $APP_CONFIG; do nc -l 8080; done".to_string(),
+            "set -e; apt-get update; apt-get install -y netcat-openbsd; echo listening on port $PORT; env ; while test -f $APP_CONFIG; do nc -l 8080; done".to_string(),
         ];
         //container.mounted_files = vec![mounted_file];
         container.environment_vars_with_infos = BTreeMap::from([

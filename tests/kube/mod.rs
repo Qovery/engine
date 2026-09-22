@@ -1,4 +1,5 @@
 use crate::helpers::aws::aws_infra_config;
+use crate::helpers::common::PUB_MIRROR_DEBIAN_TAG;
 use crate::helpers::database::StorageSize::NormalSize;
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
@@ -27,6 +28,9 @@ mod database;
 mod jobs;
 
 /// This mod holds kubernetes tests for features not specific to any cloud providers.
+/// The timeout exit code is expected when no client connects to the test listener.
+pub const MOUNTED_FILES_JOB_COMMAND: &str = "set -e; apt-get update; apt-get install -y netcat-openbsd; echo listening on port $PORT; env; test -f $APP_CONFIG; timeout 15 nc -l 8080 || test \"$?\" -eq 124; exit 0;";
+
 pub enum TestEnvOption {
     WithDB,
     WithContainer,
@@ -135,12 +139,12 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
                 command_args: vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
                     r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -328,8 +332,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 command_args: vec![
                     "/bin/sh".to_string(),
                     "-c".to_string(),
-                    "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env; test -f $APP_CONFIG; timeout 15 nc -l 8080; exit 0;"
-                        .to_string(),
+                    MOUNTED_FILES_JOB_COMMAND.to_string(),
                 ],
                 entrypoint: None,
                 force_trigger: true,
@@ -339,19 +342,19 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ram_limit_in_mib: 250,
                 gpu_request: None,
                 gpu_limit: None,
-            ephemeral_storage_in_gib: None,
+                ephemeral_storage_in_gib: None,
                 action: Action::Create,
                 schedule: JobSchedule::Cron {
                     schedule: "*/30 * * * *".to_string(), // <- every 30 minutes
                     timezone: "Etc/UTC".to_string(),
                 },
                 source: JobSource::Image {
-                registry: Registry::PublicEcr {
+                    registry: Registry::PublicEcr {
                         long_id: Uuid::new_v4(),
                         url: Url::parse("https://public.ecr.aws").unwrap(),
                     },
                     image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                    tag: "11.6-ci".to_string(),
+                    tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
                 },
                 max_nb_restart: 1,
                 max_duration_in_sec: 120,

@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::common::Infrastructure;
+use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
 use crate::helpers::gcp::{clean_environments, gcp_infra_config};
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
@@ -823,12 +823,12 @@ fn gcp_gke_deploy_container_with_ndots() {
             action: Action::Create,
             registry: source_registry.clone().into(),
             image: source_registry.image_path("pub-mirror-debian"),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps;
                 echo listening on port 8080;
                 socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
@@ -964,12 +964,12 @@ fn gcp_gke_deploy_container_with_none_ndots() {
             action: Action::Create,
             registry: source_registry.clone().into(),
             image: source_registry.image_path("pub-mirror-debian"),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps;
                 echo listening on port 8080;
                 socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT

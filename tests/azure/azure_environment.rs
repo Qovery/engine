@@ -1,6 +1,6 @@
 use crate::helpers;
 use crate::helpers::azure::{azure_infra_config, clean_environments};
-use crate::helpers::common::Infrastructure;
+use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
     FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, logger, metrics_registry,
@@ -872,7 +872,7 @@ fn azure_aks_deploy_container_with_storages() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "12.12-slim".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
@@ -1037,13 +1037,13 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 format!(
                     r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps iproute2;
                 echo listening on port $PORT;
                 env
@@ -1394,7 +1394,7 @@ fn azure_aks_deploy_job() {
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -1668,7 +1668,7 @@ fn azure_aks_deploy_cronjob() {
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             },
             max_nb_restart: 1,
             max_duration_in_sec: 30,
@@ -1817,7 +1817,7 @@ fn azure_aks_deploy_cronjob_force_trigger() {
                     url: Url::parse("https://public.ecr.aws").unwrap(),
                 },
                 image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
+                tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             },
             max_nb_restart: 1,
             max_duration_in_sec: 30,
@@ -2335,12 +2335,12 @@ fn azure_aks_deploy_container_with_ndots() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps;
                 echo listening on port 8080;
                 socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
@@ -2491,12 +2491,12 @@ fn azure_aks_deploy_container_with_none_ndots() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
-            tag: "11.6-ci".to_string(),
+            tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 r#"
-                apt-get update;
+                set -e; apt-get update;
                 apt-get install -y socat procps;
                 echo listening on port 8080;
                 socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
