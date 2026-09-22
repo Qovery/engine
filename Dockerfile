@@ -245,6 +245,7 @@ ARG SKOPEO_VERSION
 ARG PLUTO_VERSION
 ARG KRR_VERSION
 
+# Google renamed these Debian packages from google-cloud-sdk* to google-cloud-cli*.
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
   curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg  && \
@@ -264,7 +265,7 @@ RUN apt-get update && apt-get install -y \
   docker-ce-cli=$DOCKER_VERSION \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
-  google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin \
+  google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
   curl -fsSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
@@ -424,14 +425,14 @@ ARG GOVC_VERSION
 
 USER root
 RUN packages_to_remove="" && \
-  for pkg in azure-cli google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin; do \
+  for pkg in azure-cli google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin; do \
     if dpkg -s "$pkg" >/dev/null 2>&1; then packages_to_remove="$packages_to_remove $pkg"; fi; \
   done && \
   govc_arch="$(dpkg --print-architecture | sed -e 's/amd64/x86_64/' -e 's/arm64/arm64/')" && \
   if [ -n "$packages_to_remove" ]; then \
     apt-get update && apt-get purge -y $packages_to_remove; \
   fi && \
-  rm -rf /var/lib/apt/lists/* /opt/az /usr/lib/google-cloud-sdk && \
+  rm -rf /var/lib/apt/lists/* /opt/az /usr/lib/google-cloud-cli /usr/lib/google-cloud-sdk && \
   curl -sSL "https://github.com/vmware/govmomi/releases/download/v${GOVC_VERSION}/govc_Linux_${govc_arch}.tar.gz" | \
   tar -C /usr/local/bin/ --no-same-owner -xzv govc && \
   curl -sSL "https://github.com/eksctl-io/eksctl/releases/download/v${EKSCTL_VERSION}/eksctl_Linux_$(dpkg --print-architecture).tar.gz" | \
