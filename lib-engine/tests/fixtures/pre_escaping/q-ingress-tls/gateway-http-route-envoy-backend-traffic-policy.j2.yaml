@@ -26,6 +26,7 @@ metadata:
        {{ value }}
     {%- endfor %}
 spec:
+  mergeType: StrategicMerge
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: HTTPRoute

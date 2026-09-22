@@ -395,6 +395,30 @@ fn http_policy_uses_cluster_defaults_when_service_timeout_is_missing() {
 }
 
 #[test]
+fn http_route_policy_merges_with_gateway_policy() {
+    let rendered = render_http_policy(None, None, None, None, None, None);
+    let policy: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("policy must parse as YAML");
+
+    assert_eq!(
+        policy["spec"]["mergeType"].as_str(),
+        Some("StrategicMerge"),
+        "route-level policies must inherit Gateway-level BackendTrafficPolicy settings:\n{rendered}"
+    );
+}
+
+#[test]
+fn grpc_route_policy_merges_with_gateway_policy() {
+    let rendered = render_grpc_policy(None, None, None, None, None, None);
+    let policy: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("policy must parse as YAML");
+
+    assert_eq!(
+        policy["spec"]["mergeType"].as_str(),
+        Some("StrategicMerge"),
+        "route-level policies must inherit Gateway-level BackendTrafficPolicy settings:\n{rendered}"
+    );
+}
+
+#[test]
 fn http_policy_prioritizes_service_timeout_over_cluster_default() {
     let rendered = render_http_policy(Some(90), None, None, Some(42), Some(120), Some(600));
     assert!(rendered.contains("requestTimeout: 90s"));
