@@ -33,20 +33,10 @@ impl Display for KarpenterNodePoolType {
     }
 }
 
-impl KarpenterNodePoolType {
-    /// Key of the isolation taint installed on this Qovery-managed node pool.
-    /// The default pool is untainted; its name does not imply a taint.
-    pub(crate) fn taint_key(&self) -> Option<&'static str> {
-        match self {
-            Self::Stable => Some("nodepool/stable"),
-            Self::Default => None,
-            Self::Gpu => Some("nodepool/gpu"),
-            Self::Cronjob => Some("nodepool/cronjob"),
-            Self::DefaultPublic => Some("nodepool/qovery-default-public"),
-            Self::DefaultPrivate => Some("nodepool/qovery-default-private"),
-        }
-    }
-}
+/// Isolation taint shared by stable NodePool generation and Thanos scheduling.
+pub(crate) const STABLE_NODEPOOL_TAINT_KEY: &str = "nodepool/stable";
+/// Isolation taint shared by cronjob NodePool generation and Thanos scheduling.
+pub(crate) const CRONJOB_NODEPOOL_TAINT_KEY: &str = "nodepool/cronjob";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarpenterParameters {

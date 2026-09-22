@@ -15,7 +15,9 @@ use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, Secr
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
-use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
+use crate::infrastructure::models::kubernetes::karpenter::{
+    CRONJOB_NODEPOOL_TAINT_KEY, KarpenterNodePoolType, STABLE_NODEPOOL_TAINT_KEY,
+};
 use crate::io_models::context::Features;
 use crate::io_models::metrics::{MetricsConfiguration, MetricsParameters};
 use crate::io_models::models::{NodeGroupsWithDesiredState, VpcQoveryNetworkMode};
@@ -621,13 +623,13 @@ fn check_odd_subnets(
 
 fn insert_thanos_compactor_nodepool(context: &mut TeraContext, cronjob_nodepool_enabled: bool) {
     // Compaction is a batch workload, regardless of query/store gateway redundancy.
-    let nodepool = if cronjob_nodepool_enabled {
-        KarpenterNodePoolType::Cronjob
+    let (nodepool, taint_key) = if cronjob_nodepool_enabled {
+        (KarpenterNodePoolType::Cronjob, CRONJOB_NODEPOOL_TAINT_KEY)
     } else {
-        KarpenterNodePoolType::Stable
+        (KarpenterNodePoolType::Stable, STABLE_NODEPOOL_TAINT_KEY)
     };
     context.insert("thanos_compactor_nodepool", &nodepool.to_string());
-    context.insert("thanos_compactor_nodepool_taint", &nodepool.taint_key());
+    context.insert("thanos_compactor_nodepool_taint", &taint_key);
 }
 
 #[derive(Debug, PartialEq)]

@@ -38,7 +38,6 @@ gpuAmiFamily: set-by-engine-code
 gpuIsBottlerocket: set-by-engine-code
 
 gpuNodePool:
-  taintKey: set-by-engine-code
   enable: set-by-engine-code
   requirements: []
   consolidation:
@@ -59,7 +58,6 @@ cronjobNodePool:
     maxMemory: ""
 
 defaultPublicNodePool:
-  taintKey: set-by-engine-code
   enable: set-by-engine-code
   requirements: []
   limits:
@@ -67,7 +65,6 @@ defaultPublicNodePool:
     maxMemory: ""
 
 defaultPrivateNodePool:
-  taintKey: set-by-engine-code
   enable: set-by-engine-code
   requirements: []
   limits:
