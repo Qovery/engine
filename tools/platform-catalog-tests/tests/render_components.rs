@@ -302,6 +302,98 @@ fn operator_renders_the_slim_engine_worker_image_tag_suffix() {
     assert_operator_image_tag_suffix_renders("-slim");
 }
 
+fn render_operator(runtime_values: &str) -> Vec<Value> {
+    let file = write_runtime_values(runtime_values);
+    render(
+        "qovery-operator",
+        "lib-engine/lib/common/bootstrap/charts/qovery-operator",
+        "qovery",
+        &[file.path().to_owned()],
+        &[],
+    )
+}
+
+fn operator_container_environment(documents: &[Value]) -> Vec<Value> {
+    let deployment = document_by_kind_and_name(documents, "Deployment", "qovery-operator")
+        .expect("qovery-operator Deployment must be rendered");
+    yaml_path(deployment, &["spec", "template", "spec", "containers"])
+        .and_then(Value::as_sequence)
+        .and_then(|containers| containers.first())
+        .and_then(|container| yaml_path(container, &["env"]))
+        .and_then(Value::as_sequence)
+        .expect("qovery-operator container environment must be rendered")
+        .clone()
+}
+
+/// The four Helm keys the `placement` catalogue feature compiles must all reach the cluster: the
+/// Operator pod is scheduled by `nodeSelector`/`tolerations`, and its worker Jobs by the two
+/// environment variables the Operator reads.
+#[test]
+fn operator_places_its_deployment_and_its_workers_from_one_placement() {
+    let documents = render_operator(concat!(
+        "nodeSelector:\n",
+        "  karpenter.sh/nodepool: stable\n",
+        "tolerations:\n",
+        "  - key: nodepool/stable\n",
+        "    value: \"\"\n",
+        "    effect: NoSchedule\n",
+        "    operator: Equal\n",
+        "environmentVariables:\n",
+        "  QOVERY_ENGINE_WORKER_NODE_SELECTOR: \"karpenter.sh/nodepool=stable\"\n",
+        "  QOVERY_ENGINE_WORKER_TOLERATIONS: \"key=nodepool/stable,operator=Equal,value=,effect=NoSchedule\"\n",
+    ));
+    let deployment = document_by_kind_and_name(&documents, "Deployment", "qovery-operator")
+        .expect("qovery-operator Deployment must be rendered");
+    let pod_spec = yaml_path(deployment, &["spec", "template", "spec"]).expect("Operator pod spec must be rendered");
+
+    assert_eq!(
+        yaml_string(pod_spec, &["nodeSelector", "karpenter.sh/nodepool"]),
+        Some("stable")
+    );
+    let tolerations = yaml_path(pod_spec, &["tolerations"])
+        .and_then(Value::as_sequence)
+        .expect("Operator pod tolerations must be rendered");
+    assert_eq!(tolerations.len(), 1);
+    let toleration = &tolerations[0];
+    assert_eq!(yaml_string(toleration, &["key"]), Some("nodepool/stable"));
+    assert_eq!(yaml_string(toleration, &["value"]), Some(""));
+    assert_eq!(yaml_string(toleration, &["effect"]), Some("NoSchedule"));
+    assert_eq!(yaml_string(toleration, &["operator"]), Some("Equal"));
+
+    let secret = document_by_kind_and_name(&documents, "Secret", "qovery-operator")
+        .expect("qovery-operator Secret must be rendered");
+    let environment = operator_container_environment(&documents);
+    for (name, expected) in [
+        ("QOVERY_ENGINE_WORKER_NODE_SELECTOR", "karpenter.sh/nodepool=stable"),
+        (
+            "QOVERY_ENGINE_WORKER_TOLERATIONS",
+            "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule",
+        ),
+    ] {
+        assert_eq!(yaml_string(secret, &["stringData", name]), Some(expected));
+        let entry = environment
+            .iter()
+            .find(|entry| yaml_string(entry, &["name"]) == Some(name))
+            .unwrap_or_else(|| panic!("{name} must be exposed to the Operator"));
+        assert_eq!(yaml_string(entry, &["valueFrom", "secretKeyRef", "key"]), Some(name));
+    }
+}
+
+#[test]
+fn operator_without_placement_keeps_scheduling_unconstrained() {
+    let documents = render_operator("environmentVariables:\n  QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: \"\"\n");
+    let deployment = document_by_kind_and_name(&documents, "Deployment", "qovery-operator")
+        .expect("qovery-operator Deployment must be rendered");
+    let pod_spec = yaml_path(deployment, &["spec", "template", "spec"]).expect("Operator pod spec must be rendered");
+
+    assert!(yaml_path(pod_spec, &["nodeSelector"]).is_none());
+    assert!(yaml_path(pod_spec, &["tolerations"]).is_none());
+    assert!(!operator_container_environment(&documents).iter().any(|entry| matches!(
+        yaml_string(entry, &["name"]),
+        Some("QOVERY_ENGINE_WORKER_NODE_SELECTOR") | Some("QOVERY_ENGINE_WORKER_TOLERATIONS")
+    )));
+}
+
 #[test]
 fn operator_can_list_worker_pods_with_default_or_external_service_accounts() {
     for (namespace, service_account, extra_arguments) in [

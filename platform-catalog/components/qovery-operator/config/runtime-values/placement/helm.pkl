@@ -1,0 +1,63 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.placement.helm
+
+import "../sdk/helm.pkl" as sdkHelm
+import "setting.pkl"
+
+// Two targets, one placement: the chart values that schedule the Operator Deployment, and the two
+// environment variables the Operator binary reads to schedule the Engine worker Jobs it creates.
+//
+// The strings reuse the Engine's BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS grammar
+// (BuilderPlacement in lib-engine/src/cmd/docker.rs): comma-separated `key=value` pairs for the
+// selector, and semicolon-separated `key=,operator=,value=,effect=` specs for the tolerations.
+// The Operator reuses that parser, so nothing here may deviate from it.
+//
+// Nothing is emitted for a placement the customer left empty, down to the environment block: the
+// chart does skip empty environment values, but relying on that would make a wrong encoding here
+// invisible. The selector and the tolerations are emitted independently, so tolerating a taint
+// without pinning a node group works.
+
+tolerationOperator: String = "Equal"
+
+nodeSelectorVariable: String = "QOVERY_ENGINE_WORKER_NODE_SELECTOR"
+tolerationsVariable: String = "QOVERY_ENGINE_WORKER_TOLERATIONS"
+
+fragment: sdkHelm.Fragment = (scope) -> compile(setting.placement(scope))
+
+local function compile(placement: setting.Placement): Mapping =
+  let (hasSelector = placement.selectorValue != null)
+  let (hasTolerations = !placement.taints.isEmpty)
+    new Mapping {
+      when (hasSelector) {
+        ["nodeSelector"] = new Mapping {
+          [placement.selectorKey] = placement.selectorValue
+        }
+      }
+      when (hasTolerations) {
+        ["tolerations"] = new Listing {
+          for (taint in placement.taints) {
+            new Mapping {
+              ["key"] = taint["key"]
+              ["value"] = taint["value"]
+              ["effect"] = taint["effect"]
+              ["operator"] = tolerationOperator
+            }
+          }
+        }
+      }
+      when (hasSelector || hasTolerations) {
+        ["environmentVariables"] = new Mapping {
+          when (hasSelector) {
+            [nodeSelectorVariable] = "\(placement.selectorKey)=\(placement.selectorValue!!)"
+          }
+          when (hasTolerations) {
+            [tolerationsVariable] = placement.taints.map((taint) -> encodeToleration(taint)).join(";")
+          }
+        }
+      }
+    }
+
+// One buildx toleration spec. Field order is part of the grammar the Engine documents, so it is
+// spelled out here rather than derived from the row's key order.
+local function encodeToleration(taint: Mapping): String =
+  "key=\(taint["key"]),operator=\(tolerationOperator),value=\(taint["value"]),effect=\(taint["effect"])"

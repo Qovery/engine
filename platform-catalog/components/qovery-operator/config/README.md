@@ -19,3 +19,52 @@ The configuration is persisted in the Platform Template binding under the
 `cpuArchitectures` when `QOVERY_DEMO` is active and adds it to the Operator environment. Bootstrap and
 Operator self-update therefore reuse the same explicit architecture without
 introducing cluster-specific runtime inputs.
+
+## Placement
+
+`runtime-values/placement/` lets the cluster owner choose where the Operator runs. The three
+settings are optional; leaving them empty compiles exactly the values the chart received before
+this feature existed.
+
+| Setting | Meaning |
+| --- | --- |
+| `nodeSelectorKey` | Node label key. Defaults to `eks.amazonaws.com/nodegroup`. |
+| `nodeSelectorValue` | Node label value. Without it, no node is selected. |
+| `tolerations` | Taints to tolerate: `key`, `value` (may be empty), `effect`. |
+
+Typical values are `eks.amazonaws.com/nodegroup=<group>` for an EKS managed node group and
+`karpenter.sh/nodepool=<pool>` for a Karpenter NodePool, with a matching toleration when the pool
+is tainted — Qovery's `nodepool/stable` taint, for instance, carries no value and uses
+`NoSchedule`. The toleration operator is always `Equal`, which already covers valueless taints, so
+it is not exposed. `kubernetes.io/arch` is refused as a selector key: the Engine sets it per build
+and the Operator image is multi-arch.
+
+The selector and the tolerations are independent. Tolerating a taint without selecting a node is
+accepted, for a pool that repels pods without labelling them.
+
+One placement drives two targets, so the Operator and the Engine worker Jobs it creates can never
+diverge:
+
+- `nodeSelector` and `tolerations` schedule the Operator Deployment, through the chart values it
+  already renders;
+- `QOVERY_ENGINE_WORKER_NODE_SELECTOR` and `QOVERY_ENGINE_WORKER_TOLERATIONS` describe the same
+  placement to the Operator binary, which applies it to every worker Job.
+
+Both environment variables use the Engine's `BUILDER_NODE_SELECTOR` / `BUILDER_TOLERATIONS`
+grammar (`lib-engine/src/cmd/docker.rs`, `BuilderPlacement`), so the Operator reuses that parser:
+
+```
+QOVERY_ENGINE_WORKER_NODE_SELECTOR: "karpenter.sh/nodepool=stable"
+QOVERY_ENGINE_WORKER_TOLERATIONS: "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+```
+
+The selector is a comma-separated list of `key=value` pairs. The tolerations are semicolon-separated
+specs, each one listing `key`, `operator`, `value` and `effect` in that order, separated by commas.
+An environment variable is emitted only when the corresponding setting is filled in.
+
+A selector matching no node leaves the Operator pod `Pending`: bootstrap shows it immediately and
+the customer re-runs it with corrected values, while a self-update keeps the previous Operator
+running under the chart's `RollingUpdate` strategy. Worker Jobs that cannot be scheduled stay
+`Pending` until their deadline and are then reported as failed. On a Karpenter NodePool the
+`Pending` state is usually transient, since Karpenter provisions a node on demand; a managed node
+group must already have capacity.

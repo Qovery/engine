@@ -193,6 +193,10 @@ The reusable [karpenter-v1 fixtures](tests/fixtures/karpenter-v1/README.md) iden
 pairs, isolated bundle root and validation commands. The 16 [scalar-v1 baseline exchanges](tests/fixtures/scalar-v1/exchanges.json)
 were captured from unmodified Engine `bc6142c261eacfb605c08c4d26fb311018dd0541` before this extension;
 they cover all four operations for cluster-agent, qovery-operator, Loki defaults and Loki AWS S3.
+They pin the SDK against accidental change, not the catalogue against deliberate change: a component
+that gains a setting refreshes its own four responses, and the review then checks that only the new
+descriptors moved. The qovery-operator responses were refreshed this way when the Operator gained its
+optional `placement` settings; its compiled values stayed byte-identical.
 
 
 ### Optional YAML editor metadata

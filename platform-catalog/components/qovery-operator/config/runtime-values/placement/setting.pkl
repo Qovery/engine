@@ -1,0 +1,110 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.qoveryOperator.placement.setting
+
+import "../sdk/rules.pkl" as sdkRules
+import "../sdk/settings.pkl" as sdkSettings
+
+// Where the Operator Deployment and the Engine worker Jobs it creates must run. One binding value
+// drives both, so the Operator and its workers can never end up on different pools.
+//
+// Unlike the Karpenter controller, which cannot run on the pool it manages and therefore makes the
+// selector mandatory, every part of this feature is optional: an absent placement keeps the
+// compiled values byte-identical to what the chart rendered before this setting existed.
+
+selectorKey: sdkSettings.StringSetting = new {
+  key = "nodeSelectorKey"
+  label = "Node group label key"
+  description = "Node label key selecting where the Operator and its Engine worker Jobs run."
+  default = "eks.amazonaws.com/nodegroup"
+  minLength = 1
+  maxLength = 317
+  pattern = qualifiedNamePattern
+}
+
+selectorValue: sdkSettings.StringSetting = new {
+  key = "nodeSelectorValue"
+  label = "Node group label value"
+  description = "Value of the node label. Leave empty to let the Operator schedule anywhere."
+  minLength = 1
+  maxLength = 63
+  pattern = labelValuePattern
+}
+
+// The toleration operator is fixed to Equal, as on the Karpenter controller: Equal with an empty
+// value already covers valueless taints, and a smaller form is one less thing to get wrong.
+tolerations: sdkSettings.ArraySetting = new {
+  key = "tolerations"
+  label = "Node group taints to tolerate"
+  description = "Taints of the selected nodes. Tolerating a taint without selecting a node is allowed."
+  items = new sdkSettings.ObjectSetting {
+    key = "toleration"
+    label = "Toleration"
+    fields =
+      List(
+        new sdkSettings.StringSetting {
+          key = "key"
+          label = "Taint key"
+          required = true
+          minLength = 1
+          maxLength = 317
+          pattern = qualifiedNamePattern
+        },
+        new sdkSettings.StringSetting {
+          key = "value"
+          label = "Taint value"
+          required = true
+          maxLength = 63
+          pattern = labelValuePattern
+        },
+        new sdkSettings.EnumSetting {
+          key = "effect"
+          label = "Effect"
+          required = true
+          options =
+            List("NoSchedule", "PreferNoSchedule", "NoExecute")
+              .map((name) -> new sdkSettings.Option { value = name })
+        },
+      )
+  }
+}
+
+settings: List<sdkSettings.Setting> = List(selectorKey, selectorValue, tolerations)
+
+// The Engine sets kubernetes.io/arch per build, one buildx node per requested architecture
+// (BuilderPlacement in lib-engine/src/cmd/docker.rs reserves it for the same reason), and the
+// Operator image is multi-arch: pinning the Operator to one architecture here would only strand it.
+reservedSelectorKey: String = "kubernetes.io/arch"
+
+rules: List<sdkRules.Rule> =
+  List(
+    new sdkRules.FieldRule {
+      code = "RESERVED_NODE_SELECTOR_KEY"
+      fieldPath = selectorKey.key
+      message = "Qovery Operator nodeSelectorKey cannot be \(reservedSelectorKey): the Engine sets it per build"
+      violated = (scope) -> selectorKey.value(scope) == reservedSelectorKey
+    },
+  )
+
+// The placement of one Operator, as its Helm fragment reads it. `selector` is null while the
+// customer has not chosen a node, `taints` is empty while no taint must be tolerated; both are
+// independent, so tolerating a taint without selecting a node stays expressible.
+class Placement {
+  selectorKey: String
+  selectorValue: String?
+  taints: List<Mapping>
+}
+
+function placement(scope: sdkSettings.Scope): Placement = new Placement {
+  selectorKey = module.selectorKey.value(scope) ?? module.selectorKey.default!!
+  selectorValue = module.selectorValue.value(scope)
+  taints =
+    ((module.tolerations.valueIn(scope) as Listing?) ?? new Listing {})
+      .toList()
+      .map((taint) -> taint as Mapping)
+}
+
+// Kubernetes label key and value grammars, identical to the Karpenter controller's placement so
+// the Console validates both components the same way.
+qualifiedNamePattern: String =
+  "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+labelValuePattern: String = "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"

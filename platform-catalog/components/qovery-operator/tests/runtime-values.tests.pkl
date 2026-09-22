@@ -27,6 +27,45 @@ local function environment(result: contract.EvaluationResult): Mapping =
 
 local function codes(result: contract.EvaluationResult): List<String> = result.violations.map((violation) -> violation.code)
 
+// The compiled values of a draft expected to be valid, so a test that mistypes a draft fails on
+// the missing values rather than silently asserting on an absent key.
+local function compiled(profileConfig: Mapping): Mapping =
+  evaluate(contract.compileOperation, profileConfig, false).helmValues as Mapping
+
+// A draft is rejected when VALIDATE blames the path, COMPILE agrees, and nothing is compiled.
+local function rejects(profileConfig: Mapping, path: String): Boolean =
+  let (validated = evaluate(contract.validateOperation, profileConfig, false))
+  let (compiledResult = evaluate(contract.compileOperation, profileConfig, false))
+    validated.violations.any((violation) -> violation.fieldPath == path)
+      && compiledResult.violations == validated.violations
+      && compiledResult.helmValues == null
+
+local selector: Mapping = new Mapping {
+  ["nodeSelectorKey"] = "karpenter.sh/nodepool"
+  ["nodeSelectorValue"] = "stable"
+}
+
+// Qovery's own stable pool taint: valueless, NoSchedule.
+local stableTaint: Mapping = new Mapping {
+  ["key"] = "nodepool/stable"
+  ["value"] = ""
+  ["effect"] = "NoSchedule"
+}
+
+local dedicatedTaint: Mapping = new Mapping {
+  ["key"] = "dedicated"
+  ["value"] = "operator"
+  ["effect"] = "NoExecute"
+}
+
+local tolerationsOnly: Mapping = new Mapping {
+  ["tolerations"] = new Listing { stableTaint }
+}
+
+local selectorAndTolerations: Mapping = (selector) {
+  ["tolerations"] = new Listing { stableTaint }
+}
+
 facts {
   ["STANDARD describes the architecture as optional and compiles no demo worker settings"] {
     !evaluate(contract.describeOperation, new Mapping {}, false).fields.first.required
@@ -52,5 +91,153 @@ facts {
     let (result = evaluate(contract.compileOperation, new Mapping { ["cpuArchitectures"] = "ARM64" }, true))
       result.violations.isEmpty
         && environment(result)["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] == "ARM64"
+  }
+
+  ["placement is described as three optional settings"] {
+    let (fields = evaluate(contract.describeOperation, new Mapping {}, false).fields)
+      fields.map((field) -> field.key)
+        == List("cpuArchitectures", "nodeSelectorKey", "nodeSelectorValue", "tolerations")
+        && fields.drop(1).every((field) -> !field.required)
+  }
+
+  ["an absent placement compiles exactly what the Operator compiled before it existed"] {
+    let (values = compiled(new Mapping {}))
+      values.keys == Set("environmentVariables")
+        && !values.containsKey("nodeSelector")
+        && !values.containsKey("tolerations")
+        && !environment(evaluate(contract.compileOperation, new Mapping {}, false))
+          .containsKey("QOVERY_ENGINE_WORKER_NODE_SELECTOR")
+        && !environment(evaluate(contract.compileOperation, new Mapping {}, false))
+          .containsKey("QOVERY_ENGINE_WORKER_TOLERATIONS")
+  }
+
+  ["a node selector alone places the Deployment and the worker Jobs"] {
+    let (values = compiled(selector))
+      values["nodeSelector"] == new Mapping { ["karpenter.sh/nodepool"] = "stable" }
+        && !values.containsKey("tolerations")
+        && (values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_NODE_SELECTOR"]
+          == "karpenter.sh/nodepool=stable"
+        && !(values["environmentVariables"] as Mapping).containsKey("QOVERY_ENGINE_WORKER_TOLERATIONS")
+  }
+
+  ["the default node selector key applies when only a value is supplied"] {
+    (compiled(new Mapping { ["nodeSelectorValue"] = "operators" })["environmentVariables"] as Mapping)[
+      "QOVERY_ENGINE_WORKER_NODE_SELECTOR"
+    ]
+      == "eks.amazonaws.com/nodegroup=operators"
+  }
+
+  ["tolerations alone tolerate a taint without pinning a node group"] {
+    let (values = compiled(tolerationsOnly))
+      !values.containsKey("nodeSelector")
+        && values["tolerations"]
+          == new Listing {
+            new Mapping {
+              ["key"] = "nodepool/stable"
+              ["value"] = ""
+              ["effect"] = "NoSchedule"
+              ["operator"] = "Equal"
+            }
+          }
+        && (values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_TOLERATIONS"]
+          == "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+        && !(values["environmentVariables"] as Mapping).containsKey("QOVERY_ENGINE_WORKER_NODE_SELECTOR")
+  }
+
+  ["a full placement compiles both targets from one binding value"] {
+    let (values = compiled(selectorAndTolerations))
+      values["nodeSelector"] == new Mapping { ["karpenter.sh/nodepool"] = "stable" }
+        && values["tolerations"]
+          == new Listing {
+            new Mapping {
+              ["key"] = "nodepool/stable"
+              ["value"] = ""
+              ["effect"] = "NoSchedule"
+              ["operator"] = "Equal"
+            }
+          }
+        && (values["environmentVariables"] as Mapping)
+          == new Mapping {
+            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = "karpenter.sh/nodepool=stable"
+            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+          }
+  }
+
+  ["several tolerations keep their order and are joined by a semicolon"] {
+    let (
+      values =
+        compiled((selector) { ["tolerations"] = new Listing { stableTaint; dedicatedTaint } })
+    )
+      (values["tolerations"] as Listing).toList().map((toleration) -> toleration["key"])
+        == List("nodepool/stable", "dedicated")
+        && (values["environmentVariables"] as Mapping)["QOVERY_ENGINE_WORKER_TOLERATIONS"]
+          == "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+            + ";key=dedicated,operator=Equal,value=operator,effect=NoExecute"
+  }
+
+  ["the architecture reserved by the Engine cannot become the Operator's node selector"] {
+    rejects((selector) { ["nodeSelectorKey"] = "kubernetes.io/arch" }, "nodeSelectorKey")
+    codes(evaluate(contract.validateOperation, (selector) { ["nodeSelectorKey"] = "kubernetes.io/arch" }, false))
+      == List("RESERVED_NODE_SELECTOR_KEY")
+  }
+
+  ["a malformed selector is rejected before it reaches the cluster"] {
+    for (key in List(null, "", "bad key", 4, "a".repeat(318))) {
+      rejects((selector) { ["nodeSelectorKey"] = key }, "nodeSelectorKey")
+    }
+    for (value in List(null, "", "bad value", 4, "a".repeat(64))) {
+      rejects((selector) { ["nodeSelectorValue"] = value }, "nodeSelectorValue")
+    }
+  }
+
+  ["a malformed toleration list is rejected row by row"] {
+    rejects(new Mapping { ["tolerations"] = null }, "tolerations")
+    rejects(new Mapping { ["tolerations"] = new Listing { false } }, "tolerations[0]")
+    rejects(new Mapping { ["tolerations"] = new Listing { (stableTaint) { ["key"] = "bad key" } } }, "tolerations[0].key")
+    rejects(
+      new Mapping { ["tolerations"] = new Listing { (stableTaint) { ["value"] = "a".repeat(64) } } },
+      "tolerations[0].value",
+    )
+    rejects(
+      new Mapping { ["tolerations"] = new Listing { (stableTaint) { ["effect"] = "Drain" } } },
+      "tolerations[0].effect",
+    )
+    // The toleration operator is fixed to Equal, so naming it is a typo, not a choice.
+    rejects(
+      new Mapping { ["tolerations"] = new Listing { (stableTaint) { ["operator"] = "Exists" } } },
+      "tolerations[0].operator",
+    )
+    codes(
+      evaluate(
+        contract.validateOperation,
+        new Mapping { ["tolerations"] = new Listing { (stableTaint) { ["operator"] = "Exists" } } },
+        false,
+      ),
+    )
+      == List("UNKNOWN_FIELD")
+  }
+
+  ["an unknown root field is rejected instead of being ignored"] {
+    rejects(new Mapping { ["placement"] = "stable" }, "placement")
+    codes(evaluate(contract.validateOperation, new Mapping { ["placement"] = "stable" }, false))
+      == List("UNKNOWN_FIELD")
+  }
+
+  ["the demo architecture and the placement share the Operator environment"] {
+    let (
+      result =
+        evaluate(
+          contract.compileOperation,
+          (selectorAndTolerations) { ["cpuArchitectures"] = "ARM64" },
+          true,
+        )
+    )
+      result.violations.isEmpty
+        && environment(result)
+          == new Mapping {
+            ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = "ARM64"
+            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = "karpenter.sh/nodepool=stable"
+            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = "key=nodepool/stable,operator=Equal,value=,effect=NoSchedule"
+          }
   }
 }

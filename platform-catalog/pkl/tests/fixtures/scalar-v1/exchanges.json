@@ -128,6 +128,87 @@
               "ARM64"
             ]
           }
+        },
+        {
+          "key": "nodeSelectorKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "eks.amazonaws.com/nodegroup",
+          "label": "Node group label key",
+          "description": "Node label key selecting where the Operator and its Engine worker Jobs run.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 317,
+            "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+          }
+        },
+        {
+          "key": "nodeSelectorValue",
+          "type": "string",
+          "required": false,
+          "label": "Node group label value",
+          "description": "Value of the node label. Leave empty to let the Operator schedule anywhere.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+          }
+        },
+        {
+          "key": "tolerations",
+          "required": false,
+          "label": "Node group taints to tolerate",
+          "description": "Taints of the selected nodes. Tolerating a taint without selecting a node is allowed.",
+          "sensitive": false,
+          "type": "array",
+          "constraints": {
+            "uniqueItems": false
+          },
+          "items": {
+            "type": "object",
+            "fields": [
+              {
+                "key": "key",
+                "type": "string",
+                "required": true,
+                "label": "Taint key",
+                "sensitive": false,
+                "constraints": {
+                  "minLength": 1,
+                  "maxLength": 317,
+                  "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+                }
+              },
+              {
+                "key": "value",
+                "type": "string",
+                "required": true,
+                "label": "Taint value",
+                "sensitive": false,
+                "constraints": {
+                  "maxLength": 63,
+                  "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+                }
+              },
+              {
+                "key": "effect",
+                "type": "string",
+                "required": true,
+                "label": "Effect",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "NoSchedule",
+                    "PreferNoSchedule",
+                    "NoExecute"
+                  ]
+                }
+              }
+            ]
+          },
+          "itemFields": []
         }
       ],
       "requiredInputs": [],
@@ -166,6 +247,87 @@
               "ARM64"
             ]
           }
+        },
+        {
+          "key": "nodeSelectorKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "eks.amazonaws.com/nodegroup",
+          "label": "Node group label key",
+          "description": "Node label key selecting where the Operator and its Engine worker Jobs run.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 317,
+            "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+          }
+        },
+        {
+          "key": "nodeSelectorValue",
+          "type": "string",
+          "required": false,
+          "label": "Node group label value",
+          "description": "Value of the node label. Leave empty to let the Operator schedule anywhere.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+          }
+        },
+        {
+          "key": "tolerations",
+          "required": false,
+          "label": "Node group taints to tolerate",
+          "description": "Taints of the selected nodes. Tolerating a taint without selecting a node is allowed.",
+          "sensitive": false,
+          "type": "array",
+          "constraints": {
+            "uniqueItems": false
+          },
+          "items": {
+            "type": "object",
+            "fields": [
+              {
+                "key": "key",
+                "type": "string",
+                "required": true,
+                "label": "Taint key",
+                "sensitive": false,
+                "constraints": {
+                  "minLength": 1,
+                  "maxLength": 317,
+                  "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+                }
+              },
+              {
+                "key": "value",
+                "type": "string",
+                "required": true,
+                "label": "Taint value",
+                "sensitive": false,
+                "constraints": {
+                  "maxLength": 63,
+                  "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+                }
+              },
+              {
+                "key": "effect",
+                "type": "string",
+                "required": true,
+                "label": "Effect",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "NoSchedule",
+                    "PreferNoSchedule",
+                    "NoExecute"
+                  ]
+                }
+              }
+            ]
+          },
+          "itemFields": []
         }
       ],
       "requiredInputs": [],
@@ -204,6 +366,87 @@
               "ARM64"
             ]
           }
+        },
+        {
+          "key": "nodeSelectorKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "eks.amazonaws.com/nodegroup",
+          "label": "Node group label key",
+          "description": "Node label key selecting where the Operator and its Engine worker Jobs run.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 317,
+            "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+          }
+        },
+        {
+          "key": "nodeSelectorValue",
+          "type": "string",
+          "required": false,
+          "label": "Node group label value",
+          "description": "Value of the node label. Leave empty to let the Operator schedule anywhere.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+          }
+        },
+        {
+          "key": "tolerations",
+          "required": false,
+          "label": "Node group taints to tolerate",
+          "description": "Taints of the selected nodes. Tolerating a taint without selecting a node is allowed.",
+          "sensitive": false,
+          "type": "array",
+          "constraints": {
+            "uniqueItems": false
+          },
+          "items": {
+            "type": "object",
+            "fields": [
+              {
+                "key": "key",
+                "type": "string",
+                "required": true,
+                "label": "Taint key",
+                "sensitive": false,
+                "constraints": {
+                  "minLength": 1,
+                  "maxLength": 317,
+                  "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+                }
+              },
+              {
+                "key": "value",
+                "type": "string",
+                "required": true,
+                "label": "Taint value",
+                "sensitive": false,
+                "constraints": {
+                  "maxLength": 63,
+                  "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+                }
+              },
+              {
+                "key": "effect",
+                "type": "string",
+                "required": true,
+                "label": "Effect",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "NoSchedule",
+                    "PreferNoSchedule",
+                    "NoExecute"
+                  ]
+                }
+              }
+            ]
+          },
+          "itemFields": []
         }
       ],
       "requiredInputs": [],
@@ -242,6 +485,87 @@
               "ARM64"
             ]
           }
+        },
+        {
+          "key": "nodeSelectorKey",
+          "type": "string",
+          "required": false,
+          "defaultValue": "eks.amazonaws.com/nodegroup",
+          "label": "Node group label key",
+          "description": "Node label key selecting where the Operator and its Engine worker Jobs run.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 317,
+            "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+          }
+        },
+        {
+          "key": "nodeSelectorValue",
+          "type": "string",
+          "required": false,
+          "label": "Node group label value",
+          "description": "Value of the node label. Leave empty to let the Operator schedule anywhere.",
+          "sensitive": false,
+          "constraints": {
+            "minLength": 1,
+            "maxLength": 63,
+            "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+          }
+        },
+        {
+          "key": "tolerations",
+          "required": false,
+          "label": "Node group taints to tolerate",
+          "description": "Taints of the selected nodes. Tolerating a taint without selecting a node is allowed.",
+          "sensitive": false,
+          "type": "array",
+          "constraints": {
+            "uniqueItems": false
+          },
+          "items": {
+            "type": "object",
+            "fields": [
+              {
+                "key": "key",
+                "type": "string",
+                "required": true,
+                "label": "Taint key",
+                "sensitive": false,
+                "constraints": {
+                  "minLength": 1,
+                  "maxLength": 317,
+                  "pattern": "(?:(?=[^/]{1,253}/)[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?(?:[.][a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?)*/)?[A-Za-z0-9](?:[-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?"
+                }
+              },
+              {
+                "key": "value",
+                "type": "string",
+                "required": true,
+                "label": "Taint value",
+                "sensitive": false,
+                "constraints": {
+                  "maxLength": 63,
+                  "pattern": "([A-Za-z0-9]([-A-Za-z0-9_.]{0,61}[A-Za-z0-9])?)?"
+                }
+              },
+              {
+                "key": "effect",
+                "type": "string",
+                "required": true,
+                "label": "Effect",
+                "sensitive": false,
+                "constraints": {
+                  "allowedValues": [
+                    "NoSchedule",
+                    "PreferNoSchedule",
+                    "NoExecute"
+                  ]
+                }
+              }
+            ]
+          },
+          "itemFields": []
         }
       ],
       "requiredInputs": [],
