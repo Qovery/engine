@@ -11,7 +11,7 @@ use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform;
-use crate::infrastructure::models::build_platform::{BuildError, BuildPlatform};
+use crate::infrastructure::models::build_platform::{BuildError, BuildPlatform, cache_compression_for_registry};
 use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
@@ -270,7 +270,13 @@ impl EnvironmentTask {
         }
 
         // Ok now everything is setup, we can try to build the app
-        let build_result = build_platform.build(build, &logger, metrics_registry.clone(), abort);
+        let build_result = build_platform.build(
+            build,
+            cache_compression_for_registry(cr_registry.kind()),
+            &logger,
+            metrics_registry.clone(),
+            abort,
+        );
         let image_name = build.image.full_image_name_with_tag(); // .build() may have modified the image tag
         match build_result {
             Ok(_) => {

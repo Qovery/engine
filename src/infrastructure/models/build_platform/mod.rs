@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use crate::cmd::docker::DockerError;
+use crate::cmd::docker::{CacheCompression, DockerError};
 use crate::environment::report::logger::EnvLogger;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
+use crate::infrastructure::models::container_registry::Kind as RegistryKind;
 
 use crate::environment::models::abort::Abort;
 use crate::io_models::container::Registry;
@@ -116,6 +117,7 @@ pub trait BuildPlatform: Send + Sync {
     fn build(
         &self,
         build: &mut Build,
+        cache_compression: CacheCompression,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
         cancellation_requested: &dyn Abort,
@@ -155,6 +157,21 @@ pub struct Build {
     /// Dockerfile `ARG` names as parsed by the core, when it knows them. Lets the tag be computed
     /// before the repository is cloned; `None` falls back to hashing every variable.
     pub tag_build_args: Option<BTreeSet<String>>,
+}
+
+/// zstd only for registries known to accept zstd blobs: a rejected cache export fails the whole build,
+/// while gzip costs nothing but speed. Move a registry to zstd once a zstd cache export is verified on it.
+pub fn cache_compression_for_registry(kind: RegistryKind) -> CacheCompression {
+    match kind {
+        RegistryKind::Ecr
+        | RegistryKind::AzureContainerRegistry
+        | RegistryKind::GcpArtifactRegistry
+        | RegistryKind::DockerHub
+        | RegistryKind::GithubCr
+        | RegistryKind::ScalewayCr => CacheCompression::Zstd,
+        // Covers self-hosted registries of any product and version: support cannot be assumed.
+        RegistryKind::GenericCr => CacheCompression::Gzip,
+    }
 }
 
 impl Build {
@@ -413,6 +430,21 @@ pub enum Kind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_registries_verified_with_zstd_get_a_zstd_cache() {
+        for (kind, expected) in [
+            (RegistryKind::Ecr, CacheCompression::Zstd),
+            (RegistryKind::AzureContainerRegistry, CacheCompression::Zstd),
+            (RegistryKind::ScalewayCr, CacheCompression::Zstd),
+            (RegistryKind::GcpArtifactRegistry, CacheCompression::Zstd),
+            (RegistryKind::GithubCr, CacheCompression::Zstd),
+            (RegistryKind::DockerHub, CacheCompression::Zstd),
+            (RegistryKind::GenericCr, CacheCompression::Gzip),
+        ] {
+            assert_eq!(cache_compression_for_registry(kind), expected, "{kind:?}");
+        }
+    }
 
     fn build_with(environment_variables: BTreeMap<String, String>) -> Build {
         Build {
