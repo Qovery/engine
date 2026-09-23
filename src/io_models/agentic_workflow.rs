@@ -1,6 +1,6 @@
 use crate::environment::models;
 use crate::environment::models::agentic_workflow::{
-    AgenticWorkflowConfig, AgenticWorkflowError, AgenticWorkflowService,
+    AgenticWorkflowConfig, AgenticWorkflowError, AgenticWorkflowService, BedrockAuth, BedrockRuntime,
 };
 use crate::infrastructure::models::build_platform::{
     Build, BuildSource, CUSTOM_FRAGMENT_PLACEHOLDER, DockerfileFragment as BuildDockerfileFragment, Image,
@@ -52,7 +52,8 @@ pub enum AgenticWorkflowModelType {
 pub struct AgenticWorkflowModel {
     #[serde(rename = "type")]
     pub model_type: AgenticWorkflowModelType,
-    /// Write-only credential coming from q-core; never logged or echoed back.
+    /// Write-only bearer credential for Claude or Bedrock.
+    #[serde(default)]
     pub api_key: String,
     /// Opaque JSON blob (e.g. reasoning effort). Interpreted by the agent image, not the engine.
     #[serde(default)]
@@ -217,7 +218,7 @@ impl AgenticWorkflow {
             &QoveryIdentifier::new(*cluster.long_id()),
             cluster.cpu_architectures(),
         )?;
-        let config = self.into_domain_config()?;
+        let config = self.into_domain_config(cluster.region().to_string())?;
 
         let service = models::agentic_workflow::AgenticWorkflow::new(
             context,
@@ -348,7 +349,15 @@ impl AgenticWorkflow {
     /// Build the domain [`AgenticWorkflowConfig`] from q-core's plain JSON wire fields. Split out
     /// from `to_agentic_workflow_domain` so the conversion is unit-testable without constructing a
     /// `Context`.
-    fn into_domain_config(self) -> Result<AgenticWorkflowConfig, AgenticWorkflowError> {
+    ///
+    /// `cluster_region` supplies the Bedrock runtime region.
+    fn into_domain_config(self, cluster_region: String) -> Result<AgenticWorkflowConfig, AgenticWorkflowError> {
+        let AgenticWorkflowModel {
+            model_type,
+            api_key,
+            settings,
+        } = self.model;
+
         let project_repositories = self
             .project_repositories
             .into_iter()
@@ -401,14 +410,32 @@ impl AgenticWorkflow {
             })
             .transpose()?;
 
+        let bedrock = match model_type {
+            AgenticWorkflowModelType::Claude => None,
+            AgenticWorkflowModelType::Bedrock => {
+                if api_key.trim().is_empty() {
+                    return Err(AgenticWorkflowError::InvalidConfig(
+                        "bedrock auth is missing bearer_token".to_string(),
+                    ));
+                }
+
+                Some(BedrockRuntime {
+                    region: cluster_region.clone(),
+                    auth: BedrockAuth::BearerToken(api_key.clone()),
+                })
+            }
+        };
+
         Ok(AgenticWorkflowConfig {
             image_repository: self.image.repository,
             image_tag: self.image.tag,
             docker_fragment: self.docker_fragment,
             prompt: self.prompt,
-            model_type: self.model.model_type,
-            model_api_key: self.model.api_key,
-            model_settings: self.model.settings,
+            model_type,
+            cluster_region,
+            bedrock,
+            model_api_key: api_key,
+            model_settings: settings,
             mcp: self.mcp,
             project_repositories,
             host_allowlist: self.host_allowlist,
@@ -433,6 +460,9 @@ impl AgenticWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Sentinel region; catches accidental hard-coded defaults.
+    const TEST_CLUSTER_REGION: &str = "ap-southeast-2";
 
     /// Golden-JSON contract-sync test, the highest-risk seam of the integration: this is the exact JSON
     /// produced by q-core's `EngineRequestUnitTest."should serialize agentic workflow using
@@ -553,7 +583,9 @@ mod tests {
     #[test]
     fn into_domain_config_preserves_plain_static_fields_verbatim() {
         let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         assert_eq!(config.prompt, "Investigate the incident and summarize root cause.");
         assert_eq!(config.model_api_key, "sk-secret");
@@ -564,6 +596,108 @@ mod tests {
         assert_eq!(
             config.outputs[0].headers,
             vec![("Content-Type".to_string(), "application/json".to_string())]
+        );
+    }
+
+    /// The deployment cluster supplies the Bedrock runtime region.
+    #[test]
+    fn into_domain_config_carries_the_cluster_region_verbatim() {
+        let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
+
+        assert_eq!(config.cluster_region, TEST_CLUSTER_REGION);
+    }
+
+    /// Bedrock carries region/auth; Claude carries neither.
+    #[test]
+    fn only_a_bedrock_model_gets_an_aws_region() {
+        let claude: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+        assert_eq!(claude.model.model_type, AgenticWorkflowModelType::Claude);
+        let claude_config = claude
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
+
+        let bedrock: AgenticWorkflow =
+            serde_json::from_str(&GOLDEN_JSON.replace(r#""type":"CLAUDE""#, r#""type":"BEDROCK""#))
+                .expect("golden JSON should deserialize with a BEDROCK model");
+        assert_eq!(bedrock.model.model_type, AgenticWorkflowModelType::Bedrock);
+        let bedrock_config = bedrock
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
+
+        let (bedrock_context, _) = bedrock_config
+            .bedrock()
+            .expect("a Bedrock workflow must carry a region");
+        assert_eq!(bedrock_context.region, TEST_CLUSTER_REGION);
+        assert!(claude_config.bedrock().is_none());
+    }
+
+    /// The flat `api_key` is the Bedrock bearer token.
+    #[test]
+    fn a_bedrock_model_uses_the_flat_api_key_as_its_bearer_token() {
+        let with_key: AgenticWorkflow =
+            serde_json::from_str(&GOLDEN_JSON.replace(r#""type":"CLAUDE""#, r#""type":"BEDROCK""#))
+                .expect("golden JSON should deserialize with a BEDROCK model");
+        let config = with_key
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
+        assert_eq!(
+            config.bedrock.as_ref().map(|runtime| &runtime.auth),
+            Some(&BedrockAuth::BearerToken("sk-secret".to_string()))
+        );
+
+        let without_key: AgenticWorkflow = serde_json::from_str(
+            &GOLDEN_JSON
+                .replace(r#""type":"CLAUDE""#, r#""type":"BEDROCK""#)
+                .replace(r#""api_key":"sk-secret""#, r#""api_key":"""#),
+        )
+        .expect("golden JSON should deserialize with a BEDROCK model and no key");
+        let error = without_key
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect_err("a Bedrock workflow must not deploy without a bearer token");
+        assert!(format!("{error}").contains("bearer_token"));
+    }
+
+    /// Payloads produced by the previous rollout shape remain readable, but the flat api_key and
+    /// cluster region are authoritative once the nested block is removed from the contract.
+    #[test]
+    fn legacy_nested_bedrock_fields_do_not_override_the_flat_contract() {
+        let json = GOLDEN_JSON.replace(
+            r#""type":"CLAUDE","api_key":"sk-secret","settings":"{\"effort\":\"high\"}""#,
+            r#""type":"BEDROCK","api_key":"flat-bedrock-token","settings":"","bedrock":{"region":"eu-west-3","auth":{"type":"BEARER_TOKEN","bearer_token":"nested-token"}},"bedrock_auth":{"type":"BEARER_TOKEN","bearer_token":"legacy-token"}"#,
+        );
+        let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("legacy nested fields should be ignored");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
+
+        let runtime = config.bedrock.expect("Bedrock config should be present");
+        assert_eq!(runtime.region, TEST_CLUSTER_REGION);
+        assert_eq!(runtime.auth, BedrockAuth::BearerToken("flat-bedrock-token".to_string()));
+    }
+
+    #[test]
+    fn bearer_token_is_required_for_a_flat_bedrock_model() {
+        let mut value: serde_json::Value = serde_json::from_str(GOLDEN_JSON).expect("valid golden JSON");
+        value["model"]["type"] = serde_json::json!("BEDROCK");
+        value["model"]["api_key"] = serde_json::json!("");
+
+        let err = serde_json::from_value::<AgenticWorkflow>(value.clone())
+            .expect("payload parsing does not perform domain validation")
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect_err("a bearer token must not deploy empty");
+        assert!(format!("{err}").contains("bearer_token"));
+
+        value["model"]["api_key"] = serde_json::json!("bedrock-token");
+        let config = serde_json::from_value::<AgenticWorkflow>(value)
+            .expect("payload parsing does not perform domain validation")
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("a flat bearer token and cluster region should be sufficient");
+        assert_eq!(
+            config.bedrock.expect("Bedrock config should be present").region,
+            TEST_CLUSTER_REGION
         );
     }
 
@@ -617,7 +751,9 @@ mod tests {
             serde_json::from_str(GOLDEN_JSON_DEFAULTS).expect("defaults golden should deserialize");
         assert!(workflow.payload.is_some(), "q-core always sends the field");
 
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         assert!(config.run_payload.is_none());
     }
@@ -628,7 +764,9 @@ mod tests {
     #[test]
     fn into_domain_config_carries_mounted_files_verbatim() {
         let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         let files = config.mounted_files.iter().cloned().collect::<Vec<_>>();
         assert_eq!(
@@ -655,7 +793,9 @@ mod tests {
     #[test]
     fn into_domain_config_carries_the_run_payload_verbatim() {
         let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
         let payload = config.run_payload.expect("run payload should be present");
 
         assert_eq!(payload.body, "{\"issue\":{\"key\":\"QOV-1\"}}");
@@ -675,7 +815,9 @@ mod tests {
         let json = GOLDEN_JSON.replacen(r#"{\"issue\":{\"key\":\"QOV-1\"}}"#, "abcd", 1);
         let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("should deserialize");
 
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         assert_eq!(config.run_payload.expect("run payload should be present").body, "abcd");
     }
@@ -697,7 +839,7 @@ mod tests {
         let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("should deserialize");
 
         let config = workflow
-            .into_domain_config()
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
             .expect("a body at webhook-receiver's limit plus headers must not be rejected here");
 
         let payload = config.run_payload.expect("run payload should be present");
@@ -711,7 +853,9 @@ mod tests {
         let json = GOLDEN_JSON.replacen(r#"{\"issue\":{\"key\":\"QOV-1\"}}"#, &oversized, 1);
         let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("should deserialize");
 
-        let err = workflow.into_domain_config().unwrap_err();
+        let err = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .unwrap_err();
 
         assert!(matches!(err, AgenticWorkflowError::InvalidConfig(_)));
         assert!(format!("{err}").contains("run payload"));
@@ -732,7 +876,9 @@ mod tests {
             .replacen("Keep it under 500 characters.", "S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4=", 1);
         let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("base64-looking JSON should deserialize");
 
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         assert_eq!(
             config.prompt,
@@ -756,7 +902,9 @@ mod tests {
         let workflow: AgenticWorkflow =
             serde_json::from_str(GOLDEN_JSON_DEFAULTS).expect("defaults golden should deserialize");
 
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         assert_eq!(config.prompt, "");
         assert_eq!(config.model_api_key, "");
@@ -779,7 +927,9 @@ mod tests {
         let workflow: AgenticWorkflow =
             serde_json::from_str(&json).expect("empty static-field JSON should deserialize");
 
-        let config = workflow.into_domain_config().expect("domain config should build");
+        let config = workflow
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+            .expect("domain config should build");
 
         assert_eq!(config.project_repositories[0].git_token.as_deref(), Some(""));
         assert_eq!(config.outputs[0].headers, vec![("Content-Type".to_string(), "".to_string())]);

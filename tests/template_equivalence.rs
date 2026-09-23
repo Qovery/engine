@@ -135,6 +135,8 @@ fn base() -> Json {
         },
         "environment_variables": [{ "key": "DATABASE_URL", "value": "cG9zdGdyZXM6Ly9sb2NhbGhvc3Q=", "is_secret": false }],
         "user_environment_variables": [{ "key": "USER_FLAG", "value": "dHJ1ZQ==", "is_secret": false }],
+        // Claude context; Bedrock overrides this below.
+        "bedrock_credentials": [],
         "external_secrets": [{
             "secret_name": "svc-external", "external_secret_kube_name": "svc-es", "store_name": "aws-store",
             "entries": [{ "env_var_key": "API_KEY", "remote_key": "prod/api/key", "mount_path": "",
@@ -171,6 +173,7 @@ fn base() -> Json {
             "short_id": "svc12345",
             "long_id": "00000000-0000-0000-0000-0000000000a8",
             "type": "container",
+            "bedrock": null,
             "name": "test-container",
             "kube_name": "test-container",
             "user_unsafe_name": "Test Container",
@@ -359,6 +362,14 @@ fn keda_autoscaling() -> Json {
 /// is not reported as untested.
 fn case_overrides() -> Vec<Vec<(&'static str, Json)>> {
     vec![
+        // Cover the Bedrock-only Job and Secret branches.
+        vec![
+            ("service.bedrock", json!({ "region": "eu-west-3" })),
+            (
+                "bedrock_credentials",
+                json!([{ "key": "AWS_BEARER_TOKEN_BEDROCK", "value": "YmVkcm9jay10b2tlbg==", "is_secret": true }]),
+            ),
+        ],
         vec![("service.autoscaling", keda_autoscaling())],
         vec![
             ("advanced_settings.network_gateway_api_sticky_session_enable", json!(true)),
@@ -451,12 +462,22 @@ fn escaping_preserves_q_terraform_service_manifests() {
 #[test]
 fn escaping_preserves_single_template_charts() {
     let agentic = [("service.type", json!("agentic-workflow"))];
+    let bedrock = [
+        ("service.type", json!("agentic-workflow")),
+        ("service.bedrock", json!({ "region": "eu-west-3" })),
+        (
+            "bedrock_credentials",
+            json!([{ "key": "AWS_BEARER_TOKEN_BEDROCK", "value": "YmVkcm9jay10b2tlbg==", "is_secret": true }]),
+        ),
+    ];
     assert_family_equivalent(
         "q-agentic-workflow",
         vec![
             ("secret", ctx(&agentic)),
             ("job", ctx(&agentic)),
             ("prompt_config_map", ctx(&agentic)),
+            ("secret", ctx(&bedrock)),
+            ("job", ctx(&bedrock)),
         ],
     );
     assert_family_equivalent("q-external-secret", vec![("external_secret", ctx(&[]))]);

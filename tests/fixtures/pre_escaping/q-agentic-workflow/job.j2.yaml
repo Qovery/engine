@@ -105,6 +105,12 @@ spec:
             # engine base64-encodes every Secret value. See ai-runner's `load_inputs`.
             - name: INPUTS_FILE
               value: "/qovery-agentic-workflow/inputs.json"
+            {%- if service.bedrock %}
+            - name: CLAUDE_CODE_USE_BEDROCK
+              value: "1"
+            - name: AWS_REGION
+              value: "{{ service.bedrock.region }}"
+            {%- endif %}
           resources:
             limits:
               {%- if service.cpu_limit_in_milli %}
