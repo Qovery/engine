@@ -23,10 +23,9 @@ use tera::Context as TeraContext;
 use tracing::warn;
 use uuid::Uuid;
 
-/// Names a user variable may not take. The first group is the engine/runner contract rendered into
-/// `stringData` (see `get_environment_variables`); the second is set directly in the Job's `env:`
-/// block by the chart. Kept here rather than in q-core: it is engine and ai-runner knowledge, and a
-/// second copy in Kotlin would drift.
+/// User variables cannot shadow engine contract or runner environment names.
+/// Keep this list in the engine because it describes the chart/ai-runner contract.
+// Bedrock-only chart variables stay available to Claude workflows' user AWS environment.
 // TODO: Reserve the entire `INPUT_` prefix, not just `INPUTS_FILE`; ai-runner turns every matching
 // process variable into prompt input, which can expose a secret user variable to the LLM.
 const RESERVED_ENVIRONMENT_VARIABLE_NAMES: &[&str] = &[
@@ -43,6 +42,15 @@ const RESERVED_ENVIRONMENT_VARIABLE_NAMES: &[&str] = &[
     "INPUTS_FILE",
 ];
 
+/// Bedrock-only names in the user Secret block; collisions would create duplicate YAML keys.
+// Claude workflows keep these names available for their own AWS environment.
+const BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES: &[&str] = &[
+    "AWS_BEARER_TOKEN_BEDROCK",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+];
+
 #[derive(thiserror::Error, Debug)]
 pub enum AgenticWorkflowError {
     #[error("AgenticWorkflow invalid configuration: {0}")]
@@ -52,15 +60,25 @@ pub enum AgenticWorkflowError {
 /// A single project git repository to be cloned by the agent, mirroring q-job's git-source
 /// handling: q-core resolves `gitTokenId` into a short-lived token before it reaches the
 /// engine, so the domain layer only ever sees the resolved token value (or `None`).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AgenticWorkflowProjectRepository {
     pub url: String,
     pub branch: String,
     pub git_token: Option<String>,
 }
 
+impl std::fmt::Debug for AgenticWorkflowProjectRepository {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgenticWorkflowProjectRepository")
+            .field("url", &self.url)
+            .field("branch", &self.branch)
+            .field("git_token", &self.git_token.as_ref().map(|_| "***"))
+            .finish()
+    }
+}
+
 /// A configured delivery sink for the agent's result.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AgenticWorkflowOutput {
     pub name: String,
     pub url: Option<String>,
@@ -68,12 +86,32 @@ pub struct AgenticWorkflowOutput {
     pub instructions: String,
 }
 
+impl std::fmt::Debug for AgenticWorkflowOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgenticWorkflowOutput")
+            .field("name", &self.name)
+            .field("url", &self.url)
+            .field("header_count", &self.headers.len())
+            .field("instructions_length", &self.instructions.len())
+            .finish()
+    }
+}
+
 /// Repeated header names are kept: collapsing is a rendering concern, handled in
 /// [`run_inputs_json`].
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AgenticWorkflowRunPayload {
     pub body: String,
     pub headers: Vec<(String, String)>,
+}
+
+impl std::fmt::Debug for AgenticWorkflowRunPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgenticWorkflowRunPayload")
+            .field("body_length", &self.body.len())
+            .field("header_count", &self.headers.len())
+            .finish()
+    }
 }
 
 const WEBHOOK_BODY_INPUT_KEY: &str = "WEBHOOK_BODY";
@@ -115,9 +153,32 @@ fn run_inputs_json(payload: &Option<AgenticWorkflowRunPayload>) -> String {
     serde_json::to_string(&inputs).unwrap_or_else(|_| "{}".to_string())
 }
 
+/// Bedrock authentication. The custom `Debug` implementation redacts its token.
+#[derive(Clone, PartialEq, Eq)]
+pub enum BedrockAuth {
+    /// Bearer token read by the Claude CLI from `AWS_BEARER_TOKEN_BEDROCK`.
+    BearerToken(String),
+}
+
+impl std::fmt::Debug for BedrockAuth {
+    /// Redact the bearer token.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BedrockAuth::BearerToken(_) => f.write_str("BearerToken(***)"),
+        }
+    }
+}
+
+/// Region and authentication for a Bedrock run.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BedrockRuntime {
+    pub region: String,
+    pub auth: BedrockAuth,
+}
+
 /// Extra configuration beyond `long_id/name/kube_name`, bundled into a single struct so that
 /// `AgenticWorkflow::new` stays readable despite the growing field count.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AgenticWorkflowConfig {
     pub image_repository: String,
     pub image_tag: String,
@@ -126,6 +187,11 @@ pub struct AgenticWorkflowConfig {
     pub docker_fragment: String,
     pub prompt: String,
     pub model_type: AgenticWorkflowModelType,
+    /// Kubernetes cluster region used to derive the Bedrock runtime region.
+    pub cluster_region: String,
+    /// Internal Bedrock runtime settings derived from the flat workflow model, when selected.
+    pub bedrock: Option<BedrockRuntime>,
+    /// Anthropic key for Claude runs; Bedrock emits no `ANTHROPIC_API_KEY`.
     pub model_api_key: String,
     pub model_settings: String,
     pub mcp: String,
@@ -154,6 +220,154 @@ pub struct AgenticWorkflowConfig {
 impl AgenticWorkflowConfig {
     fn image_full(&self) -> String {
         format!("{}:{}", self.image_repository, self.image_tag)
+    }
+
+    /// Build the Bedrock chart context and encoded credentials; `None` for Claude.
+    pub(crate) fn bedrock(&self) -> Option<(BedrockTeraContext, Vec<EnvironmentVariable>)> {
+        let b64 = |value: &str| general_purpose::STANDARD.encode(value.as_bytes());
+        let secret = |key: &str, value: &str| EnvironmentVariable {
+            key: key.to_string(),
+            value: b64(value),
+            is_secret: true,
+        };
+
+        if self.model_type != AgenticWorkflowModelType::Bedrock {
+            return None;
+        }
+        let bedrock = self.bedrock.as_ref()?;
+
+        let credentials = match &bedrock.auth {
+            BedrockAuth::BearerToken(token) => vec![secret("AWS_BEARER_TOKEN_BEDROCK", token)],
+        };
+
+        Some((
+            BedrockTeraContext {
+                region: bedrock.region.clone(),
+            },
+            credentials,
+        ))
+    }
+
+    /// Add Bedrock-only AWS names to the reserved user-variable set.
+    fn reserved_environment_variable_names(&self) -> Vec<&'static str> {
+        let mut reserved = RESERVED_ENVIRONMENT_VARIABLE_NAMES.to_vec();
+        if self.model_type == AgenticWorkflowModelType::Bedrock {
+            reserved.extend_from_slice(BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES);
+        }
+        reserved
+    }
+}
+
+/// Encode engine contract variables for the Secret's `stringData` block.
+fn contract_environment_variables(config: &AgenticWorkflowConfig) -> Vec<EnvironmentVariable> {
+    let b64 = |value: &str| general_purpose::STANDARD.encode(value.as_bytes());
+    let mut vars = vec![
+        EnvironmentVariable {
+            key: "CLAUDE_MODEL".to_string(),
+            value: b64(config.model_type.as_engine_str()),
+            is_secret: false,
+        },
+        EnvironmentVariable {
+            key: "MODEL_SETTINGS".to_string(),
+            value: b64(&config.model_settings),
+            is_secret: false,
+        },
+        EnvironmentVariable {
+            key: "MCP_SERVERS".to_string(),
+            value: b64(&config.mcp),
+            is_secret: true,
+        },
+        EnvironmentVariable {
+            key: "HOST_ALLOWLIST".to_string(),
+            value: b64(&config.host_allowlist.join(",")),
+            is_secret: false,
+        },
+    ];
+
+    // Bedrock must never receive an Anthropic key that could reroute the CLI.
+    if config.model_type == AgenticWorkflowModelType::Claude {
+        vars.insert(
+            2,
+            EnvironmentVariable {
+                key: "ANTHROPIC_API_KEY".to_string(),
+                value: b64(&config.model_api_key),
+                is_secret: true,
+            },
+        );
+    }
+
+    if !config.project_repositories.is_empty() {
+        let repos = config
+            .project_repositories
+            .iter()
+            .map(|repo| serde_json::json!({"url": repo.url, "branch": repo.branch}))
+            .collect::<Vec<_>>();
+        let tokens = config
+            .project_repositories
+            .iter()
+            .map(|repo| repo.git_token.clone().unwrap_or_default())
+            .collect::<Vec<_>>();
+
+        vars.push(EnvironmentVariable {
+            key: "GIT_REPOS".to_string(),
+            value: b64(&serde_json::to_string(&repos).unwrap_or_else(|_| "[]".to_string())),
+            is_secret: false,
+        });
+        vars.push(EnvironmentVariable {
+            key: "GIT_TOKENS".to_string(),
+            value: b64(&serde_json::to_string(&tokens).unwrap_or_else(|_| "[]".to_string())),
+            is_secret: true,
+        });
+    }
+
+    if !config.outputs.is_empty() {
+        let outputs = config
+            .outputs
+            .iter()
+            .map(|output| {
+                serde_json::json!({
+                    "name": output.name,
+                    "url": output.url,
+                    "headers": output.headers.iter().map(|(name, value)| serde_json::json!({"name": name, "value": value})).collect::<Vec<_>>(),
+                    "instructions": output.instructions,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        vars.push(EnvironmentVariable {
+            key: "OUTPUTS".to_string(),
+            value: b64(&serde_json::to_string(&outputs).unwrap_or_else(|_| "[]".to_string())),
+            is_secret: true,
+        });
+    }
+
+    vars
+}
+
+/// Custom `Debug` redacts credentials and opaque fields.
+impl std::fmt::Debug for AgenticWorkflowConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgenticWorkflowConfig")
+            .field("image", &self.image_full())
+            .field("model_type", &self.model_type)
+            .field("cluster_region", &self.cluster_region)
+            .field("bedrock", &self.bedrock)
+            .field("model_api_key", &"***")
+            .field("model_settings", &self.model_settings)
+            .field("mcp", &"***")
+            .field("project_repositories", &self.project_repositories.len())
+            .field("host_allowlist", &self.host_allowlist)
+            .field("outputs", &self.outputs.len())
+            .field("cpu_request_in_milli", &self.cpu_request_in_milli)
+            .field("cpu_limit_in_milli", &self.cpu_limit_in_milli)
+            .field("ram_request_in_mib", &self.ram_request_in_mib)
+            .field("ram_limit_in_mib", &self.ram_limit_in_mib)
+            .field("output_variable_validation_pattern", &self.output_variable_validation_pattern)
+            .field("max_duration_in_sec", &self.max_duration_in_sec)
+            .field("run_payload", &self.run_payload.is_some())
+            .field("environment_variables", &self.environment_variables.len())
+            .field("mounted_files", &self.mounted_files.len())
+            .finish()
     }
 }
 
@@ -275,6 +489,7 @@ impl AgenticWorkflow {
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> AgenticWorkflowTeraContext {
+        let bedrock = self.config.bedrock();
         AgenticWorkflowTeraContext {
             namespace: target.environment.namespace().to_string(),
             project_long_id: target.environment.project_long_id,
@@ -297,11 +512,14 @@ impl AgenticWorkflow {
                 ram_request_in_mib: self.config.ram_request_in_mib.to_string(),
                 ram_limit_in_mib: self.config.ram_limit_in_mib.to_string(),
                 max_duration_in_sec: self.config.max_duration_in_sec,
+                bedrock: bedrock.as_ref().map(|(context, _)| context.clone()),
             },
             environment_variables: self.get_environment_variables(),
+            bedrock_credentials: bedrock.map(|(_, credentials)| credentials).unwrap_or_default(),
             user_environment_variables: to_user_environment_variables(
                 &self.config.environment_variables,
                 &self.long_id,
+                &self.config.reserved_environment_variable_names(),
             ),
             mounted_files: self.config.mounted_files.iter().cloned().collect::<Vec<_>>(),
             registry: self
@@ -337,11 +555,12 @@ impl AgenticWorkflow {
 fn to_user_environment_variables(
     variables: &BTreeMap<String, VariableInfo>,
     workflow_long_id: &Uuid,
+    reserved: &[&str],
 ) -> Vec<EnvironmentVariable> {
     variables
         .iter()
         .filter(|(key, _)| {
-            if RESERVED_ENVIRONMENT_VARIABLE_NAMES.contains(&key.as_str()) {
+            if reserved.contains(&key.as_str()) {
                 warn!(
                     "agentic workflow {workflow_long_id}: ignoring environment variable {key}, the name is reserved by the runner"
                 );
@@ -429,84 +648,7 @@ impl Service for AgenticWorkflow {
     }
 
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
-        let b64 = |value: &str| general_purpose::STANDARD.encode(value.as_bytes());
-        let mut vars = vec![
-            EnvironmentVariable {
-                key: "CLAUDE_MODEL".to_string(),
-                value: b64(self.config.model_type.as_engine_str()),
-                is_secret: false,
-            },
-            EnvironmentVariable {
-                key: "MODEL_SETTINGS".to_string(),
-                value: b64(&self.config.model_settings),
-                is_secret: false,
-            },
-            EnvironmentVariable {
-                key: "ANTHROPIC_API_KEY".to_string(),
-                value: b64(&self.config.model_api_key),
-                is_secret: true,
-            },
-            EnvironmentVariable {
-                key: "MCP_SERVERS".to_string(),
-                value: b64(&self.config.mcp),
-                is_secret: true,
-            },
-            EnvironmentVariable {
-                key: "HOST_ALLOWLIST".to_string(),
-                value: b64(&self.config.host_allowlist.join(",")),
-                is_secret: false,
-            },
-        ];
-
-        if !self.config.project_repositories.is_empty() {
-            let repos = self
-                .config
-                .project_repositories
-                .iter()
-                .map(|repo| serde_json::json!({"url": repo.url, "branch": repo.branch}))
-                .collect::<Vec<_>>();
-            let tokens = self
-                .config
-                .project_repositories
-                .iter()
-                .map(|repo| repo.git_token.clone().unwrap_or_default())
-                .collect::<Vec<_>>();
-
-            vars.push(EnvironmentVariable {
-                key: "GIT_REPOS".to_string(),
-                value: b64(&serde_json::to_string(&repos).unwrap_or_else(|_| "[]".to_string())),
-                is_secret: false,
-            });
-            vars.push(EnvironmentVariable {
-                key: "GIT_TOKENS".to_string(),
-                value: b64(&serde_json::to_string(&tokens).unwrap_or_else(|_| "[]".to_string())),
-                is_secret: true,
-            });
-        }
-
-        if !self.config.outputs.is_empty() {
-            let outputs = self
-                .config
-                .outputs
-                .iter()
-                .map(|output| {
-                    serde_json::json!({
-                        "name": output.name,
-                        "url": output.url,
-                        "headers": output.headers.iter().map(|(name, value)| serde_json::json!({"name": name, "value": value})).collect::<Vec<_>>(),
-                        "instructions": output.instructions,
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            vars.push(EnvironmentVariable {
-                key: "OUTPUTS".to_string(),
-                value: b64(&serde_json::to_string(&outputs).unwrap_or_else(|_| "[]".to_string())),
-                is_secret: true,
-            });
-        }
-
-        vars
+        contract_environment_variables(&self.config)
     }
 }
 
@@ -550,7 +692,7 @@ impl AgenticWorkflowModelType {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Clone)]
 pub(crate) struct ServiceTeraContext {
     pub(crate) short_id: String,
     pub(crate) long_id: Uuid,
@@ -568,9 +710,38 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) ram_request_in_mib: String,
     pub(crate) ram_limit_in_mib: String,
     pub(crate) max_duration_in_sec: u64,
+    /// Bedrock chart context, absent for Claude.
+    pub(crate) bedrock: Option<BedrockTeraContext>,
 }
 
+impl std::fmt::Debug for ServiceTeraContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServiceTeraContext")
+            .field("short_id", &self.short_id)
+            .field("long_id", &self.long_id)
+            .field("name", &self.name)
+            .field("kube_name", &self.kube_name)
+            .field("image_full", &self.image_full)
+            .field("prompt", &"***")
+            .field("inputs", &"***")
+            .field("cpu_request_in_milli", &self.cpu_request_in_milli)
+            .field("cpu_limit_in_milli", &self.cpu_limit_in_milli)
+            .field("ram_request_in_mib", &self.ram_request_in_mib)
+            .field("ram_limit_in_mib", &self.ram_limit_in_mib)
+            .field("max_duration_in_sec", &self.max_duration_in_sec)
+            .field("bedrock", &self.bedrock)
+            .finish()
+    }
+}
+
+/// Bedrock values rendered into the Job.
 #[derive(Serialize, Debug, Clone)]
+pub(crate) struct BedrockTeraContext {
+    /// `AWS_REGION` value rendered in plaintext.
+    pub(crate) region: String,
+}
+
+#[derive(Serialize, Clone)]
 pub(crate) struct AgenticWorkflowTeraContext {
     pub(crate) namespace: String,
     pub(crate) project_long_id: Uuid,
@@ -580,6 +751,8 @@ pub(crate) struct AgenticWorkflowTeraContext {
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
     /// User-defined variables, rendered into the Secret's `data:` block rather than `stringData`.
     pub(crate) user_environment_variables: Vec<EnvironmentVariable>,
+    /// Base64-encoded Bedrock credentials for Secret `data`; empty for Claude.
+    pub(crate) bedrock_credentials: Vec<EnvironmentVariable>,
     /// One Secret and one volume mount per entry. `Vec` because Tera iterates it; the ordering
     /// comes from the `BTreeSet` it is built from.
     pub(crate) mounted_files: Vec<MountedFile>,
@@ -587,20 +760,48 @@ pub(crate) struct AgenticWorkflowTeraContext {
     pub(crate) registry: Option<RegistryTeraContext>,
 }
 
+impl std::fmt::Debug for AgenticWorkflowTeraContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let bedrock_credential_names = self
+            .bedrock_credentials
+            .iter()
+            .map(|credential| credential.key.as_str())
+            .collect::<Vec<_>>();
+
+        f.debug_struct("AgenticWorkflowTeraContext")
+            .field("namespace", &self.namespace)
+            .field("project_long_id", &self.project_long_id)
+            .field("environment_long_id", &self.environment_long_id)
+            .field("deployment_id", &self.deployment_id)
+            .field("service", &self.service)
+            .field("environment_variable_count", &self.environment_variables.len())
+            .field("user_environment_variable_count", &self.user_environment_variables.len())
+            .field("bedrock_credential_names", &bedrock_credential_names)
+            .field("mounted_file_count", &self.mounted_files.len())
+            .field("has_registry", &self.registry.is_some())
+            .finish()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        AgenticWorkflowRunPayload, AgenticWorkflowTeraContext, ServiceTeraContext, run_inputs_json,
+        AgenticWorkflowConfig, AgenticWorkflowRunPayload, AgenticWorkflowTeraContext,
+        BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES, BedrockAuth, BedrockRuntime, BedrockTeraContext,
+        RESERVED_ENVIRONMENT_VARIABLE_NAMES, ServiceTeraContext, contract_environment_variables, run_inputs_json,
         to_user_environment_variables,
     };
     use crate::environment::models::container::RegistryTeraContext;
+    use crate::io_models::agentic_workflow::AgenticWorkflowModelType;
     use crate::io_models::models::{EnvironmentVariable, MountedFile};
+    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
     use crate::io_models::variable_utils::VariableInfo;
     use crate::tera_utils::render_one_off;
     use base64::Engine;
     use base64::engine::general_purpose;
     use serde::Deserialize;
     use std::collections::BTreeMap;
+    use std::collections::BTreeSet;
     use tera::Context;
     use uuid::Uuid;
 
@@ -628,7 +829,9 @@ mod tests {
                 ram_request_in_mib: "512Mi".to_string(),
                 ram_limit_in_mib: "1024Mi".to_string(),
                 max_duration_in_sec: 3_600,
+                bedrock: None,
             },
+            bedrock_credentials: vec![],
             environment_variables: vec![
                 EnvironmentVariable {
                     key: "ANTHROPIC_API_KEY".to_string(),
@@ -808,6 +1011,243 @@ mod tests {
         assert!(rendered.contains("name: test-agentic-workflow"));
     }
 
+    /// Deliberately not a plausible hard-coded default, see the io-model tests.
+    const TEST_CLUSTER_REGION: &str = "ap-southeast-2";
+
+    /// Minimal config used by contract and Bedrock rendering tests.
+    fn config_for(model_type: AgenticWorkflowModelType, bedrock_auth: Option<BedrockAuth>) -> AgenticWorkflowConfig {
+        AgenticWorkflowConfig {
+            image_repository: "public.ecr.aws/r3m4q3r9/qovery-ai-runner".to_string(),
+            image_tag: "0.0.2".to_string(),
+            docker_fragment: String::new(),
+            prompt: String::new(),
+            model_type,
+            cluster_region: TEST_CLUSTER_REGION.to_string(),
+            bedrock: bedrock_auth.map(|auth| BedrockRuntime {
+                region: TEST_CLUSTER_REGION.to_string(),
+                auth,
+            }),
+            model_api_key: "sk-anthropic".to_string(),
+            model_settings: String::new(),
+            mcp: String::new(),
+            project_repositories: vec![],
+            host_allowlist: vec![],
+            outputs: vec![],
+            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(500),
+            cpu_limit_in_milli: None,
+            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(512),
+            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(1024),
+            output_variable_validation_pattern: String::new(),
+            max_duration_in_sec: 3_600,
+            run_payload: None,
+            environment_variables: BTreeMap::new(),
+            mounted_files: BTreeSet::new(),
+        }
+    }
+
+    fn decode(value: &str) -> String {
+        String::from_utf8(general_purpose::STANDARD.decode(value).expect("value must be base64")).expect("utf8")
+    }
+
+    /// Bedrock must omit the Anthropic key to prevent auth fallback.
+    #[test]
+    fn a_bedrock_workflow_emits_no_anthropic_api_key() {
+        let vars = contract_environment_variables(&config_for(
+            AgenticWorkflowModelType::Bedrock,
+            Some(BedrockAuth::BearerToken("bedrock-token".to_string())),
+        ));
+
+        assert!(
+            !vars.iter().any(|ev| ev.key == "ANTHROPIC_API_KEY"),
+            "got: {:?}",
+            vars.iter().map(|ev| &ev.key).collect::<Vec<_>>()
+        );
+        // And the Claude path is untouched.
+        let claude = contract_environment_variables(&config_for(AgenticWorkflowModelType::Claude, None));
+        let key = claude
+            .iter()
+            .find(|ev| ev.key == "ANTHROPIC_API_KEY")
+            .expect("a Claude workflow must still get its key");
+        assert_eq!(decode(&key.value), "sk-anthropic");
+    }
+
+    /// Bedrock bearer credentials are base64-encoded in Secret `data`.
+    #[test]
+    fn bearer_token_auth_renders_one_credential_variable() {
+        let config = config_for(
+            AgenticWorkflowModelType::Bedrock,
+            Some(BedrockAuth::BearerToken("bedrock-token".to_string())),
+        );
+        let (context, credentials) = config.bedrock().expect("a Bedrock workflow must carry a runtime");
+
+        assert_eq!(context.region, TEST_CLUSTER_REGION);
+        assert_eq!(
+            credentials.iter().map(|ev| ev.key.as_str()).collect::<Vec<_>>(),
+            vec!["AWS_BEARER_TOKEN_BEDROCK"]
+        );
+        assert_eq!(decode(&credentials[0].value), "bedrock-token");
+        assert!(credentials.iter().all(|ev| ev.is_secret));
+    }
+
+    #[test]
+    fn debug_output_redacts_workflow_credentials() {
+        let config = config_for(
+            AgenticWorkflowModelType::Bedrock,
+            Some(BedrockAuth::BearerToken("bedrock-secret-token".to_string())),
+        );
+
+        let debug = format!("{config:?}");
+        assert!(
+            !debug.contains("bedrock-secret-token"),
+            "debug leaked the bearer token: {debug}"
+        );
+        assert!(!debug.contains("sk-anthropic"), "debug leaked the model key: {debug}");
+        assert!(debug.contains("***"), "debug should show redaction markers: {debug}");
+
+        let mut tera_context = build_agentic_workflow_tera_context();
+        tera_context.bedrock_credentials = vec![EnvironmentVariable {
+            key: "AWS_BEARER_TOKEN_BEDROCK".to_string(),
+            value: general_purpose::STANDARD.encode("bedrock-secret-token"),
+            is_secret: true,
+        }];
+        let tera_debug = format!("{tera_context:?}");
+        assert!(
+            !tera_debug.contains("bedrock-secret-token"),
+            "tera debug leaked the bearer token: {tera_debug}"
+        );
+        assert!(!tera_debug.contains(&general_purpose::STANDARD.encode("bedrock-secret-token")));
+    }
+
+    /// Bedrock routing requires the switch and AWS environment in Job `env`.
+    #[test]
+    fn bedrock_job_turns_the_claude_cli_onto_bedrock() {
+        let rendered = render_template(job_template(), build_bedrock_tera_context());
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+        let env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+            .as_sequence()
+            .expect("the container must declare env vars");
+
+        let use_bedrock = env
+            .iter()
+            .find(|var| var["name"].as_str() == Some("CLAUDE_CODE_USE_BEDROCK"))
+            .unwrap_or_else(|| panic!("a Bedrock job must set CLAUDE_CODE_USE_BEDROCK:\n{rendered}"));
+        assert_eq!(use_bedrock["value"].as_str(), Some("1"));
+    }
+
+    /// The Claude path stays free of Bedrock's generated variables, not just of the region.
+    #[test]
+    fn claude_job_is_not_switched_onto_bedrock() {
+        let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
+
+        assert!(!rendered.contains("CLAUDE_CODE_USE_BEDROCK"), "got:\n{rendered}");
+    }
+
+    /// Bedrock credentials use decoded Secret `data`; contract values stay in `stringData`.
+    #[test]
+    fn bedrock_credentials_are_rendered_into_the_decoded_secret_block() {
+        let rendered = render_template(secret_template(), build_bedrock_tera_context());
+        let secret: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered secret must parse as YAML");
+
+        assert_eq!(
+            secret["data"]["AWS_BEARER_TOKEN_BEDROCK"].as_str(),
+            Some(general_purpose::STANDARD.encode("bedrock-token").as_str())
+        );
+        assert!(secret["stringData"]["AWS_BEARER_TOKEN_BEDROCK"].is_null());
+        assert!(secret["stringData"]["ANTHROPIC_API_KEY"].is_null());
+    }
+
+    /// Bedrock uses Secret `data` for its token and omits `ANTHROPIC_API_KEY`.
+    fn build_bedrock_tera_context() -> AgenticWorkflowTeraContext {
+        let mut context = build_agentic_workflow_tera_context();
+        context.service.bedrock = Some(BedrockTeraContext {
+            region: TEST_CLUSTER_REGION.to_string(),
+        });
+        context.environment_variables.retain(|ev| ev.key != "ANTHROPIC_API_KEY");
+        context.bedrock_credentials = vec![EnvironmentVariable {
+            key: "AWS_BEARER_TOKEN_BEDROCK".to_string(),
+            value: general_purpose::STANDARD.encode("bedrock-token"),
+            is_secret: true,
+        }];
+        context
+    }
+
+    /// `AWS_REGION` is plaintext Job env; contract decoding does not apply to it.
+    #[test]
+    fn bedrock_job_sets_explicit_aws_region_in_plaintext() {
+        let rendered = render_template(job_template(), build_bedrock_tera_context());
+
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+        let env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+            .as_sequence()
+            .expect("the container must declare env vars");
+        let aws_region = env
+            .iter()
+            .find(|var| var["name"].as_str() == Some("AWS_REGION"))
+            .unwrap_or_else(|| panic!("a Bedrock job must set AWS_REGION:\n{rendered}"));
+
+        assert_eq!(aws_region["value"].as_str(), Some(TEST_CLUSTER_REGION));
+        // The guard that matters: the value is the region itself, never the engine's base64 of it.
+        assert_ne!(
+            aws_region["value"].as_str(),
+            Some(general_purpose::STANDARD.encode(TEST_CLUSTER_REGION).as_str()),
+            "AWS_REGION must not be base64-encoded, nothing decodes it for the claude CLI"
+        );
+    }
+
+    /// Claude jobs omit `AWS_REGION` so ambient AWS configuration is not overridden.
+    #[test]
+    fn claude_job_sets_no_aws_region_at_all() {
+        let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
+
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+        let env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+            .as_sequence()
+            .expect("the container must declare env vars");
+
+        assert!(
+            !env.iter().any(|var| var["name"].as_str() == Some("AWS_REGION")),
+            "a Claude job must declare no AWS_REGION:\n{rendered}"
+        );
+    }
+
+    /// The engine emits the selected region verbatim.
+    #[test]
+    fn aws_region_is_emitted_verbatim_whatever_shape_the_cluster_reports() {
+        let mut context = build_bedrock_tera_context();
+        context.service.bedrock = Some(BedrockTeraContext {
+            region: "europe-west9".to_string(),
+        });
+
+        let rendered = render_template(job_template(), context);
+
+        assert!(rendered.contains("value: \"europe-west9\""), "got:\n{rendered}");
+    }
+
+    /// Quoted/newline region input must stay within the `AWS_REGION` scalar.
+    #[test]
+    fn aws_region_cannot_inject_manifest_fields() {
+        let payload = "eu-west-3\"\n      hostPID: true\n      dummy: \"x";
+        let mut context = build_bedrock_tera_context();
+        context.service.bedrock = Some(BedrockTeraContext {
+            region: payload.to_string(),
+        });
+
+        let rendered = render_template(job_template(), context);
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+        let pod_spec = &job["spec"]["template"]["spec"];
+
+        assert!(pod_spec["hostPID"].is_null(), "injected hostPID in:\n{rendered}");
+        assert!(pod_spec["dummy"].is_null(), "injected dummy field in:\n{rendered}");
+        assert!(
+            pod_spec["containers"][0]["env"]
+                .as_sequence()
+                .expect("env must be a sequence")
+                .iter()
+                .any(|var| var["name"].as_str() == Some("AWS_REGION") && var["value"].as_str() == Some(payload)),
+            "the region must land intact inside the variable it was meant for:\n{rendered}"
+        );
+    }
+
     #[test]
     fn renders_job_template_in_oneshot_mode_not_server() {
         // A Job must run the agent once and exit. The ai-runner defaults to `server` (long-lived
@@ -844,15 +1284,7 @@ mod tests {
         assert!(rendered.contains("CLAUDE_MODEL"));
     }
 
-    /// Regression guard for QOV-2086: the secret MUST use `stringData`, not `data`.
-    ///
-    /// The engine base64-encodes every env-var value (`get_environment_variables`) and the
-    /// container base64-decodes it (`ai-runner/src/engine_env.rs`). `stringData` stores the value
-    /// verbatim, so the container receives exactly the engine's single-encoded value and its
-    /// decode recovers the canonical content. A `data:` field would make Kubernetes decode the
-    /// value a second time at `envFrom` injection, so the container would receive plaintext and
-    /// its decode would fail with "Invalid padding". This test models that one-layer contract:
-    /// the rendered value is the engine's `base64("CLAUDE")`, and decoding it once yields "CLAUDE".
+    /// Contract values use `stringData` so ai-runner performs the single decode.
     #[test]
     fn secret_uses_string_data_so_container_decode_recovers_canonical_value() {
         let rendered = render_template(secret_template(), build_agentic_workflow_tera_context());
@@ -1028,6 +1460,7 @@ mod tests {
         context.user_environment_variables = to_user_environment_variables(
             &BTreeMap::from([("MULTILINE".to_string(), plain(" first\nsecond"))]),
             &Uuid::new_v4(),
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES,
         );
 
         let rendered = render_template(secret_template(), context);
@@ -1081,6 +1514,7 @@ mod tests {
                 ("MIKE".to_string(), plain("m")),
             ]),
             &Uuid::new_v4(),
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES,
         );
 
         let rendered = render_template(secret_template(), context);
@@ -1096,23 +1530,74 @@ mod tests {
     }
 
     #[test]
-    fn a_user_variable_may_not_take_a_reserved_name() {
+    fn claude_user_variables_keep_aws_credentials() {
         let variables = to_user_environment_variables(
             &BTreeMap::from([
                 ("ANTHROPIC_API_KEY".to_string(), plain("stolen")),
+                ("AWS_ACCESS_KEY_ID".to_string(), plain("user-access")),
+                ("AWS_REGION".to_string(), plain("user-region")),
                 ("INPUTS_FILE".to_string(), plain("/tmp/evil.json")),
                 ("MY_VAR".to_string(), plain("kept")),
             ]),
             &Uuid::new_v4(),
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES,
         );
 
         assert_eq!(
             variables,
-            vec![EnvironmentVariable {
-                key: "MY_VAR".to_string(),
-                value: general_purpose::STANDARD.encode("kept"),
-                is_secret: false,
-            }]
+            vec![
+                EnvironmentVariable {
+                    key: "AWS_ACCESS_KEY_ID".to_string(),
+                    value: general_purpose::STANDARD.encode("user-access"),
+                    is_secret: false,
+                },
+                EnvironmentVariable {
+                    key: "AWS_REGION".to_string(),
+                    value: general_purpose::STANDARD.encode("user-region"),
+                    is_secret: false,
+                },
+                EnvironmentVariable {
+                    key: "MY_VAR".to_string(),
+                    value: general_purpose::STANDARD.encode("kept"),
+                    is_secret: false,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn bedrock_user_variables_drop_unsupported_aws_credential_names() {
+        let variables = to_user_environment_variables(
+            &BTreeMap::from([
+                ("AWS_BEARER_TOKEN_BEDROCK".to_string(), plain("shadow")),
+                ("AWS_ACCESS_KEY_ID".to_string(), plain("shadow-access")),
+                ("AWS_SECRET_ACCESS_KEY".to_string(), plain("shadow-secret")),
+                ("AWS_SESSION_TOKEN".to_string(), plain("shadow-session")),
+                ("AWS_REGION".to_string(), plain("shadow-region")),
+                ("MY_VAR".to_string(), plain("kept")),
+            ]),
+            &Uuid::new_v4(),
+            &[
+                RESERVED_ENVIRONMENT_VARIABLE_NAMES,
+                BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES,
+            ]
+            .concat(),
+        );
+
+        assert_eq!(
+            variables,
+            vec![
+                EnvironmentVariable {
+                    key: "AWS_REGION".to_string(),
+                    value: general_purpose::STANDARD.encode("shadow-region"),
+                    is_secret: false,
+                },
+                EnvironmentVariable {
+                    key: "MY_VAR".to_string(),
+                    value: general_purpose::STANDARD.encode("kept"),
+                    is_secret: false,
+                },
+            ]
         );
     }
 
@@ -1147,6 +1632,7 @@ mod tests {
                 ("_MY_VAR2".to_string(), plain("kept")),
             ]),
             &Uuid::new_v4(),
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES,
         );
 
         assert_eq!(
@@ -1172,6 +1658,7 @@ mod tests {
                 ("GOOD_KEY".to_string(), plain("kept")),
             ]),
             &Uuid::new_v4(),
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES,
         );
 
         let rendered = render_template(secret_template(), context);
@@ -1208,6 +1695,7 @@ mod tests {
                 },
             )]),
             &Uuid::new_v4(),
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES,
         );
 
         assert_eq!(variables.len(), 1);

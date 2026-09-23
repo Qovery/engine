@@ -105,6 +105,14 @@ spec:
             # engine base64-encodes every Secret value. See ai-runner's `load_inputs`.
             - name: INPUTS_FILE
               value: "/qovery-agentic-workflow/inputs.json"
+            {%- if service.bedrock %}
+            # The Bedrock CLI reads the switch and region directly from the process environment.
+            # Keep them together so a Bedrock run cannot be routed to Anthropic accidentally.
+            - name: CLAUDE_CODE_USE_BEDROCK
+              value: "1"
+            - name: AWS_REGION
+              value: {{ service.bedrock.region | yaml_encode }}
+            {%- endif %}
           resources:
             limits:
               {%- if service.cpu_limit_in_milli %}
