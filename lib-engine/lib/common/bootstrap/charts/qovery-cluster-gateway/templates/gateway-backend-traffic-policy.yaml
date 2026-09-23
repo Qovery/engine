@@ -31,12 +31,18 @@ spec:
   {{- end }}
   {{- if .Values.gateway.qoveryPublic.compression.enable }}
   compressor:
+    # Brotli compression with quality=6 (matches nginx brotli-level: 6)
     - type: Brotli
-      brotli: {}
+      brotli:
+        quality: 6
+    # Zstd compression with level=6 (default is 3)
     - type: Zstd
-      zstd: {}
+      zstd:
+        compression_level: 6
+    # Gzip compression with level=6 (matches nginx gzip-level: 6)
     - type: Gzip
-      gzip: {}
+      gzip:
+        compression_level: COMPRESSION_LEVEL_6
   {{- end }}
 {{- end }}
 {{- end }}

@@ -27,9 +27,6 @@ metadata:
     {{ key | yaml_encode }}: {{ value | yaml_encode }}
     {%- endfor %}
 spec:
-  # Merge route settings with Gateway defaults, including cluster-level compression.
-  # TODO(QOV-2290): support service-level compression configuration.
-  mergeType: StrategicMerge
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: GRPCRoute
