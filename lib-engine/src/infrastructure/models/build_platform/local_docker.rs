@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
-use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
+use crate::cmd::docker::{Architecture, BuilderHandle, CacheCompression, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
 use crate::infrastructure::models::build_platform::dockerfile_utils::{
@@ -134,6 +134,7 @@ impl LocalDocker {
     fn build_image_with_docker(
         &self,
         build: &mut Build,
+        cache_compression: CacheCompression,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         logger: &EnvLogger,
@@ -313,6 +314,7 @@ impl LocalDocker {
             &build_args,
             &secrets,
             image_cache.as_ref(),
+            cache_compression,
             true,
             &arch,
             &mut |line| logger.send_progress(line),
@@ -402,6 +404,7 @@ impl LocalDocker {
     fn build_from_dockerfile(
         &self,
         build: &mut Build,
+        cache_compression: CacheCompression,
         dockerfile_content: &str,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
@@ -448,6 +451,7 @@ impl LocalDocker {
 
         self.build_image_with_docker(
             build,
+            cache_compression,
             dockerfile_path.to_str().unwrap_or_default(),
             build_context_path.to_str().unwrap_or_default(),
             logger,
@@ -688,6 +692,7 @@ impl BuildPlatform for LocalDocker {
     fn build(
         &self,
         build: &mut Build,
+        cache_compression: CacheCompression,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
         abort: &dyn Abort,
@@ -704,7 +709,7 @@ impl BuildPlatform for LocalDocker {
             BuildSource::Dockerfile { content } => Some(content.clone()),
         };
         if let Some(content) = synthesized_dockerfile {
-            return self.build_from_dockerfile(build, &content, logger, metrics_registry, abort);
+            return self.build_from_dockerfile(build, cache_compression, &content, logger, metrics_registry, abort);
         }
 
         let git_repository = build.git_repository().ok_or_else(|| BuildError::InvalidConfig {
@@ -954,6 +959,7 @@ impl BuildPlatform for LocalDocker {
 
         self.build_image_with_docker(
             build,
+            cache_compression,
             dockerfile_absolute_path.to_str().unwrap_or_default(),
             build_context_path.to_str().unwrap_or_default(),
             logger,

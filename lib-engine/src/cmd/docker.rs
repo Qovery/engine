@@ -189,6 +189,34 @@ const ARCH_NODE_SELECTOR_KEY: &str = "kubernetes.io/arch";
 const NOT_READY_TOLERATION: &str =
     "key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800";
 
+/// Compression of the registry build cache blobs, which BuildKit alone reads back: pushed images are
+/// unaffected, and a cache written with the other compression still hits, so switching needs no invalidation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CacheCompression {
+    #[default]
+    Gzip,
+    Zstd,
+}
+
+impl CacheCompression {
+    fn as_str(&self) -> &'static str {
+        match self {
+            CacheCompression::Gzip => "gzip",
+            CacheCompression::Zstd => "zstd",
+        }
+    }
+}
+
+/// Renders the value of `--cache-to` for a registry cache.
+/// `force-compression` recompresses layers reused from a cache written with the other compression. Without it they
+/// keep their old compression until rebuilt, and a zstd base layer could reach a registry kept on gzip.
+fn registry_cache_to(cache_ref: &str, compression: CacheCompression) -> String {
+    format!(
+        "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression={},force-compression=true,ref={cache_ref}",
+        compression.as_str()
+    )
+}
+
 /// Extra placement constraints for kube builder pods, parsed once at process startup from
 /// BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS and merged into the buildx kubernetes driver-opts
 /// at each builder spawn. Empty placement keeps the generated driver-opts byte-identical to
@@ -935,6 +963,7 @@ impl Docker {
         build_args: &[(&str, &str)],
         secrets: &[(&str, &Path)],
         cache: Option<&ContainerImage>,
+        cache_compression: CacheCompression,
         push_after_build: bool,
         architectures: &[Architecture],
         stdout_output: &mut Stdout,
@@ -967,6 +996,7 @@ impl Docker {
             build_args,
             secrets,
             cache,
+            cache_compression,
             push_after_build,
             architectures,
             stdout_output,
@@ -985,6 +1015,7 @@ impl Docker {
         build_args: &[(&str, &str)],
         secrets: &[(&str, &Path)],
         cache: Option<&ContainerImage>,
+        cache_compression: CacheCompression,
         push_after_build: bool,
         architectures: &[Architecture],
         stdout_output: &mut Stdout,
@@ -1031,10 +1062,7 @@ impl Docker {
 
         if push_after_build && let Some(cache) = cache {
             args_string.push("--cache-to".to_string());
-            args_string.push(format!(
-                "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref={}",
-                cache.image_name()
-            ));
+            args_string.push(registry_cache_to(&cache.image_name(), cache_compression));
         }
 
         // Build for all requested architectures, if empty build for the current architecture the engine is running on
@@ -1562,7 +1590,7 @@ mod builder_placement_tests {
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::CommandKiller;
-    use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError};
+    use crate::cmd::docker::{Architecture, CacheCompression, ContainerImage, Docker, DockerError};
     use std::fs;
     use std::path::Path;
     use std::time::Duration;
@@ -1646,6 +1674,7 @@ mod tests {
             &[],
             &[],
             Some(&image_cache),
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1664,6 +1693,7 @@ mod tests {
             &[],
             &[],
             Some(&image_cache),
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1723,6 +1753,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[("MY_BUILD_SECRET", secret_path.as_path())],
             None,
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1743,6 +1774,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             None,
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1779,6 +1811,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1919,6 +1952,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
+            CacheCompression::Gzip,
             false,
             &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
@@ -1955,6 +1989,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1973,6 +2008,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2004,6 +2040,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             None,
+            CacheCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2013,5 +2050,22 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
         );
 
         assert!(ret.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod build_cache_compression_tests {
+    use super::*;
+
+    #[test]
+    fn registry_cache_is_exported_with_requested_compression() {
+        assert_eq!(
+            registry_cache_to("registry.example/app:cache", CacheCompression::Zstd),
+            "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd,force-compression=true,ref=registry.example/app:cache"
+        );
+        assert_eq!(
+            registry_cache_to("registry.example/app:cache", CacheCompression::Gzip),
+            "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression=gzip,force-compression=true,ref=registry.example/app:cache"
+        );
     }
 }
