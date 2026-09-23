@@ -80,7 +80,7 @@ pub struct QoveryClusterGatewayChartOptions {
     pub path_disable_merge_slashes: bool, // preserve duplicate slashes behavior at gateway-level path handling
     pub path_escaped_slashes_action: EnvoyGatewayApiPathEscapedSlashesAction, // escaped slash handling action for gateway-level path handling
     pub custom_http_errors_default: Option<String>, // comma-separated HTTP status codes for gateway-level custom error pages
-    pub compression_enable: bool, // enable response compression with Envoy Gateway's supported defaults
+    pub compression_enable: bool, // enable response compression (brotli quality=6 and gzip level=6, matching nginx defaults)
     pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
     pub default_backend_image: Option<String>, // default backend container image (e.g., "registry.k8s.io/ingress-nginx/custom-error-pages")
     pub default_backend_tag: Option<String>,   // default backend container image tag (e.g., "v1.1.1")
