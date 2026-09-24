@@ -187,7 +187,7 @@ pub struct AgenticWorkflowConfig {
     pub docker_fragment: String,
     pub prompt: String,
     pub model_type: AgenticWorkflowModelType,
-    /// Kubernetes cluster region used to derive the Bedrock runtime region.
+    /// Kubernetes cluster region used as a fallback for legacy Bedrock requests without a model region.
     pub cluster_region: String,
     /// Internal Bedrock runtime settings derived from the flat workflow model, when selected.
     pub bedrock: Option<BedrockRuntime>,
@@ -1013,6 +1013,7 @@ mod tests {
 
     /// Deliberately not a plausible hard-coded default, see the io-model tests.
     const TEST_CLUSTER_REGION: &str = "ap-southeast-2";
+    const TEST_BEDROCK_REGION: &str = "eu-west-1";
 
     /// Minimal config used by contract and Bedrock rendering tests.
     fn config_for(model_type: AgenticWorkflowModelType, bedrock_auth: Option<BedrockAuth>) -> AgenticWorkflowConfig {
@@ -1024,7 +1025,7 @@ mod tests {
             model_type,
             cluster_region: TEST_CLUSTER_REGION.to_string(),
             bedrock: bedrock_auth.map(|auth| BedrockRuntime {
-                region: TEST_CLUSTER_REGION.to_string(),
+                region: TEST_BEDROCK_REGION.to_string(),
                 auth,
             }),
             model_api_key: "sk-anthropic".to_string(),
@@ -1080,7 +1081,7 @@ mod tests {
         );
         let (context, credentials) = config.bedrock().expect("a Bedrock workflow must carry a runtime");
 
-        assert_eq!(context.region, TEST_CLUSTER_REGION);
+        assert_eq!(context.region, TEST_BEDROCK_REGION);
         assert_eq!(
             credentials.iter().map(|ev| ev.key.as_str()).collect::<Vec<_>>(),
             vec!["AWS_BEARER_TOKEN_BEDROCK"]
@@ -1160,7 +1161,7 @@ mod tests {
     fn build_bedrock_tera_context() -> AgenticWorkflowTeraContext {
         let mut context = build_agentic_workflow_tera_context();
         context.service.bedrock = Some(BedrockTeraContext {
-            region: TEST_CLUSTER_REGION.to_string(),
+            region: TEST_BEDROCK_REGION.to_string(),
         });
         context.environment_variables.retain(|ev| ev.key != "ANTHROPIC_API_KEY");
         context.bedrock_credentials = vec![EnvironmentVariable {
@@ -1173,7 +1174,7 @@ mod tests {
 
     /// `AWS_REGION` is plaintext Job env; contract decoding does not apply to it.
     #[test]
-    fn bedrock_job_sets_explicit_aws_region_in_plaintext() {
+    fn bedrock_job_sets_the_selected_provider_region_in_plaintext() {
         let rendered = render_template(job_template(), build_bedrock_tera_context());
 
         let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
@@ -1185,11 +1186,11 @@ mod tests {
             .find(|var| var["name"].as_str() == Some("AWS_REGION"))
             .unwrap_or_else(|| panic!("a Bedrock job must set AWS_REGION:\n{rendered}"));
 
-        assert_eq!(aws_region["value"].as_str(), Some(TEST_CLUSTER_REGION));
+        assert_eq!(aws_region["value"].as_str(), Some(TEST_BEDROCK_REGION));
         // The guard that matters: the value is the region itself, never the engine's base64 of it.
         assert_ne!(
             aws_region["value"].as_str(),
-            Some(general_purpose::STANDARD.encode(TEST_CLUSTER_REGION).as_str()),
+            Some(general_purpose::STANDARD.encode(TEST_BEDROCK_REGION).as_str()),
             "AWS_REGION must not be base64-encoded, nothing decodes it for the claude CLI"
         );
     }
@@ -1210,17 +1211,17 @@ mod tests {
         );
     }
 
-    /// The engine emits the selected region verbatim.
+    /// The runtime region reaches the Job unchanged.
     #[test]
-    fn aws_region_is_emitted_verbatim_whatever_shape_the_cluster_reports() {
+    fn aws_region_is_emitted_verbatim_from_bedrock_runtime_context() {
         let mut context = build_bedrock_tera_context();
         context.service.bedrock = Some(BedrockTeraContext {
-            region: "europe-west9".to_string(),
+            region: "eu-west-3".to_string(),
         });
 
         let rendered = render_template(job_template(), context);
 
-        assert!(rendered.contains("value: \"europe-west9\""), "got:\n{rendered}");
+        assert!(rendered.contains("value: \"eu-west-3\""), "got:\n{rendered}");
     }
 
     /// Quoted/newline region input must stay within the `AWS_REGION` scalar.
