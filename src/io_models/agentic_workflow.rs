@@ -58,6 +58,11 @@ pub struct AgenticWorkflowModel {
     /// Opaque JSON blob (e.g. reasoning effort). Interpreted by the agent image, not the engine.
     #[serde(default)]
     pub settings: String,
+    /// Bedrock source region resolved by q-core from the selected provider or inline-model default.
+    /// Omitted for Claude and by older q-core payloads; older Bedrock requests fall back to the
+    /// execution cluster's region during conversion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
@@ -350,12 +355,14 @@ impl AgenticWorkflow {
     /// from `to_agentic_workflow_domain` so the conversion is unit-testable without constructing a
     /// `Context`.
     ///
-    /// `cluster_region` supplies the Bedrock runtime region.
+    /// `cluster_region` is the compatibility fallback for Bedrock requests from older q-core
+    /// versions that omit `model.region`.
     fn into_domain_config(self, cluster_region: String) -> Result<AgenticWorkflowConfig, AgenticWorkflowError> {
         let AgenticWorkflowModel {
             model_type,
             api_key,
             settings,
+            region,
         } = self.model;
 
         let project_repositories = self
@@ -420,7 +427,7 @@ impl AgenticWorkflow {
                 }
 
                 Some(BedrockRuntime {
-                    region: cluster_region.clone(),
+                    region: region.unwrap_or_else(|| cluster_region.clone()),
                     auth: BedrockAuth::BearerToken(api_key.clone()),
                 })
             }
@@ -463,6 +470,7 @@ mod tests {
 
     /// Sentinel region; catches accidental hard-coded defaults.
     const TEST_CLUSTER_REGION: &str = "ap-southeast-2";
+    const TEST_BEDROCK_REGION: &str = "eu-west-1";
 
     /// Golden-JSON contract-sync test, the highest-risk seam of the integration: this is the exact JSON
     /// produced by q-core's `EngineRequestUnitTest."should serialize agentic workflow using
@@ -478,6 +486,17 @@ mod tests {
     /// (docker_fragment/mcp/project_repositories/host_allowlist/outputs/cpu_limit_in_milli) are
     /// present but empty/null - proving `#[serde(default)]` isn't masking a real mismatch.
     const GOLDEN_JSON_DEFAULTS: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"","prompt":"","model":{"type":"CLAUDE","api_key":"","settings":""},"mcp":"","project_repositories":[],"host_allowlist":[],"outputs":[],"cpu_request_in_milli":500,"cpu_limit_in_milli":null,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600,"payload":{"body":"","headers":[]}}"#;
+
+    fn bedrock_json_with_region() -> String {
+        GOLDEN_JSON.replace(
+            r#""model":{"type":"CLAUDE","api_key":"sk-secret","settings":"{\"effort\":\"high\"}"}"#,
+            r#""model":{"type":"BEDROCK","api_key":"sk-secret","settings":"{\"effort\":\"high\"}","region":"eu-west-1"}"#,
+        )
+    }
+
+    fn legacy_bedrock_json_without_region() -> String {
+        GOLDEN_JSON.replace(r#""type":"CLAUDE""#, r#""type":"BEDROCK""#)
+    }
 
     #[test]
     fn deserializes_the_q_core_golden_json_contract() {
@@ -556,6 +575,15 @@ mod tests {
     }
 
     #[test]
+    fn deserializes_the_bedrock_model_region_from_q_core() {
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(&bedrock_json_with_region()).expect("q-core Bedrock JSON should deserialize");
+        let model_json = serde_json::to_value(&workflow.model).expect("model should serialize");
+
+        assert_eq!(model_json["region"], TEST_BEDROCK_REGION);
+    }
+
+    #[test]
     fn image_defaults_to_the_pinned_agent_image_when_omitted() {
         // The wire payload may omit `image`; the engine then falls back to the pinned
         // first-cut agent image (`default_image`). Build a payload without the `image` key.
@@ -599,29 +627,30 @@ mod tests {
         );
     }
 
-    /// The deployment cluster supplies the Bedrock runtime region.
     #[test]
-    fn into_domain_config_carries_the_cluster_region_verbatim() {
-        let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+    fn bedrock_model_region_overrides_the_cluster_region() {
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(&bedrock_json_with_region()).expect("q-core Bedrock JSON should deserialize");
         let config = workflow
             .into_domain_config(TEST_CLUSTER_REGION.to_string())
             .expect("domain config should build");
+        let runtime = config.bedrock.expect("Bedrock runtime should be present");
 
-        assert_eq!(config.cluster_region, TEST_CLUSTER_REGION);
+        assert_eq!(runtime.region, TEST_BEDROCK_REGION);
     }
 
-    /// Bedrock carries region/auth; Claude carries neither.
     #[test]
-    fn only_a_bedrock_model_gets_an_aws_region() {
+    fn a_legacy_bedrock_model_without_region_falls_back_to_cluster_and_claude_has_no_bedrock_runtime() {
         let claude: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
         assert_eq!(claude.model.model_type, AgenticWorkflowModelType::Claude);
+        let claude_model_json = serde_json::to_value(&claude.model).expect("model should serialize");
+        assert!(claude_model_json.get("region").is_none());
         let claude_config = claude
             .into_domain_config(TEST_CLUSTER_REGION.to_string())
             .expect("domain config should build");
 
-        let bedrock: AgenticWorkflow =
-            serde_json::from_str(&GOLDEN_JSON.replace(r#""type":"CLAUDE""#, r#""type":"BEDROCK""#))
-                .expect("golden JSON should deserialize with a BEDROCK model");
+        let bedrock: AgenticWorkflow = serde_json::from_str(&legacy_bedrock_json_without_region())
+            .expect("legacy JSON should deserialize with a BEDROCK model");
         assert_eq!(bedrock.model.model_type, AgenticWorkflowModelType::Bedrock);
         let bedrock_config = bedrock
             .into_domain_config(TEST_CLUSTER_REGION.to_string())
