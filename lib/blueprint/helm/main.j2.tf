@@ -14,6 +14,11 @@ resource "qovery_helm_repository" "blueprint_repo" {
   kind                  = "{{ chart_repository_kind }}"
   url                   = "{{ chart_repository | hcl_string }}"
   skip_tls_verification = false
+
+  # An adopted repository keeps its name: the per-execution one may already be taken by a failed attempt
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "qovery_helm" "blueprint" {
@@ -67,5 +72,15 @@ resource "qovery_helm" "blueprint" {
 import {
   to = qovery_helm.blueprint
   id = "{{ import_id | hcl_string }}"
+}
+
+# Adopt the repository the service already uses: q-core rejects repointing a helm to another repository
+data "qovery_helm" "current" {
+  id = "{{ import_id | hcl_string }}"
+}
+
+import {
+  to = qovery_helm_repository.blueprint_repo
+  id = "{{ organization_id | hcl_string }},${data.qovery_helm.current.source.helm_repository.helm_repository_id}"
 }
 {% endif %}
