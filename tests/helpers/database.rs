@@ -889,14 +889,11 @@ pub fn test_db(
                 path_rewrite: None,
             }];
             app.dockerfile_path = match db_kind {
-                // to be able to support outdated container image versions, we jump to a higher version
-                DatabaseKind::Mongodb if version.contains("4.0") => Some("Dockerfile-4.4".to_string()),
-                // MongoDB 8.3+ runs on the official mongo image and carries the full image tag as
-                // `version` (e.g. `8.3-noble`), which doesn't match a Dockerfile name. The test app ships
-                // `Dockerfile-8.3` (official mongo 8 client) for this family; the DB itself still deploys
-                // with the full tag. The Bitnami family (<= 8.0) has a plain numeric version (no variant
-                // suffix) and keeps `Dockerfile-<version>`.
-                DatabaseKind::Mongodb if version.contains('-') => Some("Dockerfile-8.3".to_string()),
+                // Official mongo 8 client for DocumentDB (needs only TLS) and 8.3+, whose `version` is a full
+                // image tag (e.g. `8.3-noble`) matching no Dockerfile. The DB still deploys the requested version.
+                DatabaseKind::Mongodb if database_mode == MANAGED || version.contains('-') => {
+                    Some("Dockerfile-8.3".to_string())
+                }
                 // Use the maintained PostgreSQL client fixture for legacy database versions; the database
                 // itself still deploys with the requested version.
                 DatabaseKind::Postgresql
