@@ -56,6 +56,8 @@ pub struct TerraformServiceAdvancedSettings {
     pub build_ram_max_in_gib: u32,
     #[serde(default, alias = "build.ephemeral_storage_in_gib")]
     pub build_ephemeral_storage_in_gib: Option<u32>,
+    #[serde(default, alias = "build.disable_buildkit_cache")]
+    pub build_disable_buildkit_cache: bool,
     #[serde(default, alias = "build.skip_git_submodules")]
     pub build_skip_git_submodules: bool,
 
@@ -76,6 +78,7 @@ impl Default for TerraformServiceAdvancedSettings {
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
             build_ephemeral_storage_in_gib: None,
+            build_disable_buildkit_cache: false,
             build_skip_git_submodules: false,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
@@ -260,7 +263,7 @@ impl TerraformService {
             cpu_max_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             ram_max_in_gib: self.advanced_settings.build_ram_max_in_gib,
             ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
-            disable_buildkit_cache: false,
+            disable_buildkit_cache: self.advanced_settings.build_disable_buildkit_cache,
             skip_git_submodules: self.advanced_settings.build_skip_git_submodules,
         })
     }
@@ -613,25 +616,18 @@ impl TerraformService {
         // Use repository root as Docker build context to include all modules (incl. sibling modules)
         let root_path = PathBuf::from(".");
         let (_, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
-        let mut disable_build_cache = false;
-
         let build_env_vars = self
             .environment_vars_with_infos
             .iter()
-            .filter_map(|(k, variable_infos)| {
-                // Remove special vars
+            .map(|(k, variable_infos)| {
                 let v = String::from_utf8(
                     general_purpose::STANDARD
                         .decode(variable_infos.value.as_bytes())
                         .unwrap_or_default(),
                 )
                 .unwrap_or_default();
-                if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
-                    disable_build_cache = true;
-                    return None;
-                }
 
-                Some((k.clone(), v))
+                (k.clone(), v)
             })
             .collect::<BTreeMap<_, _>>();
 
@@ -659,7 +655,7 @@ impl TerraformService {
             })),
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: build_env_vars,
-            disable_buildkit_cache: disable_build_cache,
+            disable_buildkit_cache: bs.disable_buildkit_cache,
             timeout: Duration::from_secs(bs.timeout_max_sec as u64),
             architectures,
             max_cpu_in_milli: bs.cpu_max_in_milli,
