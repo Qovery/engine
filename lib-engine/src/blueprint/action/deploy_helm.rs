@@ -371,6 +371,49 @@ mod tests {
         assert!(result.contains(r#"id = "helm-service-uuid""#));
     }
 
+    // q-core rejects repointing a helm service to another repository, so an update must adopt the
+    // repository the service already uses rather than create a new one.
+    #[test]
+    fn generate_helm_tf_with_import_adopts_the_existing_repository() {
+        let mut request = test_request();
+        request.import_id = Some("helm-service-uuid".into());
+        let result = render_template(&test_spec(), &request, &test_info(), None);
+
+        assert!(result.contains(r#"data "qovery_helm" "current""#));
+        assert!(result.contains("to = qovery_helm_repository.blueprint_repo"));
+        assert!(result.contains(
+            r#"id = "22222222-3333-4444-5555-666666666666,${data.qovery_helm.current.source.helm_repository.helm_repository_id}""#
+        ));
+    }
+
+    #[test]
+    fn generate_helm_tf_without_import_creates_the_repository() {
+        let result = render_template(&test_spec(), &test_request(), &test_info(), None);
+
+        assert!(!result.contains(r#"data "qovery_helm" "current""#));
+        assert!(!result.contains("to = qovery_helm_repository.blueprint_repo"));
+    }
+
+    // Repository names are unique per organization and a failed first create leaves its repository
+    // behind, so a retried create (still no import_id) needs a name of its own.
+    #[test]
+    fn generate_helm_tf_names_the_repository_after_the_execution() {
+        let mut request = test_request();
+        request.execution_id = "exec-2".into();
+        let result = render_template(&test_spec(), &request, &test_info(), None);
+
+        assert!(result.contains(r#"name                  = "blueprint-redis-exec-2""#));
+    }
+
+    // Renaming an adopted repository to the current execution's name can collide with a repository
+    // a failed attempt of the same execution created, and q-core rejects duplicate names.
+    #[test]
+    fn generate_helm_tf_keeps_the_name_of_an_adopted_repository() {
+        let result = render_template(&test_spec(), &test_request(), &test_info(), None);
+
+        assert!(result.contains("ignore_changes = [name]"));
+    }
+
     #[test]
     fn render_values_yaml_with_variables() {
         let dir = TempDir::new().unwrap();
