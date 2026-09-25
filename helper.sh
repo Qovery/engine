@@ -68,6 +68,21 @@ function print_title() {
   echo "###################################################"
 }
 
+base64url() {
+  # stdin -> base64url (no padding)
+  openssl base64 -A | tr '+/' '-_' | tr -d '='
+}
+
+# Removes potentially existing sensitive files upon exit (error or not)
+cleanup() {
+  local exit_code=$?
+  for f in "$JWT_FILE" "$TOKEN_FILE" "$GIT_ASKPASS_FILE"; do
+    [ -n "$f" ] && [ -f "$f" ] && rm -f "$f"
+  done
+  exit "$exit_code"
+}
+trap cleanup EXIT
+
 #################
 # Git functions #
 #################
@@ -103,6 +118,114 @@ function generate_image_tag() {
 
   git describe --exact-match --tags
 }
+
+
+# ---- github_app_auth ----------------------------------------------------
+# Mints a GitHub App JWT, exchanges it for a short-lived installation
+# access token, and sets up GIT_ASKPASS/GIT_HTTP_PASSWORD/GIT_USERNAME so
+# any subsequent `git clone`/`git push` over HTTPS authenticates as the
+# App's bot identity. Call this once, near the top of whichever function
+# performs the actual clone/edit/commit/push work.
+#
+# Requires the following variables to be set:
+#   GH_QOVERY_CHART_APP_ID: GitHub App ID
+#   GH_QOVERY_CHART_PRIVATE_KEY: Path to a private key file (GitLab CI variable of type File)
+#   GH_QOVERY_CHART_APP_INSTALLATION_ID: GitHub App's Installation ID (per-org or per-repo)
+#   GH_QOVERY_CHART_APP_SLUG: The bot's slug. Typically lowercased-hyphenated version of the name. The app's settings page URL is https://github.com/settings/apps/<slug>
+#   GH_QOVERY_CHART_APP_BOT_ID: The Bot ID, found by querying https://api.github.com/users/${GH_QOVERY_CHART_APP_SLUG}[bot]
+#
+# Exports (consumed by git, not meant to be read directly):
+#   GIT_ASKPASS, GIT_HTTP_PASSWORD, GIT_USERNAME
+#
+# Uses/leaves behind:
+#   JWT_FILE, TOKEN_FILE, GIT_ASKPASS_FILE
+github_app_auth() {
+  # ---- 1. Mint a JWT signed with the App's private key -----------------
+  
+  #Save whether "set -x" is set or not
+  local xtrace_state
+  case "$-" in *x*) xtrace_state=1 ;; *) xtrace_state=0 ;; esac
+
+  set +x  # --- sensitive: signs with the App private key, produces the JWT ---
+ 
+  local now iat exp header payload unsigned signature jwt
+ 
+  now=$(date +%s)
+  iat=$((now - 60))     # allow for clock drift
+  exp=$((now + 540))    # GitHub max is 10 minutes; use 9 to be safe
+ 
+  header=$(printf '{"alg":"RS256","typ":"JWT"}' | base64url)
+  payload=$(printf '{"iat":%s,"exp":%s,"iss":"%s"}' "$iat" "$exp" "$GH_QOVERY_CHART_APP_ID" | base64url)
+ 
+  unsigned="${header}.${payload}"
+ 
+  signature=$(printf '%s' "$unsigned" \
+    | openssl dgst -sha256 -sign "$GH_QOVERY_CHART_PRIVATE_KEY" \
+    | base64url)
+ 
+  jwt="${unsigned}.${signature}"
+  JWT_FILE=$(mktemp)
+  printf '%s' "$jwt" > "$JWT_FILE"
+ 
+  # ---- 2. Exchange the JWT for a short-lived installation access token -
+ 
+  # --- sensitive: JWT goes in the Authorization header below ---
+  local http_status
+  TOKEN_FILE=$(mktemp)
+  http_status=$(curl -sS -o "$TOKEN_FILE" -w '%{http_code}' \
+    -X POST \
+    -H "Authorization: Bearer $(cat "$JWT_FILE")" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/app/installations/${GH_QOVERY_CHART_APP_INSTALLATION_ID}/access_tokens")
+ 
+  [ "$xtrace_state" -eq 1 ] && set -x  # tracing back on for the (non-sensitive) status check below
+ 
+  if [ "$http_status" != "201" ]; then
+    echo "Failed to obtain installation access token (HTTP $http_status)" >&2
+    # Do NOT print the response body - it's fine here (no secret on error),
+    # but avoid the habit of dumping API responses that touch auth endpoints.
+    exit 1
+  fi
+ 
+  set +x  # --- sensitive: this extracts the installation token itself ---
+ 
+  local install_token
+  install_token=$(grep -o '"token": *"[^"]*"' "$TOKEN_FILE" | head -1 | sed -E 's/.*"token": *"([^"]*)".*/\1/')
+ 
+  if [ -z "$install_token" ]; then
+    [ "$xtrace_state" -eq 1 ] && set -x
+    echo "Could not parse installation access token from response" >&2
+    exit 1
+  fi
+ 
+  [ "$xtrace_state" -eq 1 ] && set -x  # --- end sensitive block ---
+ 
+  # ---- 3. Wire the token up for git over HTTPS --------------------------
+ 
+  # Use a GIT_ASKPASS helper instead of embedding the token in the URL,
+  # so it never appears in `git remote -v`, process listings, or shell history.
+  GIT_ASKPASS_FILE=$(mktemp)
+  cat > "$GIT_ASKPASS_FILE" <<'EOF'
+#!/usr/bin/env bash
+echo "$GIT_HTTP_PASSWORD"
+EOF
+  chmod +x "$GIT_ASKPASS_FILE"
+ 
+  set +x  # --- sensitive: exports the raw installation token into env ---
+ 
+  export GIT_ASKPASS="$GIT_ASKPASS_FILE"
+  export GIT_HTTP_PASSWORD="$install_token"
+  export GIT_USERNAME="x-access-token"
+ 
+  [ "$xtrace_state" -eq 1 ] && set -x # --- Reset tracing when done ---
+
+
+  git config --global user.email "${GH_QOVERY_CHART_APP_BOT_ID}+${GH_QOVERY_CHART_APP_SLUG}[bot]@users.noreply.github.com"
+  git config --global user.name "Qovery"
+
+}
+
 
 
 #############################
@@ -744,16 +867,14 @@ function update_qovery_chart() {
   use_sccache
   set -e
 
-  apt-get update && apt-get install -y git
-  mkdir /root/.ssh && chmod 700 /root/.ssh
+  apt-get update && apt-get install -y git openssl
+  
+  github_app_auth
 
-  echo $SSH_PRIVATE_KEY_GITHUB_HELM_CHART | base64 -d > /root/.ssh/id_ed25519 && chmod 600 /root/.ssh/id_ed25519
-  echo 'Host *' > /root/.ssh/config
-  echo '  HashKnownHosts no' >> /root/.ssh/config
-  echo '  StrictHostKeyChecking no' >> /root/.ssh/config
-  echo '  UserKnownHostsFile /dev/null' >> /root/.ssh/config
+  git -c credential.helper= clone \
+    --config "credential.https://github.com.username=${GIT_USERNAME}" \
+    "https://github.com/Qovery/qovery-chart.git" "qovery-chart"
 
-  git clone git@github.com:Qovery/qovery-chart.git qovery-chart
   # generate chart
   WORKSPACE_ROOT_DIR=/builds/qovery/backend/engine/lib-engine LIB_ROOT_DIR=$WORKSPACE_ROOT_DIR/lib cargo test --package qovery-engine --lib --all-features -- byok_chart_gen::tests::generate_helm_chart --exact --nocapture --ignored
   # copy chart to github chart repo
@@ -763,8 +884,6 @@ function update_qovery_chart() {
   cp -Rf lib-engine/.qovery-workspace/qovery_chart/. qovery-chart/charts/qovery
   cd qovery-chart
   #test $(git diff --shortstat | wc -l) -eq 0 && exit 0
-  git config --global user.email "noreply@qovery.com"
-  git config --global user.name "Qovery"
   git add .
   git status
 
