@@ -10,7 +10,10 @@ const HTTP_POLICY: &str = include_str!(
     "../lib/common/charts/q-ingress-tls/templates/gateway-http-route-envoy-backend-traffic-policy.j2.yaml"
 );
 
-fn render_with_custom_http_errors(custom_http_errors: serde_json::Value) -> String {
+fn render_with_custom_http_errors(
+    service_custom_http_errors: serde_json::Value,
+    cluster_custom_http_errors: serde_json::Value,
+) -> String {
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
     context.insert("gateway_http_routes_per_namespace", &json!({"app-ns": [{}]}));
@@ -24,6 +27,8 @@ fn render_with_custom_http_errors(custom_http_errors: serde_json::Value) -> Stri
     context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &json!(null));
     context.insert("cluster_envoy_gateway_api_http_connection_idle_timeout_seconds", &json!(null));
     context.insert("cluster_envoy_gateway_api_http_max_stream_duration_seconds", &json!(null));
+    context.insert("cluster_envoy_enable_compression", &false);
+    context.insert("cluster_envoy_custom_http_errors_default", &cluster_custom_http_errors);
     context.insert("resolved_gateway_api_retry_num_retries", &json!(null));
     context.insert("resolved_gateway_api_retry_per_try_timeout_seconds", &json!(null));
     context.insert("resolved_gateway_api_retry_retry_on_triggers", &json!([]));
@@ -31,7 +36,7 @@ fn render_with_custom_http_errors(custom_http_errors: serde_json::Value) -> Stri
     context.insert(
         "advanced_settings",
         &json!({
-            "network_gateway_api_custom_http_errors": custom_http_errors,
+            "network_gateway_api_custom_http_errors": service_custom_http_errors,
             "network_gateway_api_sticky_session_enable": false,
             "network_gateway_api_route_limit_rpm": null,
             "network_gateway_api_route_limit_rps": null,
@@ -53,7 +58,7 @@ fn render_with_custom_http_errors(custom_http_errors: serde_json::Value) -> Stri
 
 #[test]
 fn custom_http_errors_render_one_override_per_code() {
-    let rendered = render_with_custom_http_errors(json!("404,503"));
+    let rendered = render_with_custom_http_errors(json!("404,503"), json!(null));
     let policy: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("policy must parse as YAML");
     let overrides = policy["spec"]["responseOverride"]
         .as_sequence()
@@ -68,11 +73,48 @@ fn custom_http_errors_render_one_override_per_code() {
 
 #[test]
 fn custom_http_errors_are_absent_when_unset() {
-    let rendered = render_with_custom_http_errors(json!(null));
+    let rendered = render_with_custom_http_errors(json!(null), json!(null));
     let policy: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("policy must parse as YAML");
 
     assert!(
         policy["spec"]["responseOverride"].is_null(),
         "no override block without codes in:\n{rendered}"
+    );
+}
+
+#[test]
+fn cluster_default_custom_http_errors_render_when_service_override_is_unset() {
+    let rendered = render_with_custom_http_errors(json!(null), json!([404, 503]));
+    let policy: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("policy must parse as YAML");
+    let overrides = policy["spec"]["responseOverride"]
+        .as_sequence()
+        .expect("cluster default responseOverride must be a sequence");
+
+    assert_eq!(overrides.len(), 2, "one override per cluster default code in:\n{rendered}");
+    assert_eq!(overrides[0]["match"]["statusCodes"][0]["value"].as_u64(), Some(404));
+    assert_eq!(
+        overrides[0]["response"]["body"]["valueRef"]["name"].as_str(),
+        Some("qovery-cluster-gateway-default-error-pages")
+    );
+    assert_eq!(overrides[1]["response"]["body"]["valueRef"]["key"].as_str(), Some("503.html"));
+}
+
+#[test]
+fn service_custom_http_errors_override_cluster_defaults() {
+    let rendered = render_with_custom_http_errors(json!("418"), json!([404, 503]));
+    let policy: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("policy must parse as YAML");
+    let overrides = policy["spec"]["responseOverride"]
+        .as_sequence()
+        .expect("service responseOverride must be a sequence");
+
+    assert_eq!(
+        overrides.len(),
+        1,
+        "service override must replace cluster defaults in:\n{rendered}"
+    );
+    assert_eq!(overrides[0]["match"]["statusCodes"][0]["value"].as_u64(), Some(418));
+    assert_eq!(
+        overrides[0]["response"]["body"]["valueRef"]["name"].as_str(),
+        Some("router-name-error-pages")
     );
 }

@@ -544,6 +544,14 @@ impl<T: CloudProvider> Router<T> {
                 .envoy_gateway_api_http_max_stream_duration_seconds,
         );
         context.insert(
+            "cluster_envoy_enable_compression",
+            &kubernetes.advanced_settings().envoy_enable_compression,
+        );
+        context.insert(
+            "cluster_envoy_custom_http_errors_default",
+            &kubernetes.advanced_settings().envoy_custom_http_errors_default,
+        );
+        context.insert(
             "cluster_envoy_gateway_api_retry_num_retries",
             &kubernetes.advanced_settings().envoy_gateway_api_retry_num_retries,
         );

@@ -31,6 +31,7 @@ spec:
     - group: gateway.networking.k8s.io
       kind: GRPCRoute
       name: {{ sanitized_name }}-grpc{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  # Custom HTTP error pages intentionally apply only to HTTPRoutes: gRPC clients consume status trailers, not HTML response bodies.
   {%- if advanced_settings.network_gateway_api_sticky_session_enable == true %}
   loadBalancer:
     type: ConsistentHash
@@ -156,6 +157,15 @@ spec:
       {%- elif cluster_max_stream_duration %}
       maxStreamDuration: {{ cluster_max_stream_duration }}s
       {%- endif %}
+  {%- endif %}
+  {%- if cluster_envoy_enable_compression %}
+  compressor:
+    - type: Brotli
+      brotli: {}
+    - type: Zstd
+      zstd: {}
+    - type: Gzip
+      gzip: {}
   {%- endif %}
   {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds or advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
   tcpKeepalive:
