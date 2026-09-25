@@ -165,6 +165,8 @@ fn base() -> Json {
         "cluster_envoy_gateway_api_http_request_timeout_seconds": null,
         "cluster_envoy_gateway_api_http_connection_idle_timeout_seconds": null,
         "cluster_envoy_gateway_api_http_max_stream_duration_seconds": null,
+        "cluster_envoy_enable_compression": false,
+        "cluster_envoy_custom_http_errors_default": null,
         "cluster_envoy_gateway_api_retry_num_retries": null,
         "cluster_envoy_gateway_api_retry_retry_on": "",
         "cluster_envoy_gateway_api_retry_http_status_codes": "",
@@ -501,6 +503,8 @@ fn escaping_preserves_q_ingress_tls_manifests() {
         ),
     ];
     let both: Vec<(&str, Json)> = nginx.iter().chain(gateway.iter()).cloned().collect();
+    let compression_enabled = [("cluster_envoy_enable_compression", json!(true))];
+    let both_with_compression: Vec<(&str, Json)> = both.iter().chain(compression_enabled.iter()).cloned().collect();
 
     assert_family_equivalent(
         "q-ingress-tls",
@@ -515,8 +519,8 @@ fn escaping_preserves_q_ingress_tls_manifests() {
             ("gateway-http-route", ctx(&both)),
             ("gateway-grpc-route", ctx(&both)),
             ("gateway-http-route-filter", ctx(&both)),
-            ("gateway-http-route-envoy-backend-traffic-policy", ctx(&both)),
-            ("gateway-grpc-route-envoy-backend-traffic-policy", ctx(&both)),
+            ("gateway-http-route-envoy-backend-traffic-policy", ctx(&both_with_compression)),
+            ("gateway-grpc-route-envoy-backend-traffic-policy", ctx(&both_with_compression)),
             ("gateway-http-route-envoy-security-policy", ctx(&both)),
             ("gateway-grpc-route-envoy-security-policy", ctx(&both)),
             ("gateway-http-route-envoy-error-pages-configmap", ctx(&both)),

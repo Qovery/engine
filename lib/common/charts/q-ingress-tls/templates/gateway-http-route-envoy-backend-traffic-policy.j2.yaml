@@ -124,6 +124,23 @@ spec:
             name: {{ sanitized_name }}-error-pages
             key: {{ code | trim }}.html
     {%- endfor %}
+  {%- elif cluster_envoy_custom_http_errors_default %}
+  responseOverride:
+    {%- for code in cluster_envoy_custom_http_errors_default %}
+    - match:
+        statusCodes:
+          - type: Value
+            value: {{ code }}
+      response:
+        contentType: text/html
+        body:
+          type: ValueRef
+          valueRef:
+            group: ""
+            kind: ConfigMap
+            name: qovery-cluster-gateway-default-error-pages
+            key: {{ code }}.html
+    {%- endfor %}
   {%- endif %}
   {%- if advanced_settings.network_gateway_api_circuit_breaker_max_connections or advanced_settings.network_gateway_api_circuit_breaker_max_pending_requests or advanced_settings.network_gateway_api_circuit_breaker_max_parallel_requests %}
   circuitBreaker:
@@ -184,6 +201,15 @@ spec:
       {%- elif cluster_max_stream_duration %}
       maxStreamDuration: {{ cluster_max_stream_duration }}s
       {%- endif %}
+  {%- endif %}
+  {%- if cluster_envoy_enable_compression %}
+  compressor:
+    - type: Brotli
+      brotli: {}
+    - type: Zstd
+      zstd: {}
+    - type: Gzip
+      gzip: {}
   {%- endif %}
   {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds or advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
   tcpKeepalive:

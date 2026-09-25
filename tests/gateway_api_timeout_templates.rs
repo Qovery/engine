@@ -21,6 +21,17 @@ struct RetrySettings {
     per_try_timeout_seconds: Option<u32>,
 }
 
+#[derive(Clone, Copy, Default)]
+struct PolicyRenderSettings {
+    service_request_timeout: Option<u32>,
+    service_idle_timeout: Option<u32>,
+    service_max_stream_duration: Option<u32>,
+    cluster_request_timeout: Option<u32>,
+    cluster_idle_timeout: Option<u32>,
+    cluster_max_stream_duration: Option<u32>,
+    compression_enabled: bool,
+}
+
 #[derive(Clone, Default)]
 struct ResolvedRetrySettings {
     num_retries: Option<u32>,
@@ -96,34 +107,12 @@ fn base_advanced_settings(
     })
 }
 
-fn render_http_policy(
-    service_request_timeout: Option<u32>,
-    service_idle_timeout: Option<u32>,
-    service_max_stream_duration: Option<u32>,
-    cluster_send_timeout: Option<u32>,
-    cluster_read_timeout: Option<u32>,
-    cluster_max_stream_duration: Option<u32>,
-) -> String {
-    render_http_policy_with_retry(
-        service_request_timeout,
-        service_idle_timeout,
-        service_max_stream_duration,
-        cluster_send_timeout,
-        cluster_read_timeout,
-        cluster_max_stream_duration,
-        no_retry_settings(),
-        no_retry_settings(),
-    )
+fn render_http_policy(settings: PolicyRenderSettings) -> String {
+    render_http_policy_with_retry(settings, no_retry_settings(), no_retry_settings())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_http_policy_with_retry(
-    service_request_timeout: Option<u32>,
-    service_idle_timeout: Option<u32>,
-    service_max_stream_duration: Option<u32>,
-    cluster_send_timeout: Option<u32>,
-    cluster_read_timeout: Option<u32>,
-    cluster_max_stream_duration: Option<u32>,
+    settings: PolicyRenderSettings,
     service_retry: RetrySettings,
     cluster_retry: RetrySettings,
 ) -> String {
@@ -145,21 +134,26 @@ fn render_http_policy_with_retry(
     context.insert(
         "advanced_settings",
         &base_advanced_settings(
-            service_request_timeout,
-            service_idle_timeout,
-            service_max_stream_duration,
+            settings.service_request_timeout,
+            settings.service_idle_timeout,
+            settings.service_max_stream_duration,
             &service_retry,
         ),
     );
-    context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &cluster_send_timeout);
+    context.insert(
+        "cluster_envoy_gateway_api_http_request_timeout_seconds",
+        &settings.cluster_request_timeout,
+    );
     context.insert(
         "cluster_envoy_gateway_api_http_connection_idle_timeout_seconds",
-        &cluster_read_timeout,
+        &settings.cluster_idle_timeout,
     );
     context.insert(
         "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
-        &cluster_max_stream_duration,
+        &settings.cluster_max_stream_duration,
     );
+    context.insert("cluster_envoy_enable_compression", &settings.compression_enabled);
+    context.insert("cluster_envoy_custom_http_errors_default", &json!(null));
     context.insert("cluster_envoy_gateway_api_retry_num_retries", &cluster_retry.num_retries);
     context.insert("cluster_envoy_gateway_api_retry_retry_on", &cluster_retry.retry_on);
     context.insert(
@@ -188,34 +182,12 @@ fn render_http_policy_with_retry(
     tera.render("template", &context).expect("HTTP template should render")
 }
 
-fn render_grpc_policy(
-    service_request_timeout: Option<u32>,
-    service_idle_timeout: Option<u32>,
-    service_max_stream_duration: Option<u32>,
-    cluster_send_timeout: Option<u32>,
-    cluster_read_timeout: Option<u32>,
-    cluster_max_stream_duration: Option<u32>,
-) -> String {
-    render_grpc_policy_with_retry(
-        service_request_timeout,
-        service_idle_timeout,
-        service_max_stream_duration,
-        cluster_send_timeout,
-        cluster_read_timeout,
-        cluster_max_stream_duration,
-        no_retry_settings(),
-        no_retry_settings(),
-    )
+fn render_grpc_policy(settings: PolicyRenderSettings) -> String {
+    render_grpc_policy_with_retry(settings, no_retry_settings(), no_retry_settings())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn render_grpc_policy_with_retry(
-    service_request_timeout: Option<u32>,
-    service_idle_timeout: Option<u32>,
-    service_max_stream_duration: Option<u32>,
-    cluster_send_timeout: Option<u32>,
-    cluster_read_timeout: Option<u32>,
-    cluster_max_stream_duration: Option<u32>,
+    settings: PolicyRenderSettings,
     service_retry: RetrySettings,
     cluster_retry: RetrySettings,
 ) -> String {
@@ -240,21 +212,26 @@ fn render_grpc_policy_with_retry(
     context.insert(
         "advanced_settings",
         &base_advanced_settings(
-            service_request_timeout,
-            service_idle_timeout,
-            service_max_stream_duration,
+            settings.service_request_timeout,
+            settings.service_idle_timeout,
+            settings.service_max_stream_duration,
             &service_retry,
         ),
     );
-    context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &cluster_send_timeout);
+    context.insert(
+        "cluster_envoy_gateway_api_http_request_timeout_seconds",
+        &settings.cluster_request_timeout,
+    );
     context.insert(
         "cluster_envoy_gateway_api_http_connection_idle_timeout_seconds",
-        &cluster_read_timeout,
+        &settings.cluster_idle_timeout,
     );
     context.insert(
         "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
-        &cluster_max_stream_duration,
+        &settings.cluster_max_stream_duration,
     );
+    context.insert("cluster_envoy_enable_compression", &settings.compression_enabled);
+    context.insert("cluster_envoy_custom_http_errors_default", &json!(null));
     context.insert("cluster_envoy_gateway_api_retry_num_retries", &cluster_retry.num_retries);
     context.insert("cluster_envoy_gateway_api_retry_retry_on", &cluster_retry.retry_on);
     context.insert(
@@ -281,6 +258,56 @@ fn render_grpc_policy_with_retry(
     );
 
     tera.render("template", &context).expect("gRPC template should render")
+}
+
+fn assert_route_policy_materializes_compression_and_timeout(
+    scenario: &str,
+    rendered: &str,
+    expected_request_timeout: Option<&str>,
+    compression_enabled: bool,
+) {
+    let policy: serde_yaml::Value = serde_yaml::from_str(rendered).expect("policy must parse as YAML");
+
+    assert!(
+        policy["spec"].get("mergeType").is_none(),
+        "{scenario}: route policy must not rely on StrategicMerge:\n{rendered}"
+    );
+    assert_eq!(
+        policy["spec"]["timeout"]["http"]["requestTimeout"].as_str(),
+        expected_request_timeout,
+        "{scenario}: route policy must retain Qovery's resolved request timeout:\n{rendered}"
+    );
+
+    let compressors = policy["spec"]
+        .get("compressor")
+        .and_then(serde_yaml::Value::as_sequence);
+    if !compression_enabled {
+        assert!(
+            compressors.is_none(),
+            "{scenario}: compression must be absent when disabled:\n{rendered}"
+        );
+        return;
+    }
+
+    let compressors = compressors.expect("compression must be materialized in the route policy");
+    assert_eq!(
+        compressors.len(),
+        3,
+        "{scenario}: all supported compressors must be rendered:\n{rendered}"
+    );
+    for (compressor, expected_type, expected_configuration) in [
+        (&compressors[0], "Brotli", "brotli"),
+        (&compressors[1], "Zstd", "zstd"),
+        (&compressors[2], "Gzip", "gzip"),
+    ] {
+        assert_eq!(compressor["type"].as_str(), Some(expected_type));
+        assert!(
+            compressor[expected_configuration]
+                .as_mapping()
+                .is_some_and(serde_yaml::Mapping::is_empty),
+            "{scenario}: {expected_type} must use Envoy Gateway defaults:\n{rendered}"
+        );
+    }
 }
 
 fn render_http_route() -> String {
@@ -388,7 +415,12 @@ fn render_grpc_route() -> String {
 
 #[test]
 fn http_policy_uses_cluster_defaults_when_service_timeout_is_missing() {
-    let rendered = render_http_policy(None, None, None, Some(42), Some(120), Some(600));
+    let rendered = render_http_policy(PolicyRenderSettings {
+        cluster_request_timeout: Some(42),
+        cluster_idle_timeout: Some(120),
+        cluster_max_stream_duration: Some(600),
+        ..Default::default()
+    });
     assert!(rendered.contains("requestTimeout: 42s"));
     assert!(rendered.contains("connectionIdleTimeout: 120s"));
     assert!(rendered.contains("maxStreamDuration: 600s"));
@@ -396,7 +428,13 @@ fn http_policy_uses_cluster_defaults_when_service_timeout_is_missing() {
 
 #[test]
 fn http_policy_prioritizes_service_timeout_over_cluster_default() {
-    let rendered = render_http_policy(Some(90), None, None, Some(42), Some(120), Some(600));
+    let rendered = render_http_policy(PolicyRenderSettings {
+        service_request_timeout: Some(90),
+        cluster_request_timeout: Some(42),
+        cluster_idle_timeout: Some(120),
+        cluster_max_stream_duration: Some(600),
+        ..Default::default()
+    });
     assert!(rendered.contains("requestTimeout: 90s"));
     assert!(!rendered.contains("requestTimeout: 42s"));
     assert!(rendered.contains("connectionIdleTimeout: 120s"));
@@ -405,7 +443,13 @@ fn http_policy_prioritizes_service_timeout_over_cluster_default() {
 
 #[test]
 fn http_policy_prioritizes_service_idle_timeout_over_cluster_default() {
-    let rendered = render_http_policy(None, Some(121), None, Some(42), Some(120), Some(600));
+    let rendered = render_http_policy(PolicyRenderSettings {
+        service_idle_timeout: Some(121),
+        cluster_request_timeout: Some(42),
+        cluster_idle_timeout: Some(120),
+        cluster_max_stream_duration: Some(600),
+        ..Default::default()
+    });
     assert!(rendered.contains("requestTimeout: 42s"));
     assert!(rendered.contains("connectionIdleTimeout: 121s"));
     assert!(!rendered.contains("connectionIdleTimeout: 120s"));
@@ -414,15 +458,71 @@ fn http_policy_prioritizes_service_idle_timeout_over_cluster_default() {
 
 #[test]
 fn http_policy_omits_timeout_when_no_value_is_provided() {
-    let rendered = render_http_policy(None, None, None, None, None, None);
+    let rendered = render_http_policy(PolicyRenderSettings::default());
     assert!(!rendered.contains("requestTimeout:"));
     assert!(!rendered.contains("connectionIdleTimeout:"));
     assert!(!rendered.contains("maxStreamDuration:"));
 }
 
 #[test]
+fn http_route_policy_materializes_compression_without_strategic_merge() {
+    for (scenario, compression_enabled, service_timeout, cluster_timeout, expected_timeout) in [
+        ("service timeout", true, Some(60), None, Some("60s")),
+        ("cluster timeout", true, None, Some(120), Some("120s")),
+        ("compression disabled", false, Some(60), None, Some("60s")),
+        ("no timeout", true, None, None, None),
+    ] {
+        let rendered = render_http_policy(PolicyRenderSettings {
+            service_request_timeout: service_timeout,
+            cluster_request_timeout: cluster_timeout,
+            compression_enabled,
+            ..Default::default()
+        });
+
+        assert_route_policy_materializes_compression_and_timeout(
+            scenario,
+            &rendered,
+            expected_timeout,
+            compression_enabled,
+        );
+    }
+}
+
+#[test]
+fn grpc_route_policy_materializes_compression_without_strategic_merge() {
+    for (scenario, compression_enabled, service_timeout, cluster_timeout, expected_timeout) in [
+        ("service timeout", true, Some(60), None, Some("60s")),
+        ("cluster timeout", true, None, Some(120), Some("120s")),
+        ("compression disabled", false, Some(60), None, Some("60s")),
+        ("no timeout", true, None, None, None),
+    ] {
+        let rendered = render_grpc_policy(PolicyRenderSettings {
+            service_request_timeout: service_timeout,
+            cluster_request_timeout: cluster_timeout,
+            compression_enabled,
+            ..Default::default()
+        });
+
+        assert_route_policy_materializes_compression_and_timeout(
+            scenario,
+            &rendered,
+            expected_timeout,
+            compression_enabled,
+        );
+    }
+}
+
+#[test]
 fn grpc_policy_uses_cluster_defaults_and_service_override() {
-    let rendered = render_grpc_policy(Some(75), Some(121), Some(300), Some(42), Some(120), Some(600));
+    let rendered = render_grpc_policy(PolicyRenderSettings {
+        service_request_timeout: Some(75),
+        service_idle_timeout: Some(121),
+        service_max_stream_duration: Some(300),
+        cluster_request_timeout: Some(42),
+        cluster_idle_timeout: Some(120),
+        cluster_max_stream_duration: Some(600),
+        ..Default::default()
+    });
     assert!(rendered.contains("requestTimeout: 75s"));
     assert!(rendered.contains("connectionIdleTimeout: 121s"));
     assert!(rendered.contains("maxStreamDuration: 300s"));
@@ -430,26 +530,27 @@ fn grpc_policy_uses_cluster_defaults_and_service_override() {
 
 #[test]
 fn http_policy_prioritizes_service_max_stream_duration_over_cluster_default() {
-    let rendered = render_http_policy(None, None, Some(300), Some(42), Some(120), Some(600));
+    let rendered = render_http_policy(PolicyRenderSettings {
+        service_max_stream_duration: Some(300),
+        cluster_request_timeout: Some(42),
+        cluster_idle_timeout: Some(120),
+        cluster_max_stream_duration: Some(600),
+        ..Default::default()
+    });
     assert!(rendered.contains("maxStreamDuration: 300s"));
     assert!(!rendered.contains("maxStreamDuration: 600s"));
 }
 
 #[test]
 fn with_no_retry_settings_retry_block_is_not_rendered() {
-    let rendered = render_http_policy(None, None, None, None, None, None);
+    let rendered = render_http_policy(PolicyRenderSettings::default());
     assert!(!rendered.contains("\n  retry:"));
 }
 
 #[test]
 fn service_num_retries_renders_retry_num_retries() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         RetrySettings {
             num_retries: Some(2),
             ..no_retry_settings()
@@ -462,12 +563,7 @@ fn service_num_retries_renders_retry_num_retries() {
 #[test]
 fn service_retry_on_renders_retry_on_triggers() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         RetrySettings {
             num_retries: Some(2),
             retry_on: "connect-failure, reset,refused-stream".to_string(),
@@ -484,12 +580,7 @@ fn service_retry_on_renders_retry_on_triggers() {
 #[test]
 fn service_http_status_codes_renders_retry_on_http_status_codes() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         RetrySettings {
             num_retries: Some(2),
             http_status_codes: "503,504".to_string(),
@@ -505,12 +596,7 @@ fn service_http_status_codes_renders_retry_on_http_status_codes() {
 #[test]
 fn service_per_try_timeout_seconds_renders_per_retry_timeout() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         RetrySettings {
             num_retries: Some(2),
             per_try_timeout_seconds: Some(2),
@@ -525,12 +611,7 @@ fn service_per_try_timeout_seconds_renders_per_retry_timeout() {
 #[test]
 fn service_settings_override_cluster_settings() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         RetrySettings {
             num_retries: Some(2),
             retry_on: "connect-failure".to_string(),
@@ -557,12 +638,7 @@ fn service_settings_override_cluster_settings() {
 #[test]
 fn cluster_settings_are_used_when_service_settings_are_absent() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         no_retry_settings(),
         RetrySettings {
             num_retries: Some(2),
@@ -582,12 +658,7 @@ fn cluster_settings_are_used_when_service_settings_are_absent() {
 #[test]
 fn num_retries_zero_renders_retry_num_retries_zero() {
     let rendered = render_http_policy_with_retry(
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
+        PolicyRenderSettings::default(),
         RetrySettings {
             num_retries: Some(0),
             ..no_retry_settings()
@@ -606,9 +677,9 @@ fn http_and_grpc_templates_render_retry_consistently() {
         per_try_timeout_seconds: Some(2),
     };
     let rendered_http =
-        render_http_policy_with_retry(None, None, None, None, None, None, service_retry.clone(), no_retry_settings());
+        render_http_policy_with_retry(PolicyRenderSettings::default(), service_retry.clone(), no_retry_settings());
     let rendered_grpc =
-        render_grpc_policy_with_retry(None, None, None, None, None, None, service_retry, no_retry_settings());
+        render_grpc_policy_with_retry(PolicyRenderSettings::default(), service_retry, no_retry_settings());
 
     for snippet in [
         "numRetries: 2",
