@@ -19,7 +19,7 @@ const DEFAULT_HELM_TIMEOUT_SEC: u64 = 600;
 
 const DEFAULT_JOB_CPU_MILLI: u32 = 500;
 const DEFAULT_JOB_RAM_MIB: u32 = 512;
-const DEFAULT_JOB_STORAGE_GIB: u32 = 20;
+const DEFAULT_JOB_STORAGE_GIB: u32 = 2;
 
 pub const DEFAULT_BLUEPRINT_DESCRIPTION: &str = "Deployed from blueprint";
 
@@ -638,7 +638,7 @@ mod tests {
         let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None));
         assert_eq!(tf.job_resources.cpu_milli, 500);
         assert_eq!(tf.job_resources.ram_mib, 512);
-        assert_eq!(tf.job_resources.storage_gib, 20);
+        assert_eq!(tf.job_resources.storage_gib, 2);
     }
 
     #[test]
@@ -684,7 +684,7 @@ mod tests {
         assert_eq!(tf.job_resources.cpu_milli, 750);
         // ram and storage fall back to defaults
         assert_eq!(tf.job_resources.ram_mib, 512);
-        assert_eq!(tf.job_resources.storage_gib, 20);
+        assert_eq!(tf.job_resources.storage_gib, 2);
     }
 
     // -- Engine version --

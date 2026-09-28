@@ -22,10 +22,13 @@ use crate::io_models::models::{
 use crate::io_models::terraform::ManagedDbConnectivity;
 use crate::io_models::terraform::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
+use crate::runtime::block_on;
 use crate::utilities::{sanitize_k8s_label_value, to_short_id};
 use base64::Engine;
 use base64::engine::general_purpose;
 use itertools::Itertools;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use kube::Api;
 use serde_derive::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
@@ -202,6 +205,21 @@ impl<T: CloudProvider> TerraformService<T> {
         format!("{}/common/charts/q-terraform-service", self.lib_root_directory)
     }
 
+    // Kubernetes rejects shrinking a PVC, so a lowered size must not fail the helm upgrade.
+    fn persistence_size_in_gib(&self, target: &DeploymentTarget) -> String {
+        let requested = &self.persistent_storage.size_in_gib;
+        let pvc_name = format!("{}-pvc", self.kube_name);
+        let pvcs: Api<PersistentVolumeClaim> = Api::namespaced(target.kube.client(), target.environment.namespace());
+        let existing = match block_on(pvcs.get_opt(&pvc_name)) {
+            Ok(pvc) => pvc.and_then(|pvc| pvc.spec?.resources?.requests?.get("storage").map(|size| size.0.clone())),
+            Err(err) => {
+                warn!("Cannot read PVC {pvc_name}, using requested size {requested}: {err}");
+                None
+            }
+        };
+        keep_existing_pvc_size_if_larger(requested, existing.as_deref())
+    }
+
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> TerraformServiceTeraContext {
         let mut environment_variables = add_cloud_provider_credentials_if_necessary(
             self.get_environment_variables(),
@@ -306,7 +324,7 @@ impl<T: CloudProvider> TerraformService<T> {
                 gpu_limit: self.gpu_limit.map(u32::from),
                 // max_nb_restart: self.max_nb_restart,
                 // max_duration_in_sec: self.max_duration.as_secs(),
-                persistence_size_in_gib: self.persistent_storage.size_in_gib.to_string(),
+                persistence_size_in_gib: self.persistence_size_in_gib(target),
                 persistence_storage_type: self.persistent_storage.storage_class.clone(),
             },
             registry: registry_info
@@ -666,6 +684,54 @@ pub(crate) struct TerraformServiceTeraContext {
     pub(crate) backend_config: BackendConfigTeraContext,
 }
 
+fn keep_existing_pvc_size_if_larger(requested: &KubernetesMemoryResourceUnit, existing: Option<&str>) -> String {
+    let Some(existing) = existing else {
+        return requested.to_string();
+    };
+    match quantity_to_bytes(existing) {
+        Some(existing_bytes) if existing_bytes > memory_unit_to_bytes(requested) => {
+            warn!("PVC cannot shrink, keeping existing size {existing} instead of requested {requested}");
+            existing.to_string()
+        }
+        Some(_) => requested.to_string(),
+        None => {
+            warn!("Cannot parse existing PVC size {existing}, using requested size {requested}");
+            requested.to_string()
+        }
+    }
+}
+
+fn memory_unit_to_bytes(unit: &KubernetesMemoryResourceUnit) -> u128 {
+    match unit {
+        KubernetesMemoryResourceUnit::MebiByte(v) => u128::from(*v) << 20,
+        KubernetesMemoryResourceUnit::MegaByte(v) => u128::from(*v) * 1000u128.pow(2),
+        KubernetesMemoryResourceUnit::GibiByte(v) => u128::from(*v) << 30,
+        KubernetesMemoryResourceUnit::GigaByte(v) => u128::from(*v) * 1000u128.pow(3),
+    }
+}
+
+// Integer Kubernetes quantities only; a fractional one ("1.5Gi") returns None.
+fn quantity_to_bytes(quantity: &str) -> Option<u128> {
+    let (value, suffix) = quantity.split_at(quantity.find(|c: char| !c.is_ascii_digit()).unwrap_or(quantity.len()));
+    let multiplier: u128 = match suffix {
+        "" => 1,
+        "k" => 1000,
+        "M" => 1000u128.pow(2),
+        "G" => 1000u128.pow(3),
+        "T" => 1000u128.pow(4),
+        "P" => 1000u128.pow(5),
+        "E" => 1000u128.pow(6),
+        "Ki" => 1 << 10,
+        "Mi" => 1 << 20,
+        "Gi" => 1 << 30,
+        "Ti" => 1 << 40,
+        "Pi" => 1 << 50,
+        "Ei" => 1 << 60,
+        _ => return None,
+    };
+    value.parse::<u128>().ok().map(|value| value * multiplier)
+}
+
 pub(crate) fn is_terraform_noop(action: &TerraformAction) -> bool {
     matches!(action, TerraformAction::TerraformNoop)
 }
@@ -677,6 +743,18 @@ mod tests {
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
     use crate::tera_utils::render_one_off;
     use tera::Context;
+
+    #[test]
+    fn test_keep_existing_pvc_size_if_larger() {
+        let gib = KubernetesMemoryResourceUnit::GibiByte;
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(2), Some("20Gi")), "20Gi");
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(30), Some("20Gi")), "30Gi");
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(2), None), "2Gi");
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(2), Some("1Ti")), "1Ti");
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(2), Some("20480Mi")), "20480Mi");
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(20), Some("20G")), "20Gi");
+        assert_eq!(keep_existing_pvc_size_if_larger(&gib(2), Some("1.5Ti")), "2Gi");
+    }
 
     #[test]
     fn test_add_credentials_when_flag_is_true() {
