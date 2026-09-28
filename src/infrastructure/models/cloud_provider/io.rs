@@ -19,12 +19,14 @@ use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
 use base64::engine::general_purpose;
 use ipnet::IpNet;
+use regex::Regex;
 use reqwest::StatusCode;
 use serde::Deserialize as SerdeDeserialize;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::str;
+use std::sync::LazyLock;
 use std::time::Duration;
 use thiserror::Error;
 
@@ -33,6 +35,10 @@ pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
 ];
 const ENVOY_CLIENT_VALIDATION_SECRET_NAME_PREFIX: &str = "envoy-client-validation-";
 const ENVOY_CLIENT_VALIDATION_MAX_CA_CERTIFICATES: usize = 8;
+static AWS_CUSTOMER_MANAGED_IAM_POLICY_ARN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^arn:aws(?:-us-gov|-cn)?:iam::[0-9]{12}:policy/(?:[A-Za-z0-9+=,.@_-]+/)*[A-Za-z0-9+=,.@_-]+$")
+        .expect("customer-managed IAM policy ARN pattern is valid")
+});
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum InputError {
@@ -589,6 +595,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_enable_nat_gateway_secondary_eip: bool,
     #[serde(alias = "aws.ecr.enable_pull_through_cache")]
     pub aws_ecr_enable_pull_through_cache: bool,
+    #[serde(alias = "aws.eks.node_iam_policy_arns")]
+    pub aws_eks_node_iam_policy_arns: Vec<String>,
     #[serde(alias = "aws.eks.enable_alb_controller")]
     pub aws_eks_enable_alb_controller: bool,
     #[serde(
@@ -831,6 +839,7 @@ impl Default for ClusterAdvancedSettings {
             aws_vpc_flow_logs_retention_days: 365,
             aws_vpc_enable_nat_gateway_secondary_eip: false,
             aws_ecr_enable_pull_through_cache: false,
+            aws_eks_node_iam_policy_arns: Vec::new(),
             aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
             database_postgresql_deny_any_access: false,
@@ -922,6 +931,19 @@ impl Default for ClusterAdvancedSettings {
 
 impl ClusterAdvancedSettings {
     pub fn validate(&self, event_details: EventDetails) -> Result<(), Box<EngineError>> {
+        let mut unique_node_iam_policy_arns = HashSet::new();
+        for arn in &self.aws_eks_node_iam_policy_arns {
+            if !AWS_CUSTOMER_MANAGED_IAM_POLICY_ARN.is_match(arn) || !unique_node_iam_policy_arns.insert(arn) {
+                return Err(Box::new(EngineError::new_invalid_engine_payload_invalid_field_value(
+                    event_details,
+                    InputError::InvalidInputFieldValue {
+                        field_name: "aws.eks.node_iam_policy_arns".to_string(),
+                        message: format!("invalid or duplicate customer-managed IAM policy ARN: {arn}"),
+                    },
+                )));
+            }
+        }
+
         // AWS Cloudwatch EKS logs retention days
         if !validate_aws_cloudwatch_eks_logs_retention_days(self.aws_cloudwatch_eks_logs_retention_days) {
             return Err(Box::new(EngineError::new_aws_wrong_cloudwatch_retention_configuration(
@@ -1142,6 +1164,57 @@ mod tests {
         let enabled_settings: ClusterAdvancedSettings =
             serde_json::from_str(r#"{"aws.ecr.enable_pull_through_cache": true}"#).unwrap();
         assert!(enabled_settings.aws_ecr_enable_pull_through_cache);
+    }
+
+    #[test]
+    fn test_aws_node_iam_policy_arns_setting_deserialization() {
+        let default_settings: ClusterAdvancedSettings = serde_json::from_str("{}").unwrap();
+        assert!(default_settings.aws_eks_node_iam_policy_arns.is_empty());
+
+        let settings: ClusterAdvancedSettings = serde_json::from_str(
+            r#"{"aws.eks.node_iam_policy_arns":["arn:aws:iam::123456789012:policy/team/EcrCache"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            settings.aws_eks_node_iam_policy_arns,
+            vec!["arn:aws:iam::123456789012:policy/team/EcrCache"]
+        );
+    }
+
+    #[test]
+    fn test_aws_node_iam_policy_arns_validation() {
+        let event_details = || {
+            EventDetails::new(
+                None,
+                QoveryIdentifier::default(),
+                QoveryIdentifier::default(),
+                "".to_string(),
+                Stage::Infrastructure(crate::events::InfrastructureStep::ValidateApiInput),
+                Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
+            )
+        };
+
+        let valid_arn = "arn:aws:iam::123456789012:policy/team/EcrCache";
+        let valid_settings = ClusterAdvancedSettings {
+            aws_eks_node_iam_policy_arns: vec![valid_arn.to_string()],
+            ..Default::default()
+        };
+        assert!(valid_settings.validate(event_details()).is_ok());
+
+        for invalid_arns in [
+            vec!["arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy".to_string()],
+            vec!["arn:aws:iam::123456789012:role/NodeRole".to_string()],
+            vec![valid_arn.to_string(), valid_arn.to_string()],
+        ] {
+            let settings = ClusterAdvancedSettings {
+                aws_eks_node_iam_policy_arns: invalid_arns.clone(),
+                ..Default::default()
+            };
+            assert!(
+                settings.validate(event_details()).is_err(),
+                "invalid or duplicate policy ARNs must be rejected: {invalid_arns:?}"
+            );
+        }
     }
 
     #[test]

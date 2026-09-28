@@ -138,6 +138,7 @@ resource "aws_eks_node_group" "karpenter_controller" {
     aws_iam_role_policy_attachment.karpenter_eks_worker_policy_node,
     aws_iam_role_policy_attachment.karpenter_eks_cni_policy,
     aws_iam_role_policy_attachment.karpenter_ec2_container_registry_read_only,
+    aws_iam_role_policy_attachment.karpenter_nodes_customer_policy,
     aws_eks_cluster.eks_cluster,
   ]
 }
