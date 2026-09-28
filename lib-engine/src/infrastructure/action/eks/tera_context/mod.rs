@@ -211,6 +211,7 @@ pub fn eks_tera_context(
         "aws_ecr_enable_pull_through_cache",
         &kubernetes.is_ecr_pull_through_cache_enabled(),
     );
+    context.insert("aws_eks_node_iam_policy_arns", &advanced_settings.aws_eks_node_iam_policy_arns);
 
     let rds_zone_a_subnet_blocks = format_ips(&options.rds_zone_a_subnet_blocks);
     let rds_zone_b_subnet_blocks = format_ips(&options.rds_zone_b_subnet_blocks);
