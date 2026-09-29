@@ -7,8 +7,8 @@
 
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::qovery_blueprint_manifest::{
-    BackendMode, BlueprintChart, BlueprintEngine, BlueprintOutput, BlueprintResources, BlueprintSpec, CredentialMode,
-    QoveryBlueprintManifest,
+    BackendMode, BlueprintChart, BlueprintEngine, BlueprintHelmPort, BlueprintOutput, BlueprintResources,
+    BlueprintSpec, CredentialMode, QoveryBlueprintManifest,
 };
 use crate::io_models::blueprint::BlueprintSpecOverrides;
 use serde::Serialize;
@@ -91,6 +91,7 @@ pub struct ResolvedHelmSpec {
     pub arguments: Vec<String>,
     pub allow_cluster_wide_resources: bool,
     pub outputs: Vec<BlueprintOutput>,
+    pub ports: Vec<BlueprintHelmPort>,
 }
 
 impl ResolvedBlueprintSpec {
@@ -144,7 +145,7 @@ impl ResolvedBlueprintSpec {
                         .ok_or(BlueprintError::MissingEngineVersion)?,
                 })
             }
-            BlueprintEngine::Helm { chart, outputs } => {
+            BlueprintEngine::Helm { chart, outputs, ports } => {
                 let timeout_sec = resolve_timeout(spec, overrides, DEFAULT_HELM_TIMEOUT_SEC);
                 ResolvedBlueprintSpec::Helm(ResolvedHelmSpec {
                     chart: chart.clone(),
@@ -154,6 +155,7 @@ impl ResolvedBlueprintSpec {
                     arguments: spec.arguments.clone(),
                     allow_cluster_wide_resources: spec.allow_cluster_wide_resources,
                     outputs: outputs.clone(),
+                    ports: ports.clone(),
                 })
             }
         };
@@ -304,8 +306,8 @@ mod tests {
     use super::*;
     use crate::blueprint::models::error::BlueprintError;
     use crate::blueprint::models::qovery_blueprint_manifest::{
-        BlueprintBackend, BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintKind, BlueprintMetadata,
-        BlueprintSpec,
+        BlueprintBackend, BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintHelmPortProtocol,
+        BlueprintKind, BlueprintMetadata, BlueprintSpec,
     };
     use std::collections::HashMap;
 
@@ -358,6 +360,7 @@ mod tests {
                     version: "20.11.3".into(),
                 },
                 outputs: vec![],
+                ports: vec![],
             },
             credentials: BlueprintCredentials::default(),
             backend: BlueprintBackend::default(),
@@ -460,6 +463,30 @@ mod tests {
         let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &None));
         assert_eq!(helm.chart.name, "redis");
         assert_eq!(helm.chart.version, "20.11.3");
+    }
+
+    #[test]
+    fn helm_carries_ports() {
+        let port = BlueprintHelmPort {
+            name: "http".into(),
+            service_name: "grafana".into(),
+            internal_port: 80,
+            external_port: 443,
+            protocol: BlueprintHelmPortProtocol::Http,
+            is_default: true,
+        };
+        let mut spec = helm_spec();
+        spec.engine = BlueprintEngine::Helm {
+            chart: BlueprintChart {
+                repository: "https://grafana-community.github.io/helm-charts".into(),
+                name: "grafana".into(),
+                version: "13.2.5".into(),
+            },
+            outputs: vec![],
+            ports: vec![port.clone()],
+        };
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(spec), &None));
+        assert_eq!(helm.ports, vec![port]);
     }
 
     // -- Credential overrides --

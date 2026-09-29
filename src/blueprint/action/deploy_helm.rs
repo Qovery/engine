@@ -1,6 +1,7 @@
 use crate::blueprint::action::{render_and_apply, render_and_diff};
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
+use crate::blueprint::models::qovery_blueprint_manifest::BlueprintHelmPort;
 use crate::blueprint::models::spec::ResolvedHelmSpec;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -29,6 +30,7 @@ struct BlueprintHelmTeraContext {
     import_id: Option<String>,
     blueprint_id: String,
     icon_uri: String,
+    ports: Vec<BlueprintHelmPort>,
 }
 
 fn infer_chart_repository_kind(repository: &str) -> &'static str {
@@ -184,6 +186,7 @@ impl BlueprintHelmTeraContext {
             import_id: request.import_id.clone(),
             blueprint_id: request.long_id.to_string(),
             icon_uri: request.icon.clone(),
+            ports: spec.ports.clone(),
         }
     }
 }
@@ -191,7 +194,9 @@ impl BlueprintHelmTeraContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintChart, CredentialMode};
+    use crate::blueprint::models::qovery_blueprint_manifest::{
+        BlueprintChart, BlueprintHelmPortProtocol, CredentialMode,
+    };
     use crate::blueprint::models::spec::DEFAULT_BLUEPRINT_DESCRIPTION;
     use crate::io_models::blueprint::BlueprintVariable;
     use crate::template::generate_and_copy_all_files_into_dir;
@@ -247,6 +252,7 @@ mod tests {
             arguments: vec!["--atomic".into()],
             allow_cluster_wide_resources: false,
             outputs: vec![],
+            ports: vec![],
         }
     }
 
@@ -443,5 +449,54 @@ mod tests {
         let error = render_values_yaml(dir.path(), &[]).unwrap_err();
 
         assert!(error.contains("datadog_site"), "cause was swallowed: {error}");
+    }
+
+    fn port(name: &str, service: &str, internal: u16, is_default: bool) -> BlueprintHelmPort {
+        BlueprintHelmPort {
+            name: name.into(),
+            service_name: service.into(),
+            internal_port: internal,
+            external_port: 443,
+            protocol: BlueprintHelmPortProtocol::Http,
+            is_default,
+        }
+    }
+
+    #[test]
+    fn generate_helm_tf_omits_ports_when_none_declared() {
+        let result = render_template(&test_spec(), &test_request(), &test_info(), None);
+
+        assert!(!result.contains("ports = {"), "{result}");
+    }
+
+    #[test]
+    fn generate_helm_tf_renders_declared_ports() {
+        let mut spec = test_spec();
+        spec.ports = vec![port("http", "grafana", 80, false)];
+
+        let result = render_template(&spec, &test_request(), &test_info(), None);
+
+        assert!(result.contains("ports = {"), "{result}");
+        assert!(result.contains(r#""http" = {"#), "{result}");
+        assert!(result.contains(r#"service_name  = "grafana""#), "{result}");
+        assert!(result.contains("internal_port = 80"), "{result}");
+        assert!(result.contains("external_port = 443"), "{result}");
+        assert!(result.contains(r#"protocol      = "HTTP""#), "{result}");
+        // A single port is always the default one, even when the manifest leaves isDefault unset.
+        assert!(result.contains("is_default    = true"), "{result}");
+    }
+
+    #[test]
+    fn generate_helm_tf_keeps_is_default_with_several_ports() {
+        let mut spec = test_spec();
+        spec.ports = vec![
+            port("ui", "signoz", 8080, true),
+            port("otlp", "signoz-otel-collector", 4318, false),
+        ];
+
+        let result = render_template(&spec, &test_request(), &test_info(), None);
+
+        assert_eq!(result.matches("is_default    = true").count(), 1, "{result}");
+        assert_eq!(result.matches("is_default    = false").count(), 1, "{result}");
     }
 }
