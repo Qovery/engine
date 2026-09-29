@@ -255,7 +255,11 @@ impl<T: CloudProvider> Job<T> {
                         &target.kubernetes.advanced_settings().registry_mirroring_mode,
                         target.container_registry.registry_info(),
                     );
-                let image_full = format!("{repository}/{image_name}:{image_tag}");
+                let image_full = if source.is_pulled_from_source(&registry_endpoint) {
+                    source.source_image_full()
+                } else {
+                    format!("{repository}/{image_name}:{image_tag}")
+                };
                 (image_full, image_tag)
             }
             ImageSource::Build { source } => (source.image.full_image_name_with_tag(), source.image.tag.clone()),
@@ -309,6 +313,9 @@ impl<T: CloudProvider> Job<T> {
                 deployment_affinity_node_preferred,
             },
             registry: match &self.image_source {
+                ImageSource::Registry { source } if source.is_pulled_from_source(&registry_endpoint) => {
+                    source.source_docker_json_config()
+                }
                 ImageSource::Registry { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
                     registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
                     repository_name: None,

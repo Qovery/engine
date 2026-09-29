@@ -48,6 +48,8 @@ pub enum NodeManager {
 pub enum ActionableFeature {
     Metrics,
     EfsAddon,
+    // Kapsule only: sets `registry.mirroring_mode = Disabled` on the test cluster
+    DisabledRegistryMirroring,
 }
 
 pub trait Cluster<T, U> {

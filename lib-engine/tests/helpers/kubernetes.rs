@@ -14,7 +14,7 @@ use qovery_engine::fs::workspace_directory;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+use qovery_engine::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::infrastructure::models::kubernetes::aws::eks::EKS;
@@ -494,6 +494,7 @@ pub fn get_environment_test_kubernetes(
                     ActionableFeature::EfsAddon => {
                         enable_efs_addon = true;
                     }
+                    ActionableFeature::DisabledRegistryMirroring => {}
                 }
             });
 
@@ -591,6 +592,14 @@ pub fn get_environment_test_kubernetes(
                 }
             });
             options.nat_gateway_parameters = nat_gateway_parameters;
+            let registry_mirroring_mode = if actionable_features
+                .iter()
+                .any(|feature| matches!(feature, ActionableFeature::DisabledRegistryMirroring))
+            {
+                RegistryMirroringMode::Disabled
+            } else {
+                RegistryMirroringMode::Service
+            };
 
             Box::new(
                 Kapsule::new(
@@ -610,6 +619,7 @@ pub fn get_environment_test_kubernetes(
                             default_kubernetes_storage_class,
                         ),
                         k8s_deploy_api_gateway: Some(true),
+                        registry_mirroring_mode,
                         ..Default::default()
                     },
                     None,

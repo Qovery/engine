@@ -53,6 +53,9 @@ pub enum Registry {
         long_id: Uuid,
         url: Url,
         credentials: Option<Credentials>,
+        // Qovery's own Docker Hub account, injected by core when the registry has none: never put it in the cluster
+        #[serde(default, alias = "qoveryManagedCredentials")]
+        qovery_managed_credentials: bool,
     },
 
     DoCr {
@@ -253,6 +256,57 @@ impl Registry {
             Registry::GcpArtifactRegistry { url, .. } => url.clone(),
         }
     }
+
+    /// Credentials a pod can keep using to pull from this registry after the deployment ended.
+    /// Pull secrets are written once per deployment, so temporary tokens would expire under a running pod.
+    pub(crate) fn direct_pull_credentials(&self) -> DirectPullCredentials<'_> {
+        match self {
+            Registry::DockerHub {
+                qovery_managed_credentials: true,
+                ..
+            } => DirectPullCredentials::Unsupported,
+            Registry::DockerHub { credentials, .. } | Registry::GenericCr { credentials, .. } => credentials
+                .as_ref()
+                .map_or(DirectPullCredentials::Anonymous, |c| DirectPullCredentials::Static {
+                    login: &c.login,
+                    password: &c.password,
+                }),
+            Registry::DoCr { token, .. } => DirectPullCredentials::Static {
+                login: token,
+                password: token,
+            },
+            Registry::ScalewayCr {
+                scaleway_secret_key, ..
+            } => DirectPullCredentials::Static {
+                login: "nologin",
+                password: scaleway_secret_key,
+            },
+            Registry::PublicEcr { .. } => DirectPullCredentials::Anonymous,
+            // ECR and Azure tokens are temporary; GCP registry urls carry the project in their path
+            Registry::PrivateEcr { .. } | Registry::AzureCr { .. } | Registry::GcpArtifactRegistry { .. } => {
+                DirectPullCredentials::Unsupported
+            }
+        }
+    }
+}
+
+impl Registry {
+    pub(crate) fn has_qovery_managed_credentials(&self) -> bool {
+        matches!(
+            self,
+            Registry::DockerHub {
+                qovery_managed_credentials: true,
+                ..
+            }
+        )
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum DirectPullCredentials<'a> {
+    Anonymous,
+    Static { login: &'a str, password: &'a str },
+    Unsupported,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]

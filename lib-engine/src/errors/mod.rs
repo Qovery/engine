@@ -1249,6 +1249,8 @@ pub enum Tag {
     ServiceInstantiationError,
     /// CannotGetRegistryCredentials
     CannotGetRegistryCredentials,
+    /// SourceImageNotFound: image pulled directly from its registry does not exist or cannot be read with its credentials
+    SourceImageNotFound,
     /// CannotCreateAwsServiceLinkedRoleForSpotInstance: represents an error while trying to create an AWS Service Linked Role
     CannotCreateAwsServiceLinkedRoleForSpotInstance,
     /// CannotUpgradeClusterDeprecatedKubernetesApiCallDetected: represents an error while trying to upgrade a cluster having deprecated Kubernetes API calls
@@ -5488,6 +5490,23 @@ impl EngineError {
         )
     }
 
+    /// Creates new error when an image pods pull directly from its registry cannot be found with the registry credentials.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image`: Full image reference, i.e. `ghcr.io/org/app:tag`.
+    pub fn new_source_image_not_found(event_details: EventDetails, image: &str) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::SourceImageNotFound,
+            format!("❌ Image {image} not found, or not readable with the credentials of its container registry"),
+            None,
+            None,
+            Some("Check that this image and tag exist, and that the container registry credentials configured in Qovery can read it. Mirroring is disabled on this cluster, so pods pull this image directly from its registry.".to_string()),
+        )
+    }
+
     /// Creates new error when attempting to create the service-linked rome for Spot Instances
     ///
     /// Arguments:
@@ -5702,6 +5721,31 @@ mod tests {
             engine_error
                 .message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
                 .contains(raw_message)
+        );
+    }
+
+    #[test]
+    fn test_source_image_not_found_names_the_image_and_keeps_its_tag_when_serialized() {
+        let engine_error = EngineError::new_source_image_not_found(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Uuid::new_v4().to_string(),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(Uuid::new_v4(), QoveryIdentifier::new_random().to_string()),
+            ),
+            "ghcr.io/didask/api:1.2",
+        );
+
+        assert_eq!(engine_error.tag(), &Tag::SourceImageNotFound);
+        assert!(engine_error.user_log_message().contains("ghcr.io/didask/api:1.2"));
+        assert!(engine_error.hint_message().is_some());
+        let (serialized, _) = crate::errors::io::EngineError::from(engine_error);
+        assert!(
+            serde_json::to_string(&serialized)
+                .unwrap()
+                .contains("\"SOURCE_IMAGE_NOT_FOUND\"")
         );
     }
 

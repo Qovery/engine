@@ -70,6 +70,27 @@ impl DockerError {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum RemoteImage {
+    Found,
+    // Missing, or the credentials cannot read it
+    NotFound,
+}
+
+fn is_missing_or_denied_image(inspect_stderr: &str) -> bool {
+    let stderr = inspect_stderr.to_lowercase();
+    [
+        "not found",
+        "manifest unknown",
+        "name unknown",
+        "unauthorized",
+        "denied",
+        "forbidden",
+    ]
+    .iter()
+    .any(|marker| stderr.contains(marker))
+}
+
 // Docker login when launched in parallel can mess up ~/.docker/config.json
 // We use a mutex that will force serialization of logins in order to avoid that
 // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
@@ -994,6 +1015,52 @@ impl Docker {
         match ret {
             Ok(_) => Ok(true),
             Err(DockerError::ExitStatusError { .. }) => Ok(false),
+            Err(err) => Err(err),
+        }
+    }
+
+    /// Like `does_image_exist_remotely`, but only a registry answer saying the image is missing or not readable
+    /// gives `NotFound`: network errors, rate limits or registry outages stay errors so callers can retry them.
+    pub fn inspect_remote_image(
+        &self,
+        image: &ContainerImage,
+        cmd_killer: &CommandKiller,
+    ) -> Result<RemoteImage, DockerError> {
+        info!("Docker inspect remote image {:?}", image);
+
+        let builder = self.configure_builder_for_http_registries(image);
+        let image_name = image.image_name();
+        let mut args = vec![
+            "--config",
+            self.config_path.path().to_str().unwrap_or(""),
+            "buildx",
+            "imagetools",
+            "inspect",
+            &image_name,
+        ];
+        if let Some(builder_name) = &builder.as_ref().and_then(|b| b.builder_name.as_deref()) {
+            args.push("--builder");
+            args.push(builder_name)
+        }
+
+        let mut stderr = String::new();
+        let ret = docker_exec(
+            &args,
+            &self.get_all_envs(&[]),
+            &mut |line| info!("{}", line),
+            &mut |line| {
+                warn!("{}", line);
+                stderr.push_str(&line);
+                stderr.push('\n');
+            },
+            cmd_killer,
+        );
+
+        match ret {
+            Ok(_) => Ok(RemoteImage::Found),
+            Err(DockerError::ExitStatusError { .. }) if is_missing_or_denied_image(&stderr) => {
+                Ok(RemoteImage::NotFound)
+            }
             Err(err) => Err(err),
         }
     }
@@ -2209,5 +2276,40 @@ mod build_cache_compression_tests {
             registry_cache_to("registry.example/app:cache", CacheCompression::Gzip),
             "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression=gzip,force-compression=true,ref=registry.example/app:cache"
         );
+    }
+}
+
+#[cfg(test)]
+mod remote_image_tests {
+    use super::is_missing_or_denied_image;
+
+    #[test]
+    fn should_treat_registry_refusals_as_missing_image() {
+        // `docker buildx imagetools inspect` output, captured against each registry on 2026-09-29
+        for stderr in [
+            "ERROR: public.ecr.aws/r3m4q3r9/qovery-ci:does-not-exist-tag: not found",
+            "ERROR: ghcr.io/actions/actions-runner:does-not-exist-tag: not found",
+            "ERROR: docker.io/library/nginx:does-not-exist-tag: not found",
+            "ERROR: failed to authorize: failed to fetch anonymous token: unexpected status from GET request to https://ghcr.io/token?scope=repository%3Aqovery%2Fdoes-not-exist-image%3Apull&service=ghcr.io: 403 Forbidden",
+            "ERROR: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed",
+            "ERROR: failed to authorize: failed to fetch anonymous token: unexpected status from GET request to https://gitlab.com/jwt/auth?scope=repository%3Agitlab-org%2Fdoes-not-exist%2Fimage%3Apull&service=container_registry: 403 Forbidden",
+            "ERROR: manifest unknown",
+            "error: failed to authorize: failed to fetch anonymous token: unexpected status: 401 Unauthorized",
+            "ERROR: denied: requested access to the resource is denied",
+        ] {
+            assert!(is_missing_or_denied_image(stderr), "{stderr}");
+        }
+    }
+
+    #[test]
+    fn should_not_treat_transient_failures_as_missing_image() {
+        for stderr in [
+            "toomanyrequests: You have reached your pull rate limit",
+            "ERROR: failed to do request: Head \"https://does-not-resolve.invalid/v2/app/manifests/1\": dial tcp: lookup does-not-resolve.invalid: no such host",
+            "unexpected status: 503 Service Unavailable",
+            "context deadline exceeded",
+        ] {
+            assert!(!is_missing_or_denied_image(stderr), "{stderr}");
+        }
     }
 }
