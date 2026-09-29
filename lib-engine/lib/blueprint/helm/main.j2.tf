@@ -55,6 +55,21 @@ resource "qovery_helm" "blueprint" {
 {% endif %}
   }
 
+{% if ports | length > 0 %}
+  ports = {
+{% for port in ports %}
+    "{{ port.name | hcl_string }}" = {
+      service_name  = "{{ port.serviceName | hcl_string }}"
+      internal_port = {{ port.internalPort }}
+      external_port = {{ port.externalPort }}
+      protocol      = "{{ port.protocol | hcl_string }}"
+      {#- A lone port is the default one whether or not the manifest says so. #}
+      is_default    = {% if port.isDefault or ports | length == 1 %}true{% else %}false{% endif %}
+    }
+{% endfor %}
+  }
+{% endif %}
+
 {% if arguments | length > 0 %}
   arguments = [
 {% for arg in arguments %}

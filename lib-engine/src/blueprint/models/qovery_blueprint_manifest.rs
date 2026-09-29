@@ -6,8 +6,8 @@
 // context variables against the cluster and sends them with the rest of the variable set.
 
 use serde::de::Error as DeError;
-use serde::{Deserialize, Deserializer};
-use std::collections::HashMap;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -115,6 +115,9 @@ struct BlueprintEngineConfigRaw {
     allow_cluster_wide_resources: bool,
     #[serde(default)]
     resources: Option<BlueprintResources>,
+    /// Ports the created Helm service exposes. Helm only.
+    #[serde(default)]
+    ports: Vec<BlueprintHelmPort>,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -141,6 +144,9 @@ impl<'de> Deserialize<'de> for BlueprintSpec {
     {
         let raw = BlueprintSpecRaw::deserialize(deserializer)?;
         let engine_cfg = raw.engine;
+        if !engine_cfg.ports.is_empty() && engine_cfg.engine_type != "helm" {
+            return Err(D::Error::custom("'ports' is only supported when engine.type is 'helm'"));
+        }
         let (engine, engine_version) = match engine_cfg.engine_type.as_str() {
             "terraform" => {
                 if engine_cfg.opentofu.is_some() {
@@ -199,10 +205,12 @@ impl<'de> Deserialize<'de> for BlueprintSpec {
                 let chart = engine_cfg
                     .chart
                     .ok_or_else(|| D::Error::custom("'chart' is required when engine.type is 'helm'"))?;
+                validate_helm_ports(&engine_cfg.ports).map_err(D::Error::custom)?;
                 (
                     BlueprintEngine::Helm {
                         chart,
                         outputs: raw.outputs,
+                        ports: engine_cfg.ports,
                     },
                     None,
                 )
@@ -237,7 +245,93 @@ pub enum BlueprintEngine {
     Helm {
         chart: BlueprintChart,
         outputs: Vec<BlueprintOutput>,
+        ports: Vec<BlueprintHelmPort>,
     },
+}
+
+/// A port of the created Helm service, mapped 1:1 onto `qovery_helm.ports`. Qovery exposes every
+/// Helm service port publicly, so declaring one is what gives the blueprint a public URL.
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BlueprintHelmPort {
+    pub name: String,
+    /// Kubernetes Service the port targets. The chart must give it a fixed name
+    /// (fullnameOverride): release names are derived from the Qovery service id.
+    pub service_name: String,
+    pub internal_port: u16,
+    /// Qovery publishes HTTP and gRPC on 443 whatever is requested, and the provider fails the
+    /// apply when the planned value differs from the one read back, so only 443 is accepted.
+    #[serde(default = "default_external_port")]
+    pub external_port: u16,
+    #[serde(default)]
+    pub protocol: BlueprintHelmPortProtocol,
+    #[serde(default)]
+    pub is_default: bool,
+}
+
+/// The protocols `qovery_helm.ports` accepts (terraform-provider-qovery `helm.AllowedProtocols`).
+/// TCP and UDP exist on applications and containers, not on Helm services.
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum BlueprintHelmPortProtocol {
+    #[default]
+    Http,
+    Grpc,
+}
+
+const HELM_PUBLIC_PORT: u16 = 443;
+/// Qovery puts the port name at the front of the public host (`<name>-z<env>-z<service>-gtw...`),
+/// so it must be a lowercase DNS label, short enough for the whole label to stay within 63 chars.
+const HELM_PORT_NAME_MAX_LENGTH: usize = 40;
+
+fn is_valid_port_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= HELM_PORT_NAME_MAX_LENGTH
+        && bytes
+            .iter()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
+        && bytes[0] != b'-'
+        && bytes[bytes.len() - 1] != b'-'
+}
+
+fn default_external_port() -> u16 {
+    HELM_PUBLIC_PORT
+}
+
+fn validate_helm_ports(ports: &[BlueprintHelmPort]) -> Result<(), String> {
+    let mut names = HashSet::new();
+    for port in ports {
+        // Missing fields are serde errors; these catch an explicit empty string.
+        if port.name.is_empty() {
+            return Err("'ports[].name' must not be empty".to_string());
+        }
+        if port.service_name.is_empty() {
+            return Err("'ports[].serviceName' must not be empty".to_string());
+        }
+        if !is_valid_port_name(&port.name) {
+            return Err(format!(
+                "port '{}': name must be lowercase letters, digits and hyphens, not starting or ending with a hyphen, max {HELM_PORT_NAME_MAX_LENGTH} chars: it is part of the public host name",
+                port.name
+            ));
+        }
+        if !names.insert(port.name.as_str()) {
+            return Err(format!("duplicate port name '{}' in 'ports'", port.name));
+        }
+        if port.internal_port == 0 {
+            return Err(format!("port '{}': internalPort must be 1-65535", port.name));
+        }
+        if port.external_port != HELM_PUBLIC_PORT {
+            return Err(format!(
+                "port '{}': externalPort must be {HELM_PUBLIC_PORT}, the only port Qovery publishes HTTP and gRPC on",
+                port.name
+            ));
+        }
+    }
+    if ports.len() > 1 && ports.iter().filter(|p| p.is_default).count() != 1 {
+        return Err("exactly one entry of 'ports' must set isDefault when several ports are declared".to_string());
+    }
+    Ok(())
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -370,7 +464,7 @@ spec:
       description: "Redis hostname"
 "#;
         let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
-        let BlueprintEngine::Helm { chart, outputs } = &manifest.spec.engine else {
+        let BlueprintEngine::Helm { chart, outputs, ports } = &manifest.spec.engine else {
             panic!("expected Helm engine");
         };
         assert_eq!(chart.name, "redis");
@@ -379,6 +473,166 @@ spec:
         assert_eq!(manifest.spec.arguments, vec!["--atomic", "--wait"]);
         assert!(manifest.spec.allow_cluster_wide_resources);
         assert_eq!(outputs.len(), 1);
+        assert!(ports.is_empty(), "no ports block means no ports");
+    }
+
+    fn helm_qbm_with_ports(ports: &str) -> String {
+        format!(
+            r#"
+kind: ServiceBlueprint
+spec:
+  engine:
+    type: helm
+    chart:
+      repository: "https://grafana-community.github.io/helm-charts"
+      name: "grafana"
+      version: "13.2.5"
+    ports:
+{ports}
+"#
+        )
+    }
+
+    #[test]
+    fn parse_helm_ports_with_defaults() {
+        let yaml = helm_qbm_with_ports(
+            r#"      - name: "http"
+        serviceName: "grafana"
+        internalPort: 80"#,
+        );
+        let manifest: QoveryBlueprintManifest = serde_yaml::from_str(&yaml).unwrap();
+        let BlueprintEngine::Helm { ports, .. } = &manifest.spec.engine else {
+            panic!("expected Helm engine");
+        };
+        assert_eq!(
+            ports,
+            &vec![BlueprintHelmPort {
+                name: "http".into(),
+                service_name: "grafana".into(),
+                internal_port: 80,
+                external_port: 443,
+                protocol: BlueprintHelmPortProtocol::Http,
+                is_default: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn parse_helm_ports_all_fields() {
+        let yaml = helm_qbm_with_ports(
+            r#"      - name: "ui"
+        serviceName: "signoz"
+        internalPort: 8080
+        protocol: "GRPC"
+        isDefault: true"#,
+        );
+        let manifest: QoveryBlueprintManifest = serde_yaml::from_str(&yaml).unwrap();
+        let BlueprintEngine::Helm { ports, .. } = &manifest.spec.engine else {
+            panic!("expected Helm engine");
+        };
+        assert_eq!(ports[0].external_port, 443);
+        assert_eq!(ports[0].protocol, BlueprintHelmPortProtocol::Grpc);
+        assert!(ports[0].is_default);
+    }
+
+    #[test]
+    fn reject_invalid_helm_ports() {
+        let cases = [
+            (
+                r#"      - name: "http"
+        serviceName: "grafana"
+        internalPort: 80
+        protocol: "SMTP""#,
+                "unknown variant `SMTP`",
+            ),
+            (
+                r#"      - name: "db"
+        serviceName: "postgres"
+        internalPort: 5432
+        protocol: "TCP""#,
+                "unknown variant `TCP`",
+            ),
+            (
+                r#"      - name: "http"
+        serviceName: "grafana"
+        internalPort: 80
+        externalPort: 8443"#,
+                "externalPort must be 443",
+            ),
+            (
+                r#"      - name: "Web UI"
+        serviceName: "grafana"
+        internalPort: 80"#,
+                "name must be lowercase letters",
+            ),
+            (
+                r#"      - name: ""
+        serviceName: "grafana"
+        internalPort: 80"#,
+                "'ports[].name' must not be empty",
+            ),
+            (
+                r#"      - name: "http"
+        serviceName: "grafana"
+        internalPort: 0"#,
+                "internalPort must be 1-65535",
+            ),
+            (
+                r#"      - name: "http"
+        serviceName: "a"
+        internalPort: 80
+      - name: "http"
+        serviceName: "b"
+        internalPort: 81"#,
+                "duplicate port name",
+            ),
+            (
+                r#"      - name: "a"
+        serviceName: "a"
+        internalPort: 80
+      - name: "b"
+        serviceName: "b"
+        internalPort: 81"#,
+                "exactly one entry",
+            ),
+        ];
+        for (ports, expected) in cases {
+            let err = serde_yaml::from_str::<QoveryBlueprintManifest>(&helm_qbm_with_ports(ports))
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains(expected), "expected '{expected}' in: {err}");
+        }
+    }
+
+    #[test]
+    fn port_name_must_be_a_short_dns_label() {
+        for name in ["http", "ui-2", &"a".repeat(40)] {
+            assert!(is_valid_port_name(name), "{name:?} should be accepted");
+        }
+        for name in ["", "Web", "web ui", "-http", "http-", "http_1", &"a".repeat(41)] {
+            assert!(!is_valid_port_name(name), "{name:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn reject_ports_on_terraform_engine() {
+        let yaml = r#"
+kind: ServiceBlueprint
+spec:
+  engine:
+    type: terraform
+    provider: AWS
+    terraform:
+      version: "1.9.7"
+    ports:
+      - name: "http"
+        serviceName: "x"
+        internalPort: 80
+"#;
+        let err = serde_yaml::from_str::<QoveryBlueprintManifest>(yaml)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("'ports' is only supported when engine.type is 'helm'"), "{err}");
     }
 
     #[test]
