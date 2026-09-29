@@ -8,7 +8,7 @@ import "placement/setting.pkl" as placementSetting
 import "placement/helm.pkl" as placementHelm
 
 // The Operator's per-cluster wiring comes from managed-values.yaml. Its product settings are the
-// CPU architecture the local demo builder needs, and where the Operator and its Engine worker Jobs
+// CPU architecture of builds and services, and where the Operator and its Engine worker Jobs
 // must run. Both features contribute to environmentVariables and own disjoint keys there.
 component: sdkEvaluate.Component = new {
   label = "Qovery Operator"

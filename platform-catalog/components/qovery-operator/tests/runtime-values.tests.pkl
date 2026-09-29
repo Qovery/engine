@@ -85,7 +85,7 @@ facts {
     }
   }
 
-  ["STANDARD describes the architecture as optional and compiles no demo worker settings"] {
+  ["STANDARD describes the architecture as optional and compiles no variable without one"] {
     !evaluate(contract.describeOperation, new Mapping {}, false).fields.first.required
     evaluate(contract.compileOperation, new Mapping {}, false).violations.isEmpty
     environment(evaluate(contract.compileOperation, new Mapping {}, false)).isEmpty
@@ -103,12 +103,29 @@ facts {
   ["only the two supported architectures are accepted"] {
     codes(evaluate(contract.validateOperation, new Mapping { ["cpuArchitectures"] = "RISCV" }, true)) == List("VALUE_NOT_ALLOWED")
     codes(evaluate(contract.validateOperation, new Mapping { ["cpuArchitectures"] = 64 }, true)) == List("INVALID_TYPE")
+    rejects(new Mapping { ["cpuArchitectures"] = "arm64" }, "cpuArchitectures")
   }
 
   ["QOVERY_DEMO compiles the configured CPU architecture"] {
     let (result = evaluate(contract.compileOperation, new Mapping { ["cpuArchitectures"] = "ARM64" }, true))
       result.violations.isEmpty
         && environment(result)["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] == "ARM64"
+  }
+
+  ["STANDARD compiles the configured CPU architecture"] {
+    for (architecture in List("AMD64", "ARM64")) {
+      let (
+        result =
+          evaluate(
+            contract.compileOperation,
+            new Mapping { ["cpuArchitectures"] = architecture },
+            false,
+          )
+      )
+        result.violations.isEmpty
+          && environment(result)
+            == new Mapping { ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = architecture }
+    }
   }
 
   ["placement is described as three optional settings"] {
@@ -241,21 +258,23 @@ facts {
       == List("UNKNOWN_FIELD")
   }
 
-  ["the demo architecture and the placement share the Operator environment"] {
-    let (
-      result =
-        evaluate(
-          contract.compileOperation,
-          (selectorAndTolerations) { ["cpuArchitectures"] = "ARM64" },
-          true,
-        )
-    )
-      result.violations.isEmpty
-        && environment(result)
-          == new Mapping {
-            ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = "ARM64"
-            ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = #"{"karpenter.sh/nodepool":"stable"}"#
-            ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = #"[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"}]"#
-          }
+  ["the architecture and the placement share the Operator environment on demo and standard clusters"] {
+    for (demo in List(true, false)) {
+      let (
+        result =
+          evaluate(
+            contract.compileOperation,
+            (selectorAndTolerations) { ["cpuArchitectures"] = "ARM64" },
+            demo,
+          )
+      )
+        result.violations.isEmpty
+          && environment(result)
+            == new Mapping {
+              ["QOVERY_ENVIRONMENT_ENGINE_WORKER_CPU_ARCHITECTURES"] = "ARM64"
+              ["QOVERY_ENGINE_WORKER_NODE_SELECTOR"] = #"{"karpenter.sh/nodepool":"stable"}"#
+              ["QOVERY_ENGINE_WORKER_TOLERATIONS"] = #"[{"key":"nodepool/stable","value":"","effect":"NoSchedule","operator":"Equal"}]"#
+            }
+    }
   }
 }

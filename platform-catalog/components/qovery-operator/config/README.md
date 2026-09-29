@@ -10,15 +10,22 @@ Demo clusters activate the `QOVERY_DEMO` capability, which merges
   For example, Engine service version `v1.341.0` produces
   `public.ecr.aws/r3m4q3r9/engine:v1.341.0-slim`. The suffix stays separate from
   `engineWorker.imageRepository`, which must remain an untagged repository.
-- `QOVERY_ENVIRONMENT_ENGINE_WORKER_PROFILE: "LOCAL_DEMO"` — the Operator
-  interprets this profile to enable the Kubernetes builder on `ENVIRONMENT`
-  worker Jobs only. Infrastructure workers never receive builder settings.
+- `QOVERY_ENVIRONMENT_ENGINE_WORKER_PROFILE: "LOCAL_DEMO"` — the Operator turns
+  off the rootless mode of the Kubernetes builder, for the demo's HTTP registry,
+  and requires an explicit architecture. With rust-backend!722, every
+  `ENVIRONMENT` worker Job gets the builder, with or without this profile, and
+  infrastructure workers never do; older Operators enable it only for
+  `LOCAL_DEMO` and ignore `cpuArchitectures` elsewhere.
 
 The configuration is persisted in the Platform Template binding under the
-`qovery-operator` component. Its evaluator (`runtime-values/cpuArchitectures/`) requires
-`cpuArchitectures` when `QOVERY_DEMO` is active and adds it to the Operator environment. Bootstrap and
-Operator self-update therefore reuse the same explicit architecture without
-introducing cluster-specific runtime inputs.
+`qovery-operator` component. Its evaluator (`runtime-values/cpuArchitectures/`) adds
+`cpuArchitectures` to the Operator environment whenever it is set, and requires it when
+`QOVERY_DEMO` is active. Bootstrap and Operator self-update therefore reuse the same explicit
+architecture without introducing cluster-specific runtime inputs.
+
+`cpuArchitectures` is the architecture of the images built in the cluster and, for services that
+set none, of the nodes they run on. When it is empty, no variable is compiled and the Operator
+uses AMD64.
 
 ## Placement
 

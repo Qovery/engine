@@ -120,7 +120,7 @@
           "type": "string",
           "required": false,
           "label": "CPU architectures",
-          "description": "Native CPU architecture used by the local demo builder.",
+          "description": "Architecture of the images built in the cluster, and of the nodes of services that set none. AMD64 when empty.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -239,7 +239,7 @@
           "type": "string",
           "required": false,
           "label": "CPU architectures",
-          "description": "Native CPU architecture used by the local demo builder.",
+          "description": "Architecture of the images built in the cluster, and of the nodes of services that set none. AMD64 when empty.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -358,7 +358,7 @@
           "type": "string",
           "required": false,
           "label": "CPU architectures",
-          "description": "Native CPU architecture used by the local demo builder.",
+          "description": "Architecture of the images built in the cluster, and of the nodes of services that set none. AMD64 when empty.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -477,7 +477,7 @@
           "type": "string",
           "required": false,
           "label": "CPU architectures",
-          "description": "Native CPU architecture used by the local demo builder.",
+          "description": "Architecture of the images built in the cluster, and of the nodes of services that set none. AMD64 when empty.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
