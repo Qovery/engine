@@ -35,7 +35,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::constants::ASCII_BANNER;
-use crate::deployment_manager::{DeploymentManager, DeploymentManagerRunMode};
+use crate::deployment_manager::{DeploymentManager, DeploymentManagerRunMode, DeploymentRequestLog};
 use crate::grpc::GrpcEngineClient;
 use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
@@ -100,6 +100,7 @@ fn to_engine_task(
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
     log_file_writer: LogFileWriter,
+    request_log: DeploymentRequestLog,
 ) -> Result<Arc<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
@@ -187,9 +188,28 @@ fn to_engine_task(
     match mk_task() {
         Ok(task) => Ok(task),
         Err(err) => {
-            error!("{}", msg);
-            error!("receiving request but JSON decoding error occurred: {:?}", err);
+            match request_log {
+                DeploymentRequestLog::Full => {
+                    error!("{}", msg);
+                    error!("receiving request but JSON decoding error occurred: {:?}", err);
+                }
+                DeploymentRequestLog::Redacted => error!(
+                    "receiving request of {} bytes but JSON decoding error occurred: {}",
+                    msg.len(),
+                    decoding_error_for_log(&err, request_log)
+                ),
+            }
             Err(err)
+        }
+    }
+}
+
+// serde_json quotes the offending value in its message, and it can be a secret of the request
+fn decoding_error_for_log(err: &serde_json::Error, request_log: DeploymentRequestLog) -> String {
+    match request_log {
+        DeploymentRequestLog::Full => format!("{err}"),
+        DeploymentRequestLog::Redacted => {
+            format!("{:?} error at line {} column {}", err.classify(), err.line(), err.column())
         }
     }
 }
@@ -244,6 +264,10 @@ struct Cli {
     /// Execute at most one deployment request, then stop the engine process.
     #[arg(long, default_value_t = false, env = "RUN_ONCE")]
     run_once: bool,
+
+    /// Log only a summary of each deployment request, never its content. Set on engines running in customer clusters
+    #[arg(long, default_value_t = false, env = "REDACT_SECRETS_IN_LOGS")]
+    redact_secrets_in_logs: bool,
 
     /// Location of the binaries version file
     #[arg(long, env = "BIN_VERSION_FILE")]
@@ -458,6 +482,11 @@ pub fn main() -> io::Result<()> {
             .await
             .expect("Engine can't connect to gateway");
 
+        let request_log = if cli.redact_secrets_in_logs {
+            DeploymentRequestLog::Redacted
+        } else {
+            DeploymentRequestLog::Full
+        };
         let payload_to_engine_task = move |payload: String,
                                            deployment_info: &DeploymentInfo,
                                            grpc_client: &GrpcEngineClient,
@@ -483,13 +512,18 @@ pub fn main() -> io::Result<()> {
                 logger,
                 metrics_registry,
                 log_file_writer,
+                request_log,
             );
 
             match ret {
                 Ok(task) => Ok(task),
                 Err(err) => {
                     let execution_id = deployment_info.execution_id.clone();
-                    error!("Error while creating task for {}: {}", execution_id, err);
+                    error!(
+                        "Error while creating task for {}: {}",
+                        execution_id,
+                        decoding_error_for_log(&err, request_log)
+                    );
                     let event_details = EventDetails::new(
                         None,
                         QoveryIdentifier::new(Uuid::parse_str(&deployment_info.organization_id).unwrap_or_default()),
@@ -514,7 +548,11 @@ For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster ins
                         EngineError::new_invalid_engine_payload(
                             event_details.clone(),
                             &msg,
-                            Some(CommandError::new(msg.clone(), Some(format!("{err}")), None)),
+                            Some(CommandError::new(
+                                msg.clone(),
+                                Some(decoding_error_for_log(&err, request_log)),
+                                None,
+                            )),
                         ),
                         Some(message),
                     );
@@ -535,6 +573,7 @@ For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster ins
             } else {
                 DeploymentManagerRunMode::Daemon
             },
+            request_log,
         );
         mngr.run().await
     };
@@ -620,6 +659,21 @@ mod test {
     use uuid::Uuid;
 
     use crate::clean_configuration_directories;
+    use crate::decoding_error_for_log;
+    use crate::deployment_manager::DeploymentRequestLog;
+
+    #[test]
+    fn test_decoding_error_for_log_hides_the_quoted_value_only_when_redacted() {
+        let fake_secret = "fake-aws-secret-access-key";
+        let err = serde_json::from_str::<u32>(&format!(r#""{fake_secret}""#)).unwrap_err();
+
+        let redacted = decoding_error_for_log(&err, DeploymentRequestLog::Redacted);
+        let full = decoding_error_for_log(&err, DeploymentRequestLog::Full);
+
+        assert!(!redacted.contains(fake_secret));
+        assert_eq!(redacted, format!("Data error at line 1 column {}", err.column()));
+        assert!(full.contains(fake_secret));
+    }
 
     #[test]
     fn test_clean_configuration_directories() {

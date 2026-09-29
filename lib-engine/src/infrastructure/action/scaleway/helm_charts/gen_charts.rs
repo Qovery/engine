@@ -1,6 +1,7 @@
 use crate::helm::{
     ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode,
-    PriorityClass, QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, get_engine_helm_action_from_location,
+    PriorityClass, QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, client_side_engine_values_string,
+    get_engine_helm_action_from_location,
 };
 use crate::infrastructure::helm_charts::alloy_chart::{AlloyChart, promtail_uninstall_chart};
 use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
@@ -820,6 +821,7 @@ pub fn kapsule_helm_charts(
                     value: "2Gi".to_string(),
                 },
             ],
+            values_string: client_side_engine_values_string(),
             ..Default::default()
         },
         vertical_pod_autoscaler: None,

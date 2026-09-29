@@ -18,6 +18,7 @@ use qovery_engine::events::EngineEvent;
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
+use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -86,6 +87,12 @@ pub enum DeploymentManagerRunMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeploymentRequestLog {
+    Full,
+    Redacted,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum DeploymentManagerRunOutcome {
     Continue,
     NoDeploymentAvailable,
@@ -121,6 +128,7 @@ pub struct DeploymentManager {
     mk_engine_task: MkEngineTask,
     log_file_writer: LogFileWriter,
     run_mode: DeploymentManagerRunMode,
+    request_log: DeploymentRequestLog,
 }
 
 impl DeploymentManager {
@@ -132,6 +140,7 @@ impl DeploymentManager {
         mk_engine_task: MkEngineTask,
         log_file_writer: LogFileWriter,
         run_mode: DeploymentManagerRunMode,
+        request_log: DeploymentRequestLog,
     ) -> Self {
         METRICS_NB_RUNNING_TASKS.set(0);
         let deployment_request = match task_type {
@@ -159,6 +168,7 @@ impl DeploymentManager {
             mk_engine_task,
             log_file_writer,
             run_mode,
+            request_log,
         }
     }
 
@@ -317,7 +327,7 @@ impl DeploymentManager {
 
                     match msg.request {
                         Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
-                            info!("Received new deployment task: {}", payload);
+                            info!("Received new deployment task: {}", deployment_task_log(self.request_log, &deployment.deployment_info, &msg.message_id, &payload));
                             let task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, logger.clone(), metrics_registry.clone(), log_file_writer.clone());
                             let upstream = UpstreamGatewayContext::new(msg_stream, close_upstream_tx, logger, metrics_registry, log_file_writer);
                             match task {
@@ -458,7 +468,7 @@ impl DeploymentManager {
                         Some(Ok(msg)) => {
                             match msg.request {
                                 Some(engine_message_rx::Request::DeploymentRequest(payload)) => {
-                                    info!("Received new deployment task: {}", payload);
+                                    info!("Received new deployment task: {}", deployment_task_log(self.request_log, &deployment.deployment_info, &msg.message_id, &payload));
                                     let new_task = (self.mk_engine_task)(payload, &deployment.deployment_info, &self.engine_client, upstream.logger(), upstream.metrics_registry(), upstream.log_file_writer().clone());
                                     match new_task {
                                         Ok(new_task) => {
@@ -529,9 +539,28 @@ impl DeploymentManager {
     }
 }
 
+// The payload carries cloud provider, registry and git credentials: engines in customer clusters log only its size.
+fn deployment_task_log<'a>(
+    request_log: DeploymentRequestLog,
+    deployment_info: &DeploymentInfo,
+    message_id: &str,
+    payload: &'a str,
+) -> Cow<'a, str> {
+    match request_log {
+        DeploymentRequestLog::Full => Cow::Borrowed(payload),
+        DeploymentRequestLog::Redacted => Cow::Owned(format!(
+            "execution {}, message {message_id}, {} bytes",
+            deployment_info.execution_id,
+            payload.len()
+        )),
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::deployment_manager::{DeploymentManager, DeploymentManagerRunMode};
+    use crate::deployment_manager::{
+        DeploymentManager, DeploymentManagerRunMode, DeploymentRequestLog, deployment_task_log,
+    };
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
         ClusterFailureContextRequest, ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx,
@@ -812,6 +841,7 @@ mod test {
             Box::new(mk_engine_task),
             Default::default(),
             DeploymentManagerRunMode::Daemon,
+            DeploymentRequestLog::Full,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(500);
         let fut = deployment_mngr.run();
@@ -852,6 +882,7 @@ mod test {
             Box::new(mk_engine_task),
             Default::default(),
             DeploymentManagerRunMode::RunOnce,
+            DeploymentRequestLog::Full,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(500);
 
@@ -892,6 +923,7 @@ mod test {
             Box::new(mk_engine_task),
             Default::default(),
             DeploymentManagerRunMode::RunOnce,
+            DeploymentRequestLog::Full,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(10);
 
@@ -948,6 +980,7 @@ mod test {
             Box::new(mk_engine_task),
             Default::default(),
             DeploymentManagerRunMode::RunOnce,
+            DeploymentRequestLog::Full,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(100);
         deployment_mngr.deadline_for_new_task = Duration::from_millis(100);
@@ -1015,6 +1048,7 @@ mod test {
             Box::new(mk_engine_task),
             Default::default(),
             DeploymentManagerRunMode::Daemon,
+            DeploymentRequestLog::Full,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(200);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
@@ -1162,6 +1196,7 @@ mod test {
             Box::new(mk_engine_task),
             Default::default(),
             DeploymentManagerRunMode::Daemon,
+            DeploymentRequestLog::Full,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(100);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
@@ -1176,5 +1211,25 @@ mod test {
         assert!(!_task.is_terminated());
         // it should have been called twice, and no more as deadline should have elapsed after
         assert_eq!(nb_exec_deployment_called.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_deployment_task_log_redacts_the_payload_only_when_asked() {
+        let fake_secret = "fake-aws-secret-access-key";
+        let payload = format!(r#"{{"cloud_provider":{{"options":{{"secret_access_key":"{fake_secret}"}}}}}}"#);
+        let deployment_info = DeploymentInfo {
+            execution_id: "execution-id".to_string(),
+            ..Default::default()
+        };
+
+        let redacted = deployment_task_log(DeploymentRequestLog::Redacted, &deployment_info, "message-id", &payload);
+        let full = deployment_task_log(DeploymentRequestLog::Full, &deployment_info, "message-id", &payload);
+
+        assert!(!redacted.contains(fake_secret));
+        assert_eq!(
+            redacted,
+            format!("execution execution-id, message message-id, {} bytes", payload.len())
+        );
+        assert_eq!(full, payload);
     }
 }
