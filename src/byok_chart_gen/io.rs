@@ -251,6 +251,7 @@ impl ValuesFile {
                     ("DOCKER_HOST".to_string(), "tcp://0.0.0.0:2375".to_string()),
                     ("GRPC_SERVER".to_string(), "*engineGatewayUrl".to_string()),
                     ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
+                    ("REDACT_SECRETS_IN_LOGS".to_string(), "true".to_string()),
                 ]),
             }),
             ingress_nginx: Some(ChartConfig { override_chart: None }),
@@ -523,6 +524,7 @@ impl ValuesFile {
                 ("DOCKER_HOST".to_string(), "tcp://0.0.0.0:2375".to_string()),
                 ("GRPC_SERVER".to_string(), "*engineGatewayUrl".to_string()),
                 ("LIB_ROOT_DIR".to_string(), "/home/qovery/lib".to_string()),
+                ("REDACT_SECRETS_IN_LOGS".to_string(), "true".to_string()),
             ]),
         });
 
@@ -565,6 +567,26 @@ mod tests {
             assert!(values["qovery"].get("operatorVersion").is_none());
             assert!(values.get("qovery-cluster-agent").is_some());
             assert!(values.get("qovery-shell-agent").is_some());
+        }
+    }
+
+    #[test]
+    fn byok_engine_redacts_secrets_in_logs() {
+        for values in [
+            ValuesFile::new_minimal(),
+            ValuesFile::new_aws(),
+            ValuesFile::new_gcp(),
+            ValuesFile::new_scaleway(),
+            ValuesFile::new_azure(),
+            ValuesFile::new_local(),
+            ValuesFile::new_demo_local(),
+        ] {
+            let values = serde_yaml::to_value(values).expect("BYOK values must serialize");
+
+            assert_eq!(
+                values["qovery-engine"]["environmentVariables"]["REDACT_SECRETS_IN_LOGS"],
+                serde_yaml::Value::String("true".to_string())
+            );
         }
     }
 

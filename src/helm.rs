@@ -1193,12 +1193,29 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
     }
 }
 
+// The in-cluster engine runs in the customer cluster. A string, as the chart puts its env vars in a Secret's stringData
+pub fn client_side_engine_values_string() -> Vec<ChartSetValue> {
+    vec![ChartSetValue {
+        key: "environmentVariables.REDACT_SECRETS_IN_LOGS".to_string(),
+        value: "true".to_string(),
+    }]
+}
+
 #[cfg(test)]
 mod tests {
     use crate::helm::{
         CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaControllerResources, VpaTargetRefApiVersion,
-        VpaTargetRefKind,
+        VpaTargetRefKind, client_side_engine_values_string,
     };
+
+    #[test]
+    fn client_side_engine_redacts_secrets_in_logs() {
+        let values = client_side_engine_values_string();
+
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].key, "environmentVariables.REDACT_SECRETS_IN_LOGS");
+        assert_eq!(values[0].value, "true");
+    }
     use crate::io_models::models::KubernetesCpuResourceUnit;
     use crate::io_models::models::KubernetesMemoryResourceUnit;
 

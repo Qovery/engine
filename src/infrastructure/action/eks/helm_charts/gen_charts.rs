@@ -1,7 +1,7 @@
 use crate::helm::{
     ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode,
     PriorityClass, QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
-    get_engine_helm_action_from_location,
+    client_side_engine_values_string, get_engine_helm_action_from_location,
 };
 use crate::infrastructure::action::eks::helm_charts::nvidia_gpu_k8s_device_plugin_chart::NvidiaGpuK8sDevicePluginChart;
 use crate::infrastructure::helm_charts::alloy_chart::{AlloyChart, promtail_uninstall_chart};
@@ -1039,6 +1039,7 @@ pub(super) fn eks_helm_charts(
                     value: "2Gi".to_string(),
                 },
             ],
+            values_string: client_side_engine_values_string(),
             ..Default::default()
         },
         vertical_pod_autoscaler: None,
