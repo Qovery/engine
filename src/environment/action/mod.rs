@@ -16,6 +16,7 @@ pub mod deploy_namespace;
 mod deploy_router;
 mod deploy_terraform;
 mod deploy_terraform_service;
+mod helm_release_custom_resources;
 mod pause_service;
 mod restart_service;
 #[cfg(test)]
