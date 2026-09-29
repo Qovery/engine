@@ -1,5 +1,5 @@
 use crate::cmd::command::CommandKiller;
-use crate::cmd::docker::ContainerImage;
+use crate::cmd::docker::{ContainerImage, RemoteImage};
 use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage};
@@ -31,7 +31,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
+use url::Url;
 use uuid::Uuid;
+
+const SOURCE_IMAGE_CHECK_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
 // specific to AWS
 pub fn delete_nlb_or_alb_service(
@@ -122,9 +125,23 @@ pub fn delete_cached_image(
     target: &DeploymentTarget,
     logger: &dyn Fn(String),
 ) -> Result<(), ContainerRegistryError> {
-    if target.kubernetes.advanced_settings().registry_mirroring_mode == RegistryMirroringMode::Cluster {
+    match target.kubernetes.advanced_settings().registry_mirroring_mode {
         // Do no delete image when mirroring mode is Cluster because it can be used by another service
-        return Ok(());
+        RegistryMirroringMode::Cluster => return Ok(()),
+        // Nothing to clean when the running image was pulled from its source registry, not from a mirror
+        RegistryMirroringMode::Disabled
+            if !last_image.as_deref().is_some_and(|image| {
+                is_hosted_on(
+                    image,
+                    &target
+                        .container_registry
+                        .get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str())),
+                )
+            }) =>
+        {
+            return Ok(());
+        }
+        RegistryMirroringMode::Disabled | RegistryMirroringMode::Service => {}
     }
 
     // Delete previous image from cache to cleanup resources
@@ -162,6 +179,17 @@ pub fn delete_cached_image(
     Ok(())
 }
 
+fn is_hosted_on(image: &str, registry: &Url) -> bool {
+    let host = registry.host_str().unwrap_or_default();
+    let registry_host = match registry.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host.to_string(),
+    };
+    image
+        .split_once('/')
+        .is_some_and(|(image_host, _)| image_host.eq_ignore_ascii_case(&registry_host))
+}
+
 pub fn mirror_image_if_necessary(
     service_id: &Uuid,
     source: &RegistryImageSource,
@@ -172,6 +200,27 @@ pub fn mirror_image_if_necessary(
 ) -> Result<(), Box<EngineError>> {
     let mirror_record = metrics_registry.start_record(*service_id, StepLabel::Service, StepName::MirrorImage);
 
+    if source.is_pulled_from_source(
+        &target
+            .container_registry
+            .get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str())),
+    ) {
+        let result = check_source_image_is_pullable(source, target, logger, &event_details);
+        let is_pullable = result.is_ok();
+        if is_pullable {
+            logger.info(format!(
+                "🎯 Skipping image mirroring: mirroring is disabled on the cluster, pods pull {} directly",
+                source.source_image_full()
+            ));
+        }
+        mirror_record.stop(if is_pullable {
+            StepStatus::Skip
+        } else {
+            StepStatus::Error
+        });
+        return result;
+    }
+
     let (cluster_container_registry, image_name, image_tag, must_mirror_image) = source
         .compute_cluster_container_registry_url_with_image_name_and_image_tag(
             service_id,
@@ -179,6 +228,21 @@ pub fn mirror_image_if_necessary(
             &target.kubernetes.advanced_settings().registry_mirroring_mode,
             target.container_registry.registry_info(),
         );
+    if must_mirror_image
+        && target.kubernetes.advanced_settings().registry_mirroring_mode == RegistryMirroringMode::Disabled
+    {
+        logger.info(if source.registry.has_qovery_managed_credentials() {
+            format!(
+                "🪞 Mirroring {} anyway: its Docker Hub registry has no credentials in Qovery. Add your Docker Hub credentials to this registry to pull it directly",
+                source.image
+            )
+        } else {
+            format!(
+                "🪞 Mirroring {} anyway: its registry credentials are temporary or its url has a path, so pods cannot pull it directly",
+                source.image
+            )
+        });
+    }
     let dest_image = ContainerImage::new(cluster_container_registry, image_name, vec![image_tag]);
 
     if image_already_exist(&dest_image, target) {
@@ -221,6 +285,86 @@ fn image_already_exist(dest_image: &ContainerImage, target: &DeploymentTarget) -
     matches!(target.docker.does_image_exist_remotely(dest_image), Ok(true))
 }
 
+fn login_to_source_registry(
+    source: &RegistryImageSource,
+    target: &DeploymentTarget,
+    logger: &EnvProgressLogger,
+    event_details: &EventDetails,
+) -> Result<(), Box<EngineError>> {
+    let url = source.registry.get_url_with_credentials().map_err(|_| {
+        logger.warning("⚠️Cannot get the registry credentials".to_string());
+        EngineError::new_error_cannot_get_registry_credentials(event_details.clone())
+    })?;
+    if url.password().is_none() {
+        return Ok(());
+    }
+
+    logger.info(format!(
+        "🔓 Login to registry {} as user {}",
+        url.host_str().unwrap_or_default(),
+        url.username()
+    ));
+    let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
+        target.docker.login(&url).inspect_err(|_err| {
+            logger.warning("🔓 Retrying to login to registry due to error...".to_string());
+        })
+    });
+
+    login_ret.map_err(|err| {
+        let err = EngineError::new_docker_error(event_details.clone(), err.error);
+        let msg = format!(
+            "❌ Failed to login to registry {} due to {}",
+            url.host_str().unwrap_or_default(),
+            err
+        );
+        Box::new(EngineError::new_engine_error(err, msg, None))
+    })
+}
+
+// Pods pull this image themselves, so fail the deployment now rather than with an ImagePullBackOff later
+fn check_source_image_is_pullable(
+    source: &RegistryImageSource,
+    target: &DeploymentTarget,
+    logger: &EnvProgressLogger,
+    event_details: &EventDetails,
+) -> Result<(), Box<EngineError>> {
+    login_to_source_registry(source, target, logger, event_details)?;
+
+    let source_image = ContainerImage::new(
+        source.registry.url().clone(),
+        source.image.to_string(),
+        vec![source.tag.to_string()],
+    );
+    // One deadline shared by every try, so the check never holds the deployment longer than the timeout
+    let cmd_killer = CommandKiller::from(SOURCE_IMAGE_CHECK_TIMEOUT, target.abort);
+    let inspect = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(3), || {
+        match target.docker.inspect_remote_image(&source_image, &cmd_killer) {
+            Ok(remote_image) => OperationResult::Ok(remote_image),
+            Err(err) if err.is_aborted() => OperationResult::Err(err),
+            Err(err) => OperationResult::Retry(err),
+        }
+    });
+
+    match inspect {
+        Ok(RemoteImage::Found) => Ok(()),
+        Ok(RemoteImage::NotFound) => Err(Box::new(EngineError::new_source_image_not_found(
+            event_details.clone(),
+            &source.source_image_full(),
+        ))),
+        Err(retry::Error { error, .. }) if error.is_aborted() => {
+            Err(Box::new(EngineError::new_docker_error(event_details.clone(), error)))
+        }
+        // The registry did not answer clearly (rate limit, network, outage): let kubelet try the pull itself
+        Err(retry::Error { error, .. }) => {
+            logger.warning(format!(
+                "⚠️ Cannot check that image {} exists, pods will try to pull it anyway: {error}",
+                source.source_image_full()
+            ));
+            Ok(())
+        }
+    }
+}
+
 fn mirror_image(
     service_id: &Uuid,
     source: &RegistryImageSource,
@@ -231,34 +375,7 @@ fn mirror_image(
     tags: RegistryTags,
 ) -> Result<(), Box<EngineError>> {
     // We need to login to the registry to get access to the image
-    let url = source.registry.get_url_with_credentials().map_err(|_| {
-        logger.warning("⚠️Cannot get the registry credentials".to_string());
-        EngineError::new_error_cannot_get_registry_credentials(event_details.clone())
-    })?;
-    if url.password().is_some() {
-        logger.info(format!(
-            "🔓 Login to registry {} as user {}",
-            url.host_str().unwrap_or_default(),
-            url.username()
-        ));
-
-        let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
-            target.docker.login(&url).inspect_err(|_err| {
-                logger.warning("🔓 Retrying to login to registry due to error...".to_string());
-            })
-        });
-
-        if let Err(err) = login_ret {
-            let err = EngineError::new_docker_error(event_details, err.error);
-            let msg = format!(
-                "❌ Failed to login to registry {} due to {}",
-                url.host_str().unwrap_or_default(),
-                err
-            );
-            let user_err = EngineError::new_engine_error(err, msg, None);
-            return Err(Box::new(user_err));
-        }
-    }
+    login_to_source_registry(source, target, logger, &event_details)?;
 
     // Once we are logged to the registry, we mirror the user image into our cluster private registry
     // This is required only to avoid to manage rotating credentials
@@ -516,4 +633,27 @@ pub fn log_job_output_error(logger: &EnvProgressLogger, event_details: &EventDet
     };
 
     logger.log(EngineEvent::Warning(event_details.clone(), EventMessage::from(engine_error)));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_detect_images_hosted_on_the_cluster_registry() {
+        let cluster_registry = Url::parse("https://rg.fr-par.scw.cloud").unwrap();
+
+        assert!(is_hosted_on("rg.fr-par.scw.cloud/qovery-mirror-x/api:1.2", &cluster_registry));
+        assert!(is_hosted_on("RG.fr-par.scw.cloud/qovery-mirror-x/api:1.2", &cluster_registry));
+        assert!(!is_hosted_on("ghcr.io/didask/api:1.2", &cluster_registry));
+        assert!(!is_hosted_on("nginx:latest", &cluster_registry));
+    }
+
+    #[test]
+    fn should_match_registry_port_when_detecting_images_hosted_on_the_cluster_registry() {
+        let cluster_registry = Url::parse("https://registry.example.com:5000").unwrap();
+
+        assert!(is_hosted_on("registry.example.com:5000/api:1.2", &cluster_registry));
+        assert!(!is_hosted_on("registry.example.com/api:1.2", &cluster_registry));
+    }
 }

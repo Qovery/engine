@@ -254,6 +254,8 @@ impl From<StorageClassModel> for StorageClass {
 pub enum RegistryMirroringMode {
     #[serde(alias = "cluster", alias = "CLUSTER")]
     Cluster,
+    #[serde(alias = "disabled", alias = "DISABLED")]
+    Disabled,
     #[serde(alias = "service", alias = "SERVICE")]
     #[serde(other)]
     Service,
@@ -1135,6 +1137,18 @@ mod tests {
             TestCase {
                 input: "CLUSTER".to_string(),
                 expected: RegistryMirroringMode::Cluster,
+            },
+            TestCase {
+                input: "Disabled".to_string(),
+                expected: RegistryMirroringMode::Disabled,
+            },
+            TestCase {
+                input: "disabled".to_string(),
+                expected: RegistryMirroringMode::Disabled,
+            },
+            TestCase {
+                input: "DISABLED".to_string(),
+                expected: RegistryMirroringMode::Disabled,
             },
             TestCase {
                 input: "TOTO".to_string(),

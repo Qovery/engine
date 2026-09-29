@@ -1999,6 +1999,7 @@ fn deploy_container_with_router_on_scw() {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
                 long_id: Uuid::new_v4(),
                 credentials: None,
+                qovery_managed_credentials: false,
             },
             image: "r3m4q3r9/pub-mirror-httpd".to_string(),
             tag: "2.4.56-alpine3.17".to_string(),

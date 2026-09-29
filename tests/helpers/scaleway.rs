@@ -91,6 +91,16 @@ pub fn scw_infra_config(
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
 ) -> InfrastructureContext {
+    scw_infra_config_with_features(targeted_cluster, context, logger, metrics_registry, vec![])
+}
+
+pub fn scw_infra_config_with_features(
+    targeted_cluster: &TargetCluster,
+    context: &Context,
+    logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
+    actionable_features: Vec<ActionableFeature>,
+) -> InfrastructureContext {
     let secrets = FuncTestsSecrets::new();
 
     Scaleway::docker_cr_engine(
@@ -116,7 +126,7 @@ pub fn scw_infra_config(
             TargetCluster::New => None, // <- creating a new cluster
         },
         NodeManager::Default,
-        vec![],
+        actionable_features,
     )
 }
 

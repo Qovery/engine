@@ -60,6 +60,7 @@ pub enum Tag {
     CannotGetNodeGroupList,
     CannotGetOrCreateIamRole,
     CannotGetRegistryCredentials,
+    SourceImageNotFound,
     CannotGetSupportedVersions,
     CannotGetWorkspaceDirectory,
     CannotListClusters,
@@ -515,6 +516,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::ServiceInstantiationError => Tag::ServiceInstantiationError,
             errors::Tag::CannotGetRegistryCredentials => Tag::CannotGetRegistryCredentials,
+            errors::Tag::SourceImageNotFound => Tag::SourceImageNotFound,
             errors::Tag::CannotCreateAwsServiceLinkedRoleForSpotInstance => Tag::ServiceInstantiationError,
             errors::Tag::K8sGetCrdError => Tag::K8sGetCrdError,
             errors::Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected => {

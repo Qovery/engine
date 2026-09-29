@@ -96,7 +96,8 @@ pub fn get_mirror_repository_name(
 ) -> String {
     match registry_mirroring_mode {
         RegistryMirroringMode::Cluster => format!("qovery-mirror-cluster-{cluster_id}"),
-        RegistryMirroringMode::Service => format!("qovery-mirror-{service_id}"),
+        // Disabled still mirrors the images that cannot be pulled from their source
+        RegistryMirroringMode::Service | RegistryMirroringMode::Disabled => format!("qovery-mirror-{service_id}"),
     }
 }
 
@@ -307,7 +308,21 @@ impl<T: CloudProvider> Container<T> {
                 &target.kubernetes.advanced_settings().registry_mirroring_mode,
                 target.container_registry.registry_info(),
             );
-        let image_full = format!("{repository}/{image_name}:{image_tag}");
+        let is_pulled_from_source = self.source.is_pulled_from_source(&registry_endpoint);
+        let image_full = if is_pulled_from_source {
+            self.source.source_image_full()
+        } else {
+            format!("{repository}/{image_name}:{image_tag}")
+        };
+        let registry_docker_json_config = if is_pulled_from_source {
+            self.source.source_docker_json_config()
+        } else {
+            registry_info.get_registry_docker_json_config(DockerRegistryInfo {
+                registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
+                repository_name: None,
+                image_name: Some(self.source.image.to_string()),
+            })
+        };
 
         ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
@@ -376,17 +391,10 @@ impl<T: CloudProvider> Container<T> {
                 tolerations,
                 autoscaling: self.autoscaling.clone(),
             },
-            registry: registry_info
-                .get_registry_docker_json_config(DockerRegistryInfo {
-                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
-                    repository_name: None,
-                    image_name: Some(self.source.image.to_string()),
-                })
-                .as_ref()
-                .map(|docker_json| RegistryTeraContext {
-                    secret_name: format!("{}-registry", self.kube_name()),
-                    docker_json_config: Some(docker_json.to_string()),
-                }),
+            registry: registry_docker_json_config.map(|docker_json| RegistryTeraContext {
+                secret_name: format!("{}-registry", self.kube_name()),
+                docker_json_config: Some(docker_json),
+            }),
             environment_variables: self.environment_variables.clone(),
             external_secrets: self.external_secrets.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
