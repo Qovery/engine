@@ -5,6 +5,9 @@ use crate::cmd::git;
 use crate::environment::action::deploy_external_secrets::{
     clean_unused_secrets_generated_by_eso, uninstall_service_external_secret,
 };
+use crate::environment::action::helm_release_custom_resources::{
+    CUSTOM_RESOURCES_DELETION_TIMEOUT, CustomResourcesCleanup, delete_release_custom_resources, stuck_resources_message,
+};
 use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::action::{DeploymentAction, K8sResourceType};
@@ -203,6 +206,26 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 &namespace_from_args.unwrap_or_else(|| Cow::Borrowed(target.environment.namespace())),
             );
             chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
+
+            // Operators must outlive the resources they finalize, or the uninstall hangs on them.
+            if let CustomResourcesCleanup::Stuck(stuck) = delete_release_custom_resources(
+                &target.helm,
+                &chart_info,
+                &target.kube.client(),
+                target.abort,
+                CUSTOM_RESOURCES_DELETION_TIMEOUT,
+                &mut |line| logger.info(line),
+                &mut |line| logger.warning(line),
+            ) {
+                return Err(Box::new(EngineError::new_helm_chart_error(
+                    event_details.clone(),
+                    HelmChartError::CommandError(CommandError::new_from_safe_message(stuck_resources_message(
+                        &chart_info.name,
+                        CUSTOM_RESOURCES_DELETION_TIMEOUT,
+                        &stuck,
+                    ))),
+                )));
+            }
 
             target
                 .helm

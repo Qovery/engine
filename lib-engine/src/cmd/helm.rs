@@ -9,7 +9,7 @@ use tracing::{error, info, warn};
 
 use crate::cmd::command::{AbortReason, CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{
-    DEPENDENCY, DIFF, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE,
+    DEPENDENCY, DIFF, FETCH, GET, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE,
 };
 use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
@@ -239,6 +239,7 @@ pub struct Helm {
 
 #[derive(Debug, Clone, Copy)]
 pub enum HelmCommand {
+    GET,
     ROLLBACK,
     STATUS,
     UPGRADE,
@@ -340,6 +341,56 @@ impl Helm {
                 let status: ReleaseStatus = serde_json::from_str(&stdout).unwrap_or_default();
                 Ok(status)
             }
+        }
+    }
+
+    /// Rendered manifest of an installed release (`helm get manifest`): every object Helm manages
+    /// for it, hooks excluded. Errors with `ReleaseDoesNotExist` when there is no such release.
+    pub fn get_release_manifest(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<String, HelmError> {
+        self.get_release_output("manifest", chart, envs, cmd_killer)
+    }
+
+    /// Rendered hooks of an installed release (`helm get hooks`). Errors with `ReleaseDoesNotExist`
+    /// when there is no such release.
+    pub fn get_release_hooks(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<String, HelmError> {
+        self.get_release_output("hooks", chart, envs, cmd_killer)
+    }
+
+    fn get_release_output(
+        &self,
+        what: &str,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<String, HelmError> {
+        let namespace = chart.get_namespace_string();
+        let args = vec!["get", what, &chart.name, "--namespace", &namespace];
+
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        match helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |line| {
+                stdout.push_str(&line);
+                stdout.push('\n');
+            },
+            &mut |line| stderr.push_str(&line),
+            cmd_killer,
+        ) {
+            Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
+            Err(err) => Err(CmdError(chart.name.clone(), GET, err.into())),
+            Ok(_) => Ok(stdout),
         }
     }
 
