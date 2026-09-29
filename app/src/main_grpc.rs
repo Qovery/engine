@@ -42,7 +42,7 @@ use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, load_deployed_engine_version};
 use qovery_engine::cluster_analysis::task::ClusterAnalysisTask;
-use qovery_engine::cmd::docker::{BuilderPlacement, Docker};
+use qovery_engine::cmd::docker::{BuilderPlacement, BuilderPodLabels, Docker};
 use qovery_engine::engine_task::Task;
 use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
@@ -228,6 +228,11 @@ struct Cli {
     #[arg(long, default_value = "", env = "BUILDER_TOLERATIONS")]
     builder_tolerations: String,
 
+    /// Extra labels for kube builder pods, comma-separated key=value pairs
+    /// (i.e: qovery.com/worker=abc). Only if kube builder is enabled
+    #[arg(long, default_value = "", env = "BUILDER_POD_LABELS")]
+    builder_pod_labels: String,
+
     /// Listening address:port of the http server (used for healthcheck, metrics)
     #[arg(long, default_value = "[::]:8080", env = "HTTP_LISTEN_ON")]
     http_listen_on: String,
@@ -408,10 +413,11 @@ pub fn main() -> io::Result<()> {
     };
 
     // Parsed and validated even when the kube builder is disabled, so a bad
-    // BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS fails when its deploy rolls out,
+    // BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS / BUILDER_POD_LABELS fails when its deploy rolls out,
     // not later when builder_kube_enabled gets flipped
     let builder_placement = BuilderPlacement::new(&cli.builder_node_selector, &cli.builder_tolerations)
         .expect("Invalid BUILDER_NODE_SELECTOR or BUILDER_TOLERATIONS");
+    let builder_pod_labels = BuilderPodLabels::new(&cli.builder_pod_labels).expect("Invalid BUILDER_POD_LABELS");
 
     let docker = if cli.builder_kube_enabled {
         let builder_prefix = "build-".to_string();
@@ -424,6 +430,7 @@ pub fn main() -> io::Result<()> {
             vec![],
             cli.builder_rootless_enabled,
             builder_placement,
+            builder_pod_labels,
         )
         .expect("Can't init docker builder")
     } else {
