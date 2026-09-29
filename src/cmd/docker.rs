@@ -185,6 +185,9 @@ impl ContainerImage {
 // The arch node selector is appended per build (one buildx node per requested architecture),
 // so it cannot be overridden by BUILDER_NODE_SELECTOR
 const ARCH_NODE_SELECTOR_KEY: &str = "kubernetes.io/arch";
+// Labels of every builder pod, which BUILDER_POD_LABELS cannot override. buildx also sets `app=<node name>`
+const BUILDER_LABELS: [(&str, &str); 2] = [("qovery.com/no-kill", "true"), ("qovery.com/is-builder", "true")];
+const BUILDX_APP_LABEL_KEY: &str = "app";
 // Builder pods must survive a node going not-ready long enough to not lose in-flight builds
 const NOT_READY_TOLERATION: &str =
     "key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800";
@@ -238,28 +241,7 @@ impl BuilderPlacement {
     /// value grammars, operator/effect enums, integer tolerationSeconds), so a bad value fails at
     /// engine startup instead of surfacing per build or at pod admission.
     pub fn new(node_selector: &str, tolerations: &str) -> Result<Self, DockerError> {
-        let mut node_selectors: Vec<(String, String)> = Vec::new();
-        for pair in node_selector.split(',').map(str::trim).filter(|s| !s.is_empty()) {
-            let invalid = |reason: String| DockerError::InvalidConfig {
-                raw_error_message: format!("Invalid builder node selector `{pair}`: {reason}"),
-            };
-
-            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-            let (key, value) = (key.trim(), value.trim());
-            if !is_valid_k8s_qualified_name(key) {
-                return Err(invalid(format!("`{key}` is not a valid Kubernetes label key")));
-            }
-            if value.is_empty() || !is_valid_k8s_label_value(value) {
-                return Err(invalid(format!("`{value}` is not a valid non-empty Kubernetes label value")));
-            }
-            if key == ARCH_NODE_SELECTOR_KEY {
-                return Err(invalid(format!("`{ARCH_NODE_SELECTOR_KEY}` is reserved, it is set per build")));
-            }
-            if node_selectors.iter().any(|(k, _)| k == key) {
-                return Err(invalid(format!("duplicate key `{key}`")));
-            }
-            node_selectors.push((key.to_string(), value.to_string()));
-        }
+        let node_selectors = parse_labels(node_selector, LabelSetting::NodeSelector)?;
 
         let mut parsed_tolerations: Vec<String> = Vec::new();
         for spec in tolerations.split(';').map(str::trim).filter(|s| !s.is_empty()) {
@@ -347,15 +329,93 @@ impl BuilderPlacement {
     }
 }
 
+/// Extra labels for kube builder pods, parsed once at process startup from BUILDER_POD_LABELS and
+/// appended to the buildx kubernetes `labels` driver-opt at each builder spawn. buildx puts them on
+/// the builder pods, so a PodDisruptionBudget can select them. Empty labels keep the generated
+/// driver-opts byte-identical to what the engine has always produced.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BuilderPodLabels {
+    labels: Vec<(String, String)>,
+}
+
+impl BuilderPodLabels {
+    /// * `labels`: comma-separated `key=value` pairs (e.g. `qovery.com/worker=abc,team=builds`)
+    ///
+    /// Validated like the builder node selector. `app` and the labels the engine sets on every
+    /// builder pod are reserved.
+    pub fn new(labels: &str) -> Result<Self, DockerError> {
+        Ok(BuilderPodLabels {
+            labels: parse_labels(labels, LabelSetting::PodLabels)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LabelSetting {
+    NodeSelector,
+    PodLabels,
+}
+
+impl LabelSetting {
+    fn name(self) -> &'static str {
+        match self {
+            LabelSetting::NodeSelector => "node selector",
+            LabelSetting::PodLabels => "pod label",
+        }
+    }
+
+    fn reserved_reason(self, key: &str) -> Option<&'static str> {
+        match self {
+            LabelSetting::NodeSelector if key == ARCH_NODE_SELECTOR_KEY => Some("it is set per build"),
+            LabelSetting::PodLabels
+                if key == BUILDX_APP_LABEL_KEY || BUILDER_LABELS.iter().any(|(label, _)| *label == key) =>
+            {
+                Some("it is set on every builder pod")
+            }
+            LabelSetting::NodeSelector | LabelSetting::PodLabels => None,
+        }
+    }
+}
+
+/// Parses comma-separated `key=value` pairs, validated against what buildx and the Kubernetes API
+/// accept for labels, so a bad value fails at engine startup instead of surfacing per build.
+fn parse_labels(input: &str, setting: LabelSetting) -> Result<Vec<(String, String)>, DockerError> {
+    let mut labels: Vec<(String, String)> = Vec::new();
+    for pair in input.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let invalid = |reason: String| DockerError::InvalidConfig {
+            raw_error_message: format!("Invalid builder {} `{pair}`: {reason}", setting.name()),
+        };
+
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        let (key, value) = (key.trim(), value.trim());
+        if !is_valid_k8s_qualified_name(key) {
+            return Err(invalid(format!("`{key}` is not a valid Kubernetes label key")));
+        }
+        if value.is_empty() || !is_valid_k8s_label_value(value) {
+            return Err(invalid(format!("`{value}` is not a valid non-empty Kubernetes label value")));
+        }
+        if let Some(reason) = setting.reserved_reason(key) {
+            return Err(invalid(format!("`{key}` is reserved, {reason}")));
+        }
+        if labels.iter().any(|(k, _)| k == key) {
+            return Err(invalid(format!("duplicate key `{key}`")));
+        }
+        labels.push((key.to_string(), value.to_string()));
+    }
+
+    Ok(labels)
+}
+
 /// Renders the --driver-opt argument of `docker buildx create --driver=kubernetes`.
-/// Pure function: with an empty placement, the output is byte-identical to the historical
-/// hardcoded driver-opts, so already deployed fleets see no behavior change.
+/// Pure function: with an empty placement and no extra pod labels, the output is byte-identical
+/// to the historical hardcoded driver-opts, so already deployed fleets see no behavior change.
 #[allow(clippy::too_many_arguments)]
 fn kube_builder_driver_opt(
     namespace: &str,
     nb_builder: NonZeroUsize,
     arch: Architecture,
     placement: &BuilderPlacement,
+    pod_labels: &BuilderPodLabels,
     (cpu_request_milli, cpu_limit_milli): (u32, u32),
     (memory_request_gib, memory_limit_gib): (u32, u32),
     ephemeral_storage_gib: Option<u32>,
@@ -371,6 +431,11 @@ fn kube_builder_driver_opt(
         tolerations.push_str(&format!(";{toleration}"));
     }
 
+    let mut labels = BUILDER_LABELS.map(|(key, value)| format!("{key}={value}")).join(",");
+    for (key, value) in &pod_labels.labels {
+        labels.push_str(&format!(",{key}={value}"));
+    }
+
     let mut driver_opt = format!(
         concat!(
             "--driver-opt=",
@@ -379,7 +444,7 @@ fn kube_builder_driver_opt(
             "\"loadbalance=random\",",
             "\"nodeselector={}\",",
             "\"tolerations={}\",",
-            "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+            "\"labels={}\",",
             "\"requests.cpu={}m\",",
             "\"limits.cpu={}m\",",
             "\"requests.memory={}Gi\",",
@@ -389,6 +454,7 @@ fn kube_builder_driver_opt(
         nb_builder,
         node_selector,
         tolerations,
+        labels,
         cpu_request_milli,
         cpu_limit_milli,
         memory_request_gib,
@@ -413,6 +479,7 @@ enum BuilderLocation {
         supported_architectures: Vec<Architecture>,
         enable_rootless: bool,
         placement: BuilderPlacement,
+        pod_labels: BuilderPodLabels,
     },
 }
 
@@ -567,6 +634,7 @@ impl Docker {
         args: Vec<(String, String)>,
         enable_rootless: bool,
         placement: BuilderPlacement,
+        pod_labels: BuilderPodLabels,
     ) -> Result<Self, DockerError> {
         let mut docker = Self::new(socket_location)?;
 
@@ -576,6 +644,7 @@ impl Docker {
             supported_architectures: supported_architectures.iter().dedup().cloned().collect_vec(),
             enable_rootless,
             placement,
+            pod_labels,
         };
         docker.common_envs.extend(args);
 
@@ -621,6 +690,7 @@ impl Docker {
                 supported_architectures,
                 enable_rootless,
                 placement,
+                pod_labels,
             } => {
                 let available_architectures = requested_architectures
                     .iter()
@@ -670,6 +740,7 @@ impl Docker {
                         nb_builder,
                         *arch,
                         placement,
+                        pod_labels,
                         (cpu_request_milli, cpu_limit_milli),
                         (memory_request_gib, memory_limit_gib),
                         ephemeral_storage_gib,
@@ -1346,7 +1417,7 @@ where
 #[cfg(test)]
 mod builder_placement_tests {
     use crate::cmd::docker::{
-        Architecture, BuilderPlacement, BuilderResource, DockerError, kube_builder_driver_opt,
+        Architecture, BuilderPlacement, BuilderPodLabels, BuilderResource, DockerError, kube_builder_driver_opt,
         record_builder_resource_shortage,
     };
     use std::cell::RefCell;
@@ -1358,6 +1429,7 @@ mod builder_placement_tests {
             NonZeroUsize::new(2).unwrap(),
             Architecture::AMD64,
             placement,
+            &BuilderPodLabels::default(),
             (500, 1000),
             (4, 8),
             None,
@@ -1368,7 +1440,7 @@ mod builder_placement_tests {
     #[test]
     fn test_kube_builder_driver_opt_without_placement_is_byte_identical() {
         // Byte-identical to the historical hardcoded driver-opts: deployed fleets that don't set
-        // BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS must see no behavior change
+        // BUILDER_NODE_SELECTOR / BUILDER_TOLERATIONS / BUILDER_POD_LABELS must see no behavior change
         assert_eq!(
             driver_opt_with_placement(&BuilderPlacement::default()),
             concat!(
@@ -1392,6 +1464,7 @@ mod builder_placement_tests {
                 NonZeroUsize::new(1).unwrap(),
                 Architecture::ARM64,
                 &BuilderPlacement::default(),
+                &BuilderPodLabels::new("").unwrap(),
                 (500, 1000),
                 (4, 8),
                 Some(20),
@@ -1471,6 +1544,74 @@ mod builder_placement_tests {
                 "\"limits.memory=8Gi\""
             )
         );
+    }
+
+    #[test]
+    fn test_kube_builder_driver_opt_with_pod_labels() {
+        let pod_labels = BuilderPodLabels::new(" qovery.com/worker-job = 6d3c0f4e , team=builds").unwrap();
+        assert_eq!(
+            kube_builder_driver_opt(
+                "qovery",
+                NonZeroUsize::new(2).unwrap(),
+                Architecture::AMD64,
+                &BuilderPlacement::default(),
+                &pod_labels,
+                (500, 1000),
+                (4, 8),
+                None,
+                false,
+            ),
+            concat!(
+                "--driver-opt=",
+                "\"namespace=qovery\",",
+                "\"replicas=2\",",
+                "\"loadbalance=random\",",
+                "\"nodeselector=kubernetes.io/arch=amd64\",",
+                "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true,qovery.com/worker-job=6d3c0f4e,team=builds\",",
+                "\"requests.cpu=500m\",",
+                "\"limits.cpu=1000m\",",
+                "\"requests.memory=4Gi\",",
+                "\"limits.memory=8Gi\""
+            )
+        );
+    }
+
+    #[test]
+    fn test_builder_pod_labels_parsing() {
+        // Empty / blank inputs => no extra label
+        assert_eq!(BuilderPodLabels::new("").unwrap(), BuilderPodLabels::default());
+        assert_eq!(BuilderPodLabels::new(" , ").unwrap(), BuilderPodLabels::default());
+
+        // Valid inputs are trimmed and keep their order
+        assert_eq!(
+            BuilderPodLabels::new(" qovery.com/worker-job = 6d3c0f4e ,team=builds").unwrap(),
+            BuilderPodLabels {
+                labels: vec![
+                    ("qovery.com/worker-job".to_string(), "6d3c0f4e".to_string()),
+                    ("team".to_string(), "builds".to_string()),
+                ]
+            }
+        );
+
+        for labels in [
+            "no-value",
+            "=builds",
+            "team=",
+            "team=bu ilds",
+            "team=a/b",                    // `/` is only legal in label keys, not values
+            "-bad=x",                      // label key must start alphanumeric
+            "Qovery.com/worker-job=x",     // key prefix must be a lowercase DNS subdomain
+            "app=other",                   // buildx sets app=<node name>
+            "qovery.com/no-kill=false",    // set on every builder pod
+            "qovery.com/is-builder=false", // set on every builder pod
+            "team=a,team=b",               // duplicate key
+        ] {
+            assert!(
+                matches!(BuilderPodLabels::new(labels), Err(DockerError::InvalidConfig { .. })),
+                "pod labels `{labels}` should be rejected"
+            );
+        }
     }
 
     #[test]
@@ -1914,6 +2055,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             args,
             true,
             super::BuilderPlacement::default(),
+            super::BuilderPodLabels::default(),
         )
         .unwrap();
         let builder = docker
