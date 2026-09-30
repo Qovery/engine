@@ -1121,6 +1121,57 @@ mod tests {
     }
 
     #[test]
+    fn test_karpenter_configuration_with_stable_node_pool_drift_blocking() {
+        let qovery_node_pools: KarpenterNodePool = serde_json::from_value(serde_json::json!({
+            "requirements": [],
+            "stable_override": {
+                "budgets": [
+                    {
+                        "nodes": "0",
+                        "reasons": ["Underutilized"],
+                        "duration": "24h",
+                        "schedule": "0 0 * * *"
+                    },
+                    {
+                        "nodes": "0",
+                        "reasons": ["Drifted"],
+                        "duration": "3h",
+                        "schedule": "28 15 * * *"
+                    }
+                ]
+            }
+        }))
+        .expect("Core's stable node pool budgets should deserialize");
+
+        let yaml = generate_chart_yaml(KUBERNETES_VERSION, false, qovery_node_pools);
+        let stable_node_pool = serde_yaml::Deserializer::from_str(&yaml)
+            .filter_map(|document| {
+                let value = Value::deserialize(document).ok()?;
+                serde_yaml::from_value::<NodePool>(value).ok()
+            })
+            .find(|node_pool| node_pool.metadata.name == "stable")
+            .expect("Expected stable node pool to be rendered");
+
+        let budgets = &stable_node_pool.spec.disruption.budgets;
+        assert_eq!(budgets.len(), 3, "Expected the default and both Core budgets");
+        assert_stable_node_pool_exists(budgets, "10%", None, None, None);
+        assert_stable_node_pool_exists(
+            budgets,
+            "0",
+            Some(vec!["Underutilized".to_string()]),
+            Some("24h".to_string()),
+            Some("0 0 * * *".to_string()),
+        );
+        assert_stable_node_pool_exists(
+            budgets,
+            "0",
+            Some(vec!["Drifted".to_string()]),
+            Some("3h".to_string()),
+            Some("28 15 * * *".to_string()),
+        );
+    }
+
+    #[test]
     fn test_karpenter_configuration_with_cronjob_node_pool() {
         let yaml = generate_chart_yaml(
             KUBERNETES_VERSION,

@@ -195,12 +195,14 @@ impl ToHelmString for Vec<KarpenterNodePoolDisruptionReason> {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum KarpenterNodePoolDisruptionReason {
     Underutilized,
+    Drifted,
 }
 
 impl fmt::Display for KarpenterNodePoolDisruptionReason {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let output = match self {
             KarpenterNodePoolDisruptionReason::Underutilized => "Underutilized",
+            KarpenterNodePoolDisruptionReason::Drifted => "Drifted",
         };
         write!(f, "{output}")
     }
