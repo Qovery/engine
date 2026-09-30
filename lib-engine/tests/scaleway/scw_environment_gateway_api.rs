@@ -3131,7 +3131,7 @@ fn deploy_container_with_cors_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -3337,7 +3337,7 @@ fn deploy_container_with_sticky_session_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -3537,7 +3537,7 @@ fn deploy_container_with_header_sticky_session_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -3735,7 +3735,7 @@ fn deploy_container_with_source_ip_sticky_session_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -3925,7 +3925,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -4130,7 +4130,7 @@ fn deploy_container_with_ip_denylist_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -4334,7 +4334,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -4556,7 +4556,7 @@ fn deploy_container_with_basic_auth_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -4747,7 +4747,7 @@ fn deploy_container_with_rate_limit_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -5017,7 +5017,7 @@ fn deploy_container_with_custom_headers_enabled_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -5270,7 +5270,7 @@ fn deploy_container_with_sticky_session_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -5472,7 +5472,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -5679,7 +5679,7 @@ fn deploy_container_with_ip_denylist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -5885,7 +5885,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -6109,7 +6109,7 @@ fn deploy_container_with_basic_auth_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -6302,7 +6302,7 @@ fn deploy_container_with_rate_limit_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -6574,7 +6574,7 @@ fn deploy_container_with_custom_headers_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -7121,7 +7121,7 @@ fn deploy_container_with_force_ssl_redirect_on_scw_kapsule_http() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -10867,7 +10867,7 @@ fn deploy_container_with_custom_http_errors_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
@@ -11435,7 +11435,7 @@ fn deploy_container_with_circuit_breaker_on_scw_kapsule() {
             action: Action::Create,
             registry: Registry::PublicEcr {
                 long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.scw").unwrap(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
             },
             image: "r3m4q3r9/pub-mirror-debian".to_string(),
             tag: PUB_MIRROR_DEBIAN_TAG.to_string(),
