@@ -1152,6 +1152,7 @@ mod tests {
             .find(|node_pool| node_pool.metadata.name == "stable")
             .expect("Expected stable node pool to be rendered");
 
+        assert_eq!(stable_node_pool.spec.template.spec.expire_after, "Never");
         let budgets = &stable_node_pool.spec.disruption.budgets;
         assert_eq!(budgets.len(), 3, "Expected the default and both Core budgets");
         assert_stable_node_pool_exists(budgets, "10%", None, None, None);
@@ -1352,6 +1353,8 @@ mod tests {
     #[derive(Debug, Deserialize)]
     struct SpecT {
         requirements: Vec<Requirement>,
+        #[serde(rename = "expireAfter")]
+        expire_after: String,
     }
 
     #[derive(Debug, Deserialize)]
@@ -1542,6 +1545,7 @@ mod tests {
 
             // Check stable node pool
             if node_pool.metadata.name == "stable" {
+                assert_eq!(node_pool.spec.template.spec.expire_after, "Never");
                 // Consolidation
                 assert_stable_node_pool_exists(&node_pool.spec.disruption.budgets, "10%", None, None, None);
                 assert_stable_node_pool_exists(
@@ -1568,6 +1572,7 @@ mod tests {
 
             // Check default node pool
             if node_pool.metadata.name == "default" {
+                assert_eq!(node_pool.spec.template.spec.expire_after, "720h");
                 if has_default_node_pool_limits {
                     let limits = node_pool.spec.limits.expect("should have default node pool limits");
                     assert_eq!(&limits.cpu, "30000m");
