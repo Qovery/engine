@@ -1,0 +1,97 @@
+{{- if and (eq (len $.Values.service.storages) 0) ($.Values.service.autoscaling) (eq $.Values.service.autoscaling.type "keda") (gt (len $.Values.service.autoscaling.scalers) 0) }}
+{{- if gt (len $.Values.service.autoscaling.trigger_authentications) 0 }}
+{{- range $trigger_auth := $.Values.service.autoscaling.trigger_authentications }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ $trigger_auth.name | toJson }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: {{ $.Values.service.type | quote }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: {{ $.Values.service.type | quote }}
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  {{- if $trigger_auth.spec }}
+  {{- range $key, $value := $trigger_auth.spec }}
+  {{ $key | toJson }}: {{ $value | toJson }}
+  {{- end }}
+  {{- else if $trigger_auth.raw_yaml }}
+  {{- $trigger_auth.raw_yaml | nindent 2 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $.Values.service.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: {{ $.Values.service.type | quote }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: {{ $.Values.service.type | quote }}
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Values.service.name }}
+  {{- if $.Values.service.autoscaling.polling_interval_seconds }}
+  pollingInterval: {{ $.Values.service.autoscaling.polling_interval_seconds }}
+  {{- else }}
+  pollingInterval: 30
+  {{- end }}
+  {{- if $.Values.service.autoscaling.cooldown_period_seconds }}
+  cooldownPeriod: {{ $.Values.service.autoscaling.cooldown_period_seconds }}
+  {{- else }}
+  cooldownPeriod: 300
+  {{- end }}
+  minReplicaCount: {{ $.Values.service.min_instances }}
+  maxReplicaCount: {{ $.Values.service.max_instances }}
+  {{- if $.Values.service.autoscaling.fallback }}
+  fallback:
+    failureThreshold: {{ $.Values.service.autoscaling.fallback.failure_threshold }}
+    replicas: {{ $.Values.service.autoscaling.fallback.replicas }}
+    {{- if $.Values.service.autoscaling.fallback.behavior }}
+    behavior: {{ $.Values.service.autoscaling.fallback.behavior | toJson }}
+    {{- end }}
+  {{- end }}
+  triggers:
+  {{- range $scaler := $.Values.service.autoscaling.scalers }}
+    - type: {{ $scaler.scaler_type | toJson }}
+      {{- if $scaler.metadata }}
+      metadata:
+        {{- range $key, $value := $scaler.metadata }}
+        {{ $key | toJson }}: {{ $value | toJson }}
+        {{- end }}
+      {{- else if $scaler.raw_yaml }}
+      {{- $scaler.raw_yaml | nindent 6 }}
+      {{- end }}
+      {{- if $scaler.authentication_ref }}
+      authenticationRef:
+        name: {{ $scaler.authentication_ref.name | toJson }}
+      {{- end }}
+  {{- end }}
+{{- end }}

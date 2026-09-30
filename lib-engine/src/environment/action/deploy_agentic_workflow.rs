@@ -1,5 +1,5 @@
 use crate::environment::action::DeploymentAction;
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_job::job::{
     JobRunError, await_job_pod_to_terminate, await_job_to_complete, job_is_failed, kill_job,
     retrieve_output_and_terminate_pod,
@@ -29,7 +29,7 @@ impl DeploymentAction for AgenticWorkflow {
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                None,
+                HelmChartValues::ChartDefaults,
                 chart,
             );
 
@@ -113,7 +113,7 @@ impl DeploymentAction for AgenticWorkflow {
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                None,
+                HelmChartValues::ChartDefaults,
                 chart,
             );
 

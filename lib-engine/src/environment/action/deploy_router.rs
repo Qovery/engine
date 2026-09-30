@@ -1,6 +1,6 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::models::router::Router;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::router::reporter::RouterDeploymentReporter;
@@ -51,7 +51,7 @@ where
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                None,
+                HelmChartValues::ChartDefaults,
                 chart,
             );
 
@@ -110,7 +110,7 @@ where
                     self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
                     self.to_tera_context(target)?,
                     PathBuf::from(self.helm_chart_dir().as_str()),
-                    None,
+                    HelmChartValues::ChartDefaults,
                     chart,
                 );
 

@@ -1,5 +1,5 @@
 use crate::environment::action::DeploymentAction;
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::models::container::{Container, ContainerService, get_container_with_invalid_storage_size};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
@@ -109,7 +109,7 @@ where
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                None,
+                HelmChartValues::SerializedContext,
                 chart,
             );
 
@@ -220,7 +220,7 @@ where
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir().as_str()),
-                None,
+                HelmChartValues::SerializedContext,
                 chart,
             );
 
