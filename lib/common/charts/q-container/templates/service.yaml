@@ -1,0 +1,82 @@
+{{- if $.Values.service.default_port }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Values.service.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: {{ $.Values.service.type | quote }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: {{ $.Values.service.type | quote }}
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    {{- range $key, $value := $.Values.annotations_group.service }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    {{- range $port := $.Values.service.ports }}
+    - protocol: {{ if eq $port.protocol.type "UDP" }}"UDP"{{ else }}"TCP"{{ end }}
+      name: "p{{ $port.port }}"
+      port: {{ $port.port }}
+      targetPort: {{ $port.port }}
+    {{- end }}
+  selector:
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+{{- end }}
+
+{{- range $l4_ports := $.Values.service.ports_layer4_public }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Values.service.name }}-public-{{ $l4_ports.protocol | lower }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: {{ $.Values.service.type | quote }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: {{ $.Values.service.type | quote }}
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ $l4_ports.hostnames | join "," | toJson }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {{- range $annotation := $.Values.loadbalancer_l4_annotations }}
+    {{ $annotation | first | quote }}: {{ $annotation | last | quote }}
+    {{- end }}
+    {{- range $key, $value := $.Values.annotations_group.service }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    {{- range $port := $l4_ports.ports }}
+    - protocol: {{ $port.protocol.type }}
+      name: "p{{ $port.port }}"
+      port: {{ $port.port }}
+      targetPort: {{ $port.port }}
+    {{- end }}
+  selector:
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+{{- end }}

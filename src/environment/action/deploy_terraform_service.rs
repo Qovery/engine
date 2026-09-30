@@ -5,7 +5,7 @@ use crate::environment::action::deploy_database::{
 use crate::environment::action::deploy_external_secrets::{
     clean_unused_secrets_generated_by_eso, uninstall_service_external_secret,
 };
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_job::job::JobRunError;
 use crate::environment::action::{DeploymentAction, log_job_output_error};
 use crate::environment::models::abort::AbortStatus;
@@ -362,7 +362,7 @@ where
             event_details.clone(),
             self.to_tera_context(target)?,
             PathBuf::from(self.helm_chart_dir()),
-            None,
+            HelmChartValues::ChartDefaults,
             chart,
         ))
     }
@@ -753,7 +753,7 @@ where
         event_details.clone(),
         tera_context,
         PathBuf::from(terraform.helm_chart_external_name_service_dir()),
-        None,
+        HelmChartValues::ChartDefaults,
         chart,
     )
     .on_create(target)
@@ -786,7 +786,7 @@ where
         event_details.clone(),
         tera::Context::default(),
         PathBuf::from(terraform.helm_chart_external_name_service_dir()),
-        None,
+        HelmChartValues::ChartDefaults,
         chart,
     )
     .on_delete(target)

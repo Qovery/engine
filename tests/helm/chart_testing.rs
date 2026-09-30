@@ -5,7 +5,7 @@ use crate::helm::{
 };
 use kube::core::DynamicObject;
 use qovery_engine::cmd::helm::Helm;
-use qovery_engine::environment::action::deploy_helm::HelmDeployment;
+use qovery_engine::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use qovery_engine::helm::CommonChart;
 use qovery_engine::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use std::collections::HashMap;
@@ -42,14 +42,21 @@ fn get_kube_resources(
     test_info: &TestInfo,
     chart_id: &Uuid,
 ) -> HashMap<String, DynamicObject> {
+    let values = if chart_info.name == "q-container" {
+        HelmChartValues::SerializedContext
+    } else {
+        render_custom_values_file.map_or(HelmChartValues::ChartDefaults, HelmChartValues::TeraFile)
+    };
     let helm_deployment = HelmDeployment::new(
         test_info.event_details.clone(),
         test_info.context.clone(),
         chart_original_path.parse().unwrap(),
-        render_custom_values_file,
+        values,
         chart_info.clone(),
     );
-    let _ = helm_deployment.prepare_helm_chart();
+    helm_deployment
+        .prepare_helm_chart()
+        .expect("chart preparation should succeed");
 
     let template_dir = generate_template(&chart_info, &test_info.temp_dir, &test_info.service_folder_type, chart_id);
 

@@ -1,5 +1,5 @@
 use crate::environment::action::DeploymentAction;
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_job::action::{JobPostRun, JobPreRun, JobRun, TaskContext};
 use crate::environment::action::deploy_job::common::{mk_deploy_post_run, mk_deploy_pre_run};
 use crate::environment::action::deploy_job::job::ConditionStatus;
@@ -35,7 +35,7 @@ where
             event_details.clone(),
             job.to_tera_context(target)?,
             PathBuf::from(job.helm_chart_dir()),
-            None,
+            HelmChartValues::ChartDefaults,
             chart,
         );
 

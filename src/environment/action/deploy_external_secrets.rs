@@ -1,6 +1,6 @@
 use crate::cmd::command::CommandKiller;
 use crate::environment::action::DeploymentAction;
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::models::external_secret::ExternalSecretGroup;
 use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::EngineError;
@@ -213,7 +213,7 @@ fn install_external_secrets(
         event_details,
         tera::Context::from_serialize(tera_context).unwrap_or_default(),
         PathBuf::from(helm_chart_eso_dir(lib_root_directory)),
-        None,
+        HelmChartValues::ChartDefaults,
         chart_info,
     );
 

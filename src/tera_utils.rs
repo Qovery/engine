@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn test_yaml_encode_filter_blocks_node_affinity_break_out() {
-        // Mirrors the nodeAffinity block of q-container/templates/deployment.j2.yaml.
+        // Exercises YAML escaping for node affinity in legacy Tera charts.
         let template = r#"spec:
   template:
     spec:

@@ -3,7 +3,7 @@ use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::constants::AWS_DEFAULT_REGION;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
-use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_terraform::TerraformDeployment;
 use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::models::database::{
@@ -404,7 +404,7 @@ where
         event_details.clone(),
         tera_context,
         PathBuf::from(db.helm_chart_external_name_service_dir()),
-        None,
+        HelmChartValues::ChartDefaults,
         chart,
     );
 
@@ -735,7 +735,7 @@ where
                         event_details.clone(),
                         tera::Context::default(),
                         PathBuf::from(self.helm_chart_external_name_service_dir()),
-                        None,
+                        HelmChartValues::ChartDefaults,
                         chart,
                     );
                     return helm.on_delete(target);
@@ -787,7 +787,7 @@ where
                     event_details.clone(),
                     tera::Context::default(),
                     PathBuf::from(self.helm_chart_external_name_service_dir()),
-                    None,
+                    HelmChartValues::ChartDefaults,
                     chart,
                 );
 
@@ -863,7 +863,10 @@ where
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
+                HelmChartValues::TeraFile(PathBuf::from(format!(
+                    "{}/qovery-values.j2.yaml",
+                    self.helm_chart_values_dir()
+                ))),
                 chart,
             );
 
@@ -954,7 +957,7 @@ where
                     event_details.clone(),
                     self.to_tera_context(target)?,
                     PathBuf::from(self.helm_chart_dir()),
-                    None,
+                    HelmChartValues::ChartDefaults,
                     chart,
                 );
 

@@ -787,33 +787,49 @@ mod tests {
     use crate::io_models::container::ContainerAdvancedSettings;
     use crate::io_models::labels_group::{Label, LabelsGroup};
     use crate::io_models::models::EnvironmentVariable;
+    use crate::template::{generate_and_copy_all_files_into_dir, write_chart_values};
     use crate::tera_utils::render_one_off;
     use regex::Regex;
     use serde::Deserialize;
     use std::collections::BTreeMap;
+    use std::path::Path;
+    use std::process::Command;
     use tera::Context;
     use uuid::Uuid;
 
-    fn render_template(template: &str, context: ContainerTeraContext) -> String {
-        let tera_context = Context::from_serialize(context).expect("container tera context should serialize");
-        render_one_off(template, &tera_context).expect("template should render")
+    fn render_template(name: &str, context: ContainerTeraContext) -> String {
+        let chart = tempfile::tempdir().expect("temporary chart directory");
+        let values = Context::from_serialize(context).expect("container context should serialize");
+        generate_and_copy_all_files_into_dir(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts/q-container"),
+            chart.path(),
+            &values,
+        )
+        .expect("chart should be prepared");
+        write_chart_values(chart.path(), &values).expect("chart values should be serialized");
+        let output = Command::new("helm")
+            .args([
+                "template",
+                "test",
+                chart.path().to_str().expect("chart path"),
+                "--show-only",
+            ])
+            .arg(format!("templates/{name}.yaml"))
+            .output()
+            .expect("helm must be installed to test chart rendering");
+        assert!(
+            output.status.success(),
+            "helm template failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).expect("Helm output should be UTF-8")
     }
 
-    /// Helm renders the manifest as a Go template before applying it, so the assertions
-    /// below run on what Kubernetes would actually receive. Charts keep a couple of sprig
-    /// calls in `{% raw %}` blocks on purpose; user input must never add more.
-    fn parse_as_kubernetes_would(rendered: &str) -> Vec<serde_yaml::Value> {
-        let helm_action = Regex::new(r"\{\{.*?\}\}").expect("valid regex");
-        let helm_rendered = helm_action.replace_all(rendered, "helm-rendered");
-
-        serde_yaml::Deserializer::from_str(&helm_rendered)
+    fn parse_manifests(rendered: &str) -> Vec<serde_yaml::Value> {
+        serde_yaml::Deserializer::from_str(rendered)
             .map(|doc| serde_yaml::Value::deserialize(doc).expect("rendered manifest must parse as YAML"))
             .filter(|doc| !doc.is_null())
             .collect()
-    }
-
-    fn count_helm_actions(rendered: &str) -> usize {
-        rendered.matches("{{").count()
     }
 
     fn build_container_tera_context(ephemeral_storage_in_gib: Option<String>) -> ContainerTeraContext {
@@ -880,10 +896,7 @@ mod tests {
     #[test]
     fn renders_deployment_template_with_ephemeral_storage() {
         let ctx = build_container_tera_context(Some("5Gi".to_string()));
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("deployment", ctx);
         assert_eq!(
             rendered.matches("ephemeral-storage: 5Gi").count(),
             2,
@@ -895,7 +908,7 @@ mod tests {
     fn renders_statefulset_template_with_ephemeral_storage() {
         use crate::io_models::models::StorageDataTemplate;
         let mut ctx = build_container_tera_context(Some("5Gi".to_string()));
-        // statefulset.j2.yaml only renders when storages.len() > 0
+        // statefulset.yaml only renders when storages.len() > 0
         ctx.service.storages = vec![StorageDataTemplate {
             id: "stor1".to_string(),
             long_id: Uuid::new_v4(),
@@ -905,10 +918,7 @@ mod tests {
             mount_point: "/data".to_string(),
             snapshot_retention_in_days: 0,
         }];
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/statefulset.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("statefulset", ctx);
         assert_eq!(
             rendered.matches("ephemeral-storage: 5Gi").count(),
             2,
@@ -919,10 +929,7 @@ mod tests {
     #[test]
     fn renders_deployment_template_without_ephemeral_storage_when_unset() {
         let ctx = build_container_tera_context(None);
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("deployment", ctx);
         assert!(
             !rendered.contains("ephemeral-storage"),
             "ephemeral-storage should be absent when not set"
@@ -933,10 +940,7 @@ mod tests {
     fn renders_deployment_template_without_cpu_limit_when_unset() {
         let mut ctx = build_container_tera_context(None);
         ctx.service.cpu_limit_in_milli = None;
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("deployment", ctx);
         assert_eq!(
             rendered.matches("cpu:").count(),
             1,
@@ -958,10 +962,7 @@ mod tests {
             mount_point: "/data".to_string(),
             snapshot_retention_in_days: 0,
         }];
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/statefulset.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("statefulset", ctx);
         assert_eq!(
             rendered.matches("cpu:").count(),
             1,
@@ -976,7 +977,7 @@ mod tests {
     const KEY_INJECTION_PAYLOAD: &str = "evil\n      hostPID: true\n      dummy";
 
     fn assert_no_injected_pod_fields(rendered: &str) {
-        let docs = parse_as_kubernetes_would(rendered);
+        let docs = parse_manifests(rendered);
         let deployment = docs.first().expect("a deployment must be rendered");
         let pod_spec = &deployment["spec"]["template"]["spec"];
 
@@ -1035,8 +1036,33 @@ mod tests {
         after_template: &str,
         context: ContainerTeraContext,
     ) {
-        let before = parse_as_kubernetes_would(&render_template(before_template, context.clone()));
-        let after = parse_as_kubernetes_would(&render_template(after_template, context));
+        let values = Context::from_serialize(&context).expect("fixture context");
+        let legacy = render_one_off(before_template, &values).expect("legacy fixture should render");
+        let helm_action = Regex::new(r"\{\{.*?\}\}").expect("valid regex");
+        let before = parse_manifests(&helm_action.replace_all(&legacy, "helm-rendered"));
+        let mut after = parse_manifests(&render_template(after_template, context));
+        for doc in &mut after {
+            if let Some(value) = doc
+                .get_mut("metadata")
+                .and_then(|metadata| metadata.get_mut("annotations"))
+                .and_then(|annotations| annotations.get_mut("releaseTime"))
+            {
+                *value = "helm-rendered".into();
+            }
+            if let Some(annotations) = doc
+                .get_mut("spec")
+                .and_then(|spec| spec.get_mut("template"))
+                .and_then(|template| template.get_mut("metadata"))
+                .and_then(|metadata| metadata.get_mut("annotations"))
+                .and_then(|annotations| annotations.as_mapping_mut())
+            {
+                for key in ["checksum/config", "checksum/config-mount-files"] {
+                    if let Some(value) = annotations.get_mut(key) {
+                        *value = "helm-rendered".into();
+                    }
+                }
+            }
+        }
 
         assert!(
             !before.is_empty(),
@@ -1050,7 +1076,7 @@ mod tests {
         assert_escaping_preserved_the_manifest(
             "deployment",
             include_str!("../../../tests/fixtures/pre_escaping/q-container/deployment.j2.yaml"),
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            "deployment",
             build_populated_container_tera_context(),
         );
     }
@@ -1059,7 +1085,7 @@ mod tests {
     fn escaping_preserves_the_statefulset_manifest() {
         use crate::io_models::models::StorageDataTemplate;
 
-        // statefulset.j2.yaml renders only with storage, deployment.j2.yaml only without
+        // statefulset.yaml renders only with storage, deployment.yaml only without
         let mut context = build_populated_container_tera_context();
         context.service.storages = vec![StorageDataTemplate {
             id: "stor1".to_string(),
@@ -1074,7 +1100,7 @@ mod tests {
         assert_escaping_preserved_the_manifest(
             "statefulset",
             include_str!("../../../tests/fixtures/pre_escaping/q-container/statefulset.j2.yaml"),
-            include_str!("../../../lib/common/charts/q-container/templates/statefulset.j2.yaml"),
+            "statefulset",
             context,
         );
     }
@@ -1084,7 +1110,7 @@ mod tests {
         assert_escaping_preserved_the_manifest(
             "secret",
             include_str!("../../../tests/fixtures/pre_escaping/q-container/secret.j2.yaml"),
-            include_str!("../../../lib/common/charts/q-container/templates/secret.j2.yaml"),
+            "secret",
             build_populated_container_tera_context(),
         );
     }
@@ -1107,14 +1133,11 @@ mod tests {
             scopes: vec![AnnotationsGroupScope::Deployments, AnnotationsGroupScope::Pods],
         }]);
 
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("deployment", ctx);
 
         assert_no_injected_pod_fields(&rendered);
 
-        let docs = parse_as_kubernetes_would(&rendered);
+        let docs = parse_manifests(&rendered);
         assert_eq!(
             docs[0]["metadata"]["labels"][KEY_INJECTION_PAYLOAD].as_str(),
             Some(INJECTION_PAYLOAD),
@@ -1129,14 +1152,11 @@ mod tests {
         ctx.service.advanced_settings.deployment_affinity_node_required =
             BTreeMap::from([(KEY_INJECTION_PAYLOAD.to_string(), INJECTION_PAYLOAD.to_string())]);
 
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("deployment", ctx);
 
         assert_no_injected_pod_fields(&rendered);
 
-        let docs = parse_as_kubernetes_would(&rendered);
+        let docs = parse_manifests(&rendered);
         let pod_spec = &docs[0]["spec"]["template"]["spec"];
         assert_eq!(
             pod_spec["tolerations"][0]["effect"].as_str(),
@@ -1153,13 +1173,8 @@ mod tests {
     }
 
     #[test]
-    fn deployment_template_neutralizes_helm_actions_from_user_input() {
-        let helm_payload = r#"{{ lookup "v1" "Secret" "kube-system" "admin" }}"#;
-
-        let baseline = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            build_container_tera_context(None),
-        );
+    fn deployment_template_does_not_evaluate_helm_actions_from_user_input() {
+        let helm_payload = r#"{{ fail "user input must remain data" }}"#;
 
         let mut ctx = build_container_tera_context(None);
         ctx.labels_group = LabelsGroupTeraContext::new(vec![LabelsGroup {
@@ -1169,18 +1184,10 @@ mod tests {
                 propagate_to_cloud_provider: false,
             }],
         }]);
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("deployment", ctx);
 
         assert_eq!(
-            count_helm_actions(&rendered),
-            count_helm_actions(&baseline),
-            "user input must not add a Go template action for Helm to evaluate in:\n{rendered}"
-        );
-        assert_eq!(
-            parse_as_kubernetes_would(&rendered)[0]["metadata"]["labels"]["app"].as_str(),
+            parse_manifests(&rendered)[0]["metadata"]["labels"]["app"].as_str(),
             Some(helm_payload),
             "the value must still reach Kubernetes unchanged"
         );
@@ -1196,12 +1203,9 @@ mod tests {
             is_secret: false,
         }];
 
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-container/templates/secret.j2.yaml"),
-            ctx,
-        );
+        let rendered = render_template("secret", ctx);
 
-        let docs = parse_as_kubernetes_would(&rendered);
+        let docs = parse_manifests(&rendered);
         let secret = docs.first().expect("a secret must be rendered");
 
         assert!(secret["injected"].is_null(), "injected root field in:\n{rendered}");

@@ -15,10 +15,17 @@
 // the shared context is one large object literal
 #![recursion_limit = "512"]
 
+use qovery_engine::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
+use qovery_engine::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+use qovery_engine::helm::ChartInfo;
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::tera_utils::render_one_off;
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
+use std::path::Path;
+use std::process::Command;
 use tera::Context;
+use uuid::Uuid;
 
 fn read(path: String) -> String {
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
@@ -38,6 +45,48 @@ fn current(family: &str, name: &str) -> String {
     ))
 }
 
+/// q-container now consumes the serialized context as values, without a Tera pass.
+fn render_current(family: &str, name: &str, context: &Context) -> Result<String, tera::Error> {
+    if family != "q-container" {
+        return render_one_off(&current(family, name), context);
+    }
+    let chart = tempfile::tempdir().expect("temporary chart");
+    let event_details = EventDetails::new(
+        None,
+        QoveryIdentifier::new_random(),
+        QoveryIdentifier::new_random(),
+        Uuid::new_v4().to_string(),
+        Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig),
+        Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
+    );
+    HelmDeployment::new(
+        event_details,
+        context.clone(),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts/q-container"),
+        HelmChartValues::SerializedContext,
+        ChartInfo {
+            path: chart.path().to_string_lossy().into_owned(),
+            ..Default::default()
+        },
+    )
+    .prepare_helm_chart()
+    .expect("prepare native Helm chart");
+    let output = Command::new("helm")
+        .args([
+            "template",
+            "test",
+            chart.path().to_str().expect("chart path"),
+            "--show-only",
+        ])
+        .arg(format!("templates/{name}.yaml"))
+        .output()
+        .expect("helm must be installed to test chart rendering");
+    if !output.status.success() {
+        return Err(tera::Error::msg(String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(String::from_utf8(output.stdout).expect("Helm output should be UTF-8"))
+}
+
 /// Helm renders the manifest as a Go template before applying it, so the comparison runs on what
 /// Kubernetes would parse. Charts keep a few sprig calls in `{% raw %}` blocks on purpose.
 fn parse_as_kubernetes_would(rendered: &str) -> Vec<Json> {
@@ -47,7 +96,20 @@ fn parse_as_kubernetes_would(rendered: &str) -> Vec<Json> {
     serde_yaml::Deserializer::from_str(&helm_rendered)
         .map(|doc| serde_yaml::Value::deserialize(doc).expect("rendered manifest must parse as YAML"))
         .filter(|doc| !doc.is_null())
-        .map(|doc| serde_json::to_value(doc).expect("YAML maps to JSON"))
+        .map(|doc| {
+            let mut doc = serde_json::to_value(doc).expect("YAML maps to JSON");
+            // Ignore runtime timestamps and the text-format-dependent secret checksums.
+            for pointer in [
+                "/metadata/annotations/releaseTime",
+                "/spec/template/metadata/annotations/checksum~1config",
+                "/spec/template/metadata/annotations/checksum~1config-mount-files",
+            ] {
+                if let Some(value) = doc.pointer_mut(pointer) {
+                    *value = json!("helm-rendered");
+                }
+            }
+            doc
+        })
         .collect()
 }
 
@@ -57,7 +119,7 @@ fn assert_family_equivalent(family: &str, cases: Vec<(&str, Context)>) {
     for (name, context) in cases {
         let (before, after) = match (
             render_one_off(&fixture(family, name), &context),
-            render_one_off(&current(family, name), &context),
+            render_current(family, name, &context),
         ) {
             (Ok(before), Ok(after)) => (before, after),
             (Err(e), _) => {
@@ -70,7 +132,16 @@ fn assert_family_equivalent(family: &str, cases: Vec<(&str, Context)>) {
             }
         };
 
-        let (before, after) = (parse_as_kubernetes_would(&before), parse_as_kubernetes_would(&after));
+        let (mut before, mut after) = (parse_as_kubernetes_would(&before), parse_as_kubernetes_would(&after));
+        // Helm orders documents by resource kind/name; compare resources independently of that ordering.
+        for documents in [&mut before, &mut after] {
+            documents.sort_by(|a, b| {
+                a["kind"]
+                    .as_str()
+                    .cmp(&b["kind"].as_str())
+                    .then_with(|| a["metadata"]["name"].as_str().cmp(&b["metadata"]["name"].as_str()))
+            });
+        }
         if before.is_empty() {
             failures.push(format!("{family}/{name}: fixture rendered no document, so this proves nothing"));
         } else if before != after {
@@ -397,9 +468,33 @@ fn escaping_preserves_q_container_manifests() {
         "q-container",
         vec![
             ("deployment", ctx(&[])),
+            ("deployment", ctx(&[("service.legacy_deployment_matchlabels", json!(true))])),
+            (
+                "deployment",
+                ctx(&[
+                    ("service.legacy_deployment_matchlabels", json!(true)),
+                    ("service.legacy_deployment_from_scaleway", json!(true)),
+                ]),
+            ),
             ("statefulset", ctx(&[("service.storages", json!([storage()]))])),
+            (
+                "statefulset",
+                ctx(&[
+                    ("service.storages", json!([storage()])),
+                    ("service.legacy_deployment_matchlabels", json!(true)),
+                    ("service.legacy_volumeclaim_template", json!(true)),
+                ]),
+            ),
             ("secret", ctx(&[])),
             ("mounted_files_secret", ctx(&[])),
+            (
+                "horizontal_autoscaler",
+                ctx(&[
+                    ("service.max_instances", json!(3)),
+                    ("service.advanced_settings.hpa_memory_average_utilization_percent", json!(70)),
+                ]),
+            ),
+            ("pdb", ctx(&[("service.max_instances", json!(3))])),
             // the probe branches the base context does not take
             ("deployment", ctx(&probe_variants()[0])),
             ("deployment", ctx(&probe_variants()[1])),
@@ -423,6 +518,33 @@ fn escaping_preserves_q_container_manifests() {
             ("keda_autoscaling", ctx(&[("service.autoscaling", keda_autoscaling())])),
         ],
     );
+}
+
+#[test]
+fn native_q_container_preserves_structured_keda_values_and_literal_templates() {
+    let literal = r#"{{ fail "values must not be evaluated" }}"#;
+    let spec = json!({"secretTargetRef": [{"parameter": "token", "name": "s", "key": "k"}]});
+    let mut autoscaling = keda_autoscaling();
+    autoscaling["trigger_authentications"][0]["spec"] = spec.clone();
+    autoscaling["trigger_authentications"][0]["raw_yaml"] = Json::Null;
+    autoscaling["scalers"][0]["metadata"] = Json::Null;
+    autoscaling["scalers"][0]["raw_yaml"] = json!(format!("metadata:\n  query: '{literal}'\n  threshold: '10'"));
+    let rendered = render_current("q-container", "keda_autoscaling", &ctx(&[("service.autoscaling", autoscaling)]))
+        .expect("native Helm chart should render literal template text without executing it");
+    let documents: Vec<Json> = serde_yaml::Deserializer::from_str(&rendered)
+        .map(|document| Json::deserialize(document).expect("valid manifest"))
+        .collect();
+    let authentication = documents
+        .iter()
+        .find(|doc| doc["kind"] == "TriggerAuthentication")
+        .expect("authentication");
+    assert_eq!(authentication["spec"], spec);
+    let scaled_object = documents
+        .iter()
+        .find(|doc| doc["kind"] == "ScaledObject")
+        .expect("scaled object");
+    assert_eq!(scaled_object["spec"]["triggers"][0]["metadata"]["query"], literal);
+    assert_eq!(scaled_object["spec"]["triggers"][0]["metadata"]["threshold"], "10");
 }
 
 #[test]

@@ -3,7 +3,7 @@ use serde_json::json;
 use tera::Context;
 
 /// Minimal template snippet that mirrors the exec probe rendering in
-/// `q-container/templates/deployment.j2.yaml` (and statefulset, job, cronjob).
+/// `q-job/templates/job.j2.yaml` and `cronjob.j2.yaml`.
 ///
 /// The template iterates over each command element and emits it as a quoted YAML
 /// scalar.  This guarantees that strings containing commas, semicolons, quotes,
