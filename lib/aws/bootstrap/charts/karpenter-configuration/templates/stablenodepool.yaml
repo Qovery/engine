@@ -24,7 +24,7 @@ spec:
       taints:
         - key: {{ .Values.stableNodePool.taintKey | quote }}
           effect: NoSchedule
-      expireAfter: 720h # 30 * 24h = 720h
+      expireAfter: Never
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
     consolidationPolicy: {{ .Values.stableNodePool.consolidationPolicy | default "WhenEmptyOrUnderutilized" }}
