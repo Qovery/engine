@@ -32,9 +32,8 @@ spec:
     budgets:
       # By default, 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
       - nodes: 10%
-      # The consolidation budgets injected below contain:
-      # - either a forbidden rule for Underutilized when the user hasn't configured any disruption period
-      # - or some custom forbidden rules which are the complementary of what they configured on core side
+      # Core adds zero-node budgets for Underutilized consolidation and, when configured,
+      # for Drifted replacements during the daily blocking window.
       {{- range .Values.stableNodePool.consolidation.budgets }}
       - nodes: {{ .nodes | quote }}
         reasons:
