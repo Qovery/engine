@@ -483,7 +483,10 @@ fn qovery_spot_is_independent_and_stable_defaults_to_empty_only_after_thirty_sec
             req["profileConfig"]["diskSizeGiB"] = json!(80);
             req["clusterInputs"]["aws.nodeRoleName"] = json!("existing-custom-node-role");
             let docs = rendered_qovery_configuration(&req, &[]);
-            for (name, spot, weight) in [("default", default_spot, 50), ("stable", stable_spot, 10)] {
+            for (name, spot, weight, expire_after) in [
+                ("default", default_spot, 50, "720h"),
+                ("stable", stable_spot, 10, "Never"),
+            ] {
                 let pool = resource(&docs, "NodePool", name);
                 let requirements = pool["spec"]["template"]["spec"]["requirements"].as_array().unwrap();
                 let capacity = requirements
@@ -499,7 +502,7 @@ fn qovery_spot_is_independent_and_stable_defaults_to_empty_only_after_thirty_sec
                     }
                 );
                 assert_eq!(pool["spec"]["weight"], weight);
-                assert_eq!(pool["spec"]["template"]["spec"]["expireAfter"], "720h");
+                assert_eq!(pool["spec"]["template"]["spec"]["expireAfter"], expire_after);
             }
             let stable = resource(&docs, "NodePool", "stable");
             assert_eq!(
