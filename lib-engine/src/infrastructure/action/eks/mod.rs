@@ -1,3 +1,4 @@
+pub(crate) mod access_entry_check;
 mod cluster_bootstrap;
 mod cluster_create;
 mod cluster_delete;

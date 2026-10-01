@@ -855,6 +855,8 @@ pub enum Tag {
     CannotPauseManagedDatabase,
     /// CannotConnectK8sCluster: represents an error when trying to connect to the kubernetes cluster
     CannotConnectK8sCluster,
+    /// EksAccessEntryMissing: represents an error when the AWS identity has no access entry on the EKS cluster
+    EksAccessEntryMissing,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
     CannotExecuteK8sApiCustomMetrics,
     /// CloudProviderGetLoadBalancer: represents an issue while trying to get load balancers from the cloud provider API
@@ -2194,6 +2196,32 @@ impl EngineError {
         let message = format!("Unable to connect to target k8s cluster: `{kube_error}`");
 
         EngineError::new(event_details, Tag::CannotConnectK8sCluster, message, None, None, None)
+    }
+
+    /// Creates new error when the AWS identity used to reach an EKS cluster has no access entry on it.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `principal_arn`: IAM principal (role or user) carried by the cloud provider credentials.
+    /// * `cluster_name`: EKS cluster name.
+    pub fn new_eks_access_entry_missing(
+        event_details: EventDetails,
+        principal_arn: &str,
+        cluster_name: &str,
+    ) -> EngineError {
+        let message = format!(
+            "The AWS identity `{principal_arn}` configured for this cluster has no access to the EKS cluster `{cluster_name}`."
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::EksAccessEntryMissing,
+            message,
+            None,
+            None,
+            Some("This happens when the cluster credentials have been changed to another IAM role or user. Redeploy the cluster so Qovery grants access to the new credentials, then redeploy this environment.".to_string()),
+        )
     }
 
     /// Creates new error delete local kubeconfig file error

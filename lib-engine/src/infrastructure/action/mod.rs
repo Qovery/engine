@@ -21,6 +21,7 @@ mod utils;
 pub use deploy_helms::{
     ChartFailure, DelayStrategy, ParallelDeploymentResult, ParallelDeploymentRetryConfig, RetryAttempt,
 };
+pub(crate) use eks::access_entry_check::explain_kube_client_error;
 
 use crate::environment::models::types::VersionsNumber;
 use crate::errors::{EngineError, ErrorMessageVerbosity, Tag};

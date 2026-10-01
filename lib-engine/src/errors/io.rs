@@ -117,6 +117,7 @@ pub enum Tag {
     DockerError,
     DockerPullImageError,
     DockerPushImageError,
+    EksAccessEntryMissing,
     ExternalSecretFailedToResolve,
     HelmChartUninstallError,
     HelmChartsDeployError,
@@ -420,6 +421,7 @@ impl From<errors::Tag> for Tag {
                 Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage
             }
             errors::Tag::CannotConnectK8sCluster => Tag::CannotConnectK8sCluster,
+            errors::Tag::EksAccessEntryMissing => Tag::EksAccessEntryMissing,
             errors::Tag::DnsProviderInformationError => Tag::DnsProviderInformationError,
             errors::Tag::CloudProviderInformationError => Tag::CloudProviderInformationError,
             errors::Tag::DnsProviderInvalidCredentials => Tag::DnsProviderInvalidCredentials,
