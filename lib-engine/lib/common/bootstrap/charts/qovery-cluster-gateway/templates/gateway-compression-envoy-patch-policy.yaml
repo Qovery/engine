@@ -1,0 +1,47 @@
+{{- if and .Values.gateway.qoveryPublic.enable .Values.gateway.qoveryPublic.compression.enable }}
+{{/*
+HACK(QOV-2290): Envoy's compressor must not encode HTTP 206 responses: a
+Range request is for a slice of the unencoded representation, while
+Content-Range keeps describing that slice. Envoy Gateway v1.8.3 does not
+expose uncompressible_response_codes through BackendTrafficPolicy, so patch
+its generated compressor filters directly. Remove this patch when the bundled
+Envoy Gateway exposes that field through BackendTrafficPolicy. Track upstream
+support in https://github.com/envoyproxy/gateway/issues/10159.
+TODO(QOV-2349): https://qovery.atlassian.net/browse/QOV-2349 Replace this patch with BackendTrafficPolicy's
+uncompressible_response_codes support once the upstream issue is resolved.
+
+The bundled Envoy Gateway uses the v1 xDS name scheme. These listener names
+must be changed if the bundled version switches to XDSNameSchemeV2.
+*/}}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: qovery-cluster-public-gateway-compression-patch
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: qovery-cluster-public-gateway
+  type: JSONPatch
+  jsonPatches:
+    - type: type.googleapis.com/envoy.config.listener.v3.Listener
+      name: {{ .Release.Namespace }}/qovery-cluster-public-gateway/http
+      operation:
+        op: add
+        jsonPath: '$..http_filters[?(@.name == "envoy.filters.http.compressor")].typed_config'
+        path: /response_direction_config
+        value:
+          uncompressible_response_codes:
+            - 206
+    - type: type.googleapis.com/envoy.config.listener.v3.Listener
+      name: {{ .Release.Namespace }}/qovery-cluster-public-gateway/https
+      operation:
+        op: add
+        jsonPath: '$..http_filters[?(@.name == "envoy.filters.http.compressor")].typed_config'
+        path: /response_direction_config
+        value:
+          uncompressible_response_codes:
+            - 206
+{{- end }}
