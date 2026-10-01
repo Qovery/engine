@@ -180,6 +180,27 @@ The script writes `platform-config-publish.json` (component, version, ref,
 digest) — the digest is the pin q-core records. `oras pull` of the reference
 restores the exact `config/` directory content.
 
+## Templates
+
+`catalog.yaml` declares every published root template and the `defaultTemplate` that q-core
+resolves for a cluster without a platform binding.
+
+| Template | Purpose | Layers |
+| --- | --- | --- |
+| `qovery-cluster-v0` | Default, resolved for clusters without a binding; internal testing, including Karpenter | adds `infrastructure` and the opt-in `karpenter` layer; `dns-certificates` is opt-in (off by default), `log-infra` and `gateway-api` are optional but on by default |
+| `qovery-self-managed-v0` | Self-managed (BYOK) V0 clusters | `qovery-stack`, `log-infra`, `gateway-api`, `dns-certificates`, all mandatory |
+| `qovery-demo-v0` | Demo clusters | `qovery-stack`, `dns-certificates`, optional `gateway-api` |
+
+q-core (!4057) pins `qovery-self-managed-v0` `0.1.0` for
+`POST /api/v1/organization/{organizationId}/selfManagedCluster` when no template is given, so
+deprecating or bumping that release needs a q-core change.
+
+q-core rejects any selection for a mandatory layer, so every `qovery-self-managed-v0` deployment
+needs what its layers require: a Qovery DNS provider whose domain matches the cluster managed
+domain, the cluster `tls_email_report` for ACME, a default StorageClass while Loki keeps its `pvc`
+storage, no existing ExternalDNS instance, and no cert-manager or Gateway API CRDs owned by another
+installation.
+
 ## Root template publication
 
 Root releases are generic OCI artifacts, not Helm charts. The

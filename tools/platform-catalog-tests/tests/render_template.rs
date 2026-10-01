@@ -231,6 +231,32 @@ fn demo_template_renders_from_the_verified_publication_outputs() {
 }
 
 #[test]
+fn self_managed_template_renders_from_the_verified_publication_outputs() {
+    let fixture = RenderFixture::new();
+    fixture.write_outputs();
+
+    let output = fixture.render_source(
+        "platform-catalog/templates/qovery-self-managed-v0/template.yaml",
+        "qovery-self-managed-v0",
+        "0.1.0",
+    );
+
+    assert!(
+        output.status.success(),
+        "render failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rendered_source = fs::read_to_string(&fixture.destination).expect("rendered template must exist");
+    assert!(!rendered_source.contains("__PUBLISHED_CONFIG_DIGEST__"));
+    let rendered = parse_yaml_file(&fixture.destination);
+    assert_config_references_preserved("platform-catalog/templates/qovery-self-managed-v0/template.yaml", &rendered);
+    assert_eq!(
+        yaml_string(&rendered, &["platformTemplateRelease", "status"]),
+        Some("PUBLISHED")
+    );
+}
+
+#[test]
 fn published_components_and_charts_are_referenced_by_the_template_set() {
     let catalog = read_catalog();
     let expected_configs = catalog
@@ -686,40 +712,48 @@ fn qovery_pools_remain_required_within_the_layer_and_keep_their_legacy_release()
 
 #[test]
 fn component_dependency_graph_has_no_cycles() {
-    let template: JsonValue = serde_yaml::from_str(
-        &fs::read_to_string(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml")).unwrap(),
-    )
-    .unwrap();
-    let components: Vec<_> = template["platformTemplateRelease"]["layers"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .flat_map(|layer| layer["components"].as_array().unwrap())
-        .collect();
-    let keys: Vec<_> = components
-        .iter()
-        .map(|component| component["key"].as_str().unwrap())
-        .collect();
-    let mut completed = Vec::new();
-    while completed.len() < components.len() {
-        let before = completed.len();
-        for component in &components {
-            let key = component["key"].as_str().unwrap();
-            if completed.contains(&key) {
-                continue;
+    for catalog_template in read_catalog().templates {
+        let template_path = catalog_template.path;
+        let template: JsonValue =
+            serde_yaml::from_str(&fs::read_to_string(repository_path(&template_path)).unwrap()).unwrap();
+        let components: Vec<_> = template["platformTemplateRelease"]["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|layer| layer["components"].as_array().unwrap())
+            .collect();
+        let keys: Vec<_> = components
+            .iter()
+            .map(|component| component["key"].as_str().unwrap())
+            .collect();
+        let mut completed = Vec::new();
+        while completed.len() < components.len() {
+            let before = completed.len();
+            for component in &components {
+                let key = component["key"].as_str().unwrap();
+                if completed.contains(&key) {
+                    continue;
+                }
+                let dependencies = component["dependsOn"].as_array().map(Vec::as_slice).unwrap_or_default();
+                for edge in dependencies {
+                    let dependency = edge["component"].as_str().unwrap();
+                    assert!(
+                        keys.contains(&dependency),
+                        "{template_path}: {key} depends on unknown component {dependency}"
+                    );
+                }
+                if dependencies
+                    .iter()
+                    .all(|edge| completed.contains(&edge["component"].as_str().unwrap()))
+                {
+                    completed.push(key);
+                }
             }
-            let dependencies = component["dependsOn"].as_array().map(Vec::as_slice).unwrap_or_default();
-            for edge in dependencies {
-                assert!(keys.contains(&edge["component"].as_str().unwrap()));
-            }
-            if dependencies
-                .iter()
-                .all(|edge| completed.contains(&edge["component"].as_str().unwrap()))
-            {
-                completed.push(key);
-            }
+            assert!(
+                completed.len() > before,
+                "{template_path}: cycle in the full enabled catalogue dependency graph"
+            );
         }
-        assert!(completed.len() > before, "cycle in the full enabled catalogue dependency graph");
     }
 }
 

@@ -130,3 +130,6 @@ templates:
   - key: qovery-demo-v0
     version: 0.1.0
     path: platform-catalog/templates/qovery-demo-v0/template.yaml
+  - key: qovery-self-managed-v0
+    version: 0.1.0
+    path: platform-catalog/templates/qovery-self-managed-v0/template.yaml
