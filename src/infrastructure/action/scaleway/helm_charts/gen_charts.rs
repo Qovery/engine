@@ -663,6 +663,9 @@ pub fn kapsule_helm_charts(
                     replicas: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_gateway_controller_replicas,
+                    enable_envoy_patch_policy: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_enable_compression,
                 },
                 cluster_failure_context.clone(),
             )

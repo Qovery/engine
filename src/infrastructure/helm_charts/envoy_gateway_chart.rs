@@ -19,11 +19,15 @@ use crate::{
 
 pub struct EnvoyGatewayOptions {
     pub replicas: u32,
+    pub enable_envoy_patch_policy: bool,
 }
 
 impl Default for EnvoyGatewayOptions {
     fn default() -> Self {
-        Self { replicas: 1 }
+        Self {
+            replicas: 1,
+            enable_envoy_patch_policy: false,
+        }
     }
 }
 
@@ -137,6 +141,15 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
             key: "podDisruptionBudget.maxUnavailable".to_string(),
             value: 1.to_string(),
         });
+        // Envoy Gateway v1.8.3 ignores EnvoyPatchPolicy resources unless this extension API is enabled.
+        // Qovery needs that policy to exclude HTTP 206 range responses from compression because
+        // BackendTrafficPolicy does not expose Envoy's uncompressible_response_codes setting.
+        if self.options.enable_envoy_patch_policy {
+            chart_info.values.push(ChartSetValue {
+                key: "config.envoyGateway.extensionApis.enableEnvoyPatchPolicy".to_string(),
+                value: true.to_string(),
+            });
+        }
 
         Ok(CommonChart {
             chart_info,
@@ -444,7 +457,10 @@ mod tests {
             HelmChartNamespaces::Qovery,
             PriorityClass::Default,
             HelmChartResourcesConstraintType::ChartDefault,
-            EnvoyGatewayOptions { replicas: 3 },
+            EnvoyGatewayOptions {
+                replicas: 3,
+                enable_envoy_patch_policy: true,
+            },
             fake_failure_context(),
         );
 
@@ -470,6 +486,31 @@ mod tests {
                 .values
                 .iter()
                 .any(|value| value.key == "podDisruptionBudget.maxUnavailable" && value.value == "1")
+        );
+        assert!(common_chart.chart_info.values.iter().any(|value| {
+            value.key == "config.envoyGateway.extensionApis.enableEnvoyPatchPolicy" && value.value == "true"
+        }));
+    }
+
+    #[test]
+    fn envoy_gateway_chart_leaves_patch_policy_api_disabled_by_default() {
+        let chart = EnvoyGatewayChart::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            HelmChartNamespaces::Qovery,
+            PriorityClass::Default,
+            HelmChartResourcesConstraintType::ChartDefault,
+            EnvoyGatewayOptions::default(),
+            fake_failure_context(),
+        );
+
+        let common_chart = chart.to_common_helm_chart().unwrap();
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .all(|value| { value.key != "config.envoyGateway.extensionApis.enableEnvoyPatchPolicy" })
         );
     }
 }
