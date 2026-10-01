@@ -406,10 +406,6 @@ impl<T: CloudProvider> Container<T> {
         }
     }
 
-    pub fn is_stateful(&self) -> bool {
-        !self.storages.is_empty()
-    }
-
     pub fn service_type(&self) -> ServiceType {
         ServiceType::Container
     }
@@ -695,7 +691,7 @@ pub fn get_container_with_invalid_storage_size<T: CloudProvider>(
     namespace: &str,
     event_details: &EventDetails,
 ) -> Result<Option<InvalidStatefulsetStorage>, Box<EngineError>> {
-    match !container.is_stateful() {
+    match container.storages.is_empty() {
         true => Ok(None),
         false => {
             let selector = Container::kube_label_selector(container);
@@ -905,25 +901,49 @@ mod tests {
     }
 
     #[test]
-    fn renders_statefulset_template_with_ephemeral_storage() {
+    fn renders_deployment_and_pvc_with_storage() {
         use crate::io_models::models::StorageDataTemplate;
-        let mut ctx = build_container_tera_context(Some("5Gi".to_string()));
-        // statefulset.yaml only renders when storages.len() > 0
+        let mut ctx = build_container_tera_context(None);
+        let disk_id = Uuid::new_v4();
         ctx.service.storages = vec![StorageDataTemplate {
-            id: "stor1".to_string(),
-            long_id: Uuid::new_v4(),
+            id: "legacy-disk".to_string(),
+            long_id: disk_id,
             name: "data".to_string(),
             storage_type: "gp2".to_string(),
             size_in_gib: 10,
             mount_point: "/data".to_string(),
             snapshot_retention_in_days: 0,
         }];
-        let rendered = render_template("statefulset", ctx);
+
+        let deployment = parse_manifests(&render_template("deployment", ctx.clone()));
+        assert_eq!(deployment[0]["kind"], "Deployment");
+        assert_eq!(deployment[0]["spec"]["strategy"]["type"], "Recreate");
+        let pod = &deployment[0]["spec"]["template"]["spec"];
+        assert_eq!(pod["containers"][0]["volumeMounts"][0]["mountPath"], "/data");
         assert_eq!(
-            rendered.matches("ephemeral-storage: 5Gi").count(),
-            2,
-            "ephemeral-storage should appear in both requests and limits"
+            pod["volumes"][0]["persistentVolumeClaim"]["claimName"],
+            format!("{disk_id}-test-container-0")
         );
+
+        let pvc = parse_manifests(&render_template("pvc", ctx));
+        assert_eq!(pvc[0]["kind"], "PersistentVolumeClaim");
+        assert_eq!(pvc[0]["metadata"]["name"], format!("{disk_id}-test-container-0"));
+        assert_eq!(pvc[0]["spec"]["resources"]["requests"]["storage"], "10Gi");
+
+        let mut legacy_ctx = build_container_tera_context(None);
+        legacy_ctx.service.storages = vec![StorageDataTemplate {
+            id: "legacy-disk".to_string(),
+            long_id: disk_id,
+            name: "data".to_string(),
+            storage_type: "gp2".to_string(),
+            size_in_gib: 10,
+            mount_point: "/data".to_string(),
+            snapshot_retention_in_days: 0,
+        }];
+        legacy_ctx.service.legacy_volumeclaim_template = true;
+        let legacy_pvc = parse_manifests(&render_template("pvc", legacy_ctx));
+        assert_eq!(legacy_pvc[0]["metadata"]["name"], "legacy-disk-test-container-0");
+        assert_eq!(legacy_pvc[0]["metadata"]["labels"]["diskId"], "legacy-disk");
     }
 
     #[test]
@@ -941,28 +961,6 @@ mod tests {
         let mut ctx = build_container_tera_context(None);
         ctx.service.cpu_limit_in_milli = None;
         let rendered = render_template("deployment", ctx);
-        assert_eq!(
-            rendered.matches("cpu:").count(),
-            1,
-            "only the cpu request should be rendered when the cpu limit is unset"
-        );
-    }
-
-    #[test]
-    fn renders_statefulset_template_without_cpu_limit_when_unset() {
-        use crate::io_models::models::StorageDataTemplate;
-        let mut ctx = build_container_tera_context(None);
-        ctx.service.cpu_limit_in_milli = None;
-        ctx.service.storages = vec![StorageDataTemplate {
-            id: "stor1".to_string(),
-            long_id: Uuid::new_v4(),
-            name: "data".to_string(),
-            storage_type: "gp2".to_string(),
-            size_in_gib: 10,
-            mount_point: "/data".to_string(),
-            snapshot_retention_in_days: 0,
-        }];
-        let rendered = render_template("statefulset", ctx);
         assert_eq!(
             rendered.matches("cpu:").count(),
             1,
@@ -1078,30 +1076,6 @@ mod tests {
             include_str!("../../../tests/fixtures/pre_escaping/q-container/deployment.j2.yaml"),
             "deployment",
             build_populated_container_tera_context(),
-        );
-    }
-
-    #[test]
-    fn escaping_preserves_the_statefulset_manifest() {
-        use crate::io_models::models::StorageDataTemplate;
-
-        // statefulset.yaml renders only with storage, deployment.yaml only without
-        let mut context = build_populated_container_tera_context();
-        context.service.storages = vec![StorageDataTemplate {
-            id: "stor1".to_string(),
-            long_id: Uuid::new_v4(),
-            name: "data".to_string(),
-            storage_type: "gp2".to_string(),
-            size_in_gib: 10,
-            mount_point: "/data".to_string(),
-            snapshot_retention_in_days: 0,
-        }];
-
-        assert_escaping_preserved_the_manifest(
-            "statefulset",
-            include_str!("../../../tests/fixtures/pre_escaping/q-container/statefulset.j2.yaml"),
-            "statefulset",
-            context,
         );
     }
 

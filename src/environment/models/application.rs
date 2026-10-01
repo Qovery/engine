@@ -329,10 +329,6 @@ impl<T: CloudProvider> Application<T> {
         }
     }
 
-    pub fn is_stateful(&self) -> bool {
-        !self.storages.is_empty()
-    }
-
     pub fn service_type(&self) -> ServiceType {
         ServiceType::Application
     }
@@ -567,7 +563,7 @@ pub fn get_application_with_invalid_storage_size<T: CloudProvider>(
     namespace: &str,
     event_details: &EventDetails,
 ) -> Result<Option<InvalidStatefulsetStorage>, Box<EngineError>> {
-    match !application.is_stateful() {
+    match application.storages.is_empty() {
         true => Ok(None),
         false => {
             let selector = Application::kube_label_selector(application);

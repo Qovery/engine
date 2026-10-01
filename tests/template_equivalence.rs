@@ -362,11 +362,6 @@ fn base() -> Json {
     })
 }
 
-fn storage() -> Json {
-    json!({ "id": "stor1", "long_id": "00000000-0000-0000-0000-0000000000b1", "name": "data",
-            "storage_type": "gp2", "size_in_gib": 10, "mount_point": "/data", "snapshot_retention_in_days": 0 })
-}
-
 fn probe(kind: Json) -> Json {
     json!({ "port": 8080, "initial_delay_seconds": 10, "period_seconds": 10, "timeout_seconds": 5,
             "success_threshold": 1, "failure_threshold": 3, "type": kind })
@@ -438,15 +433,6 @@ fn escaping_preserves_q_container_manifests() {
                 ctx(&[
                     ("service.legacy_deployment_matchlabels", json!(true)),
                     ("service.legacy_deployment_from_scaleway", json!(true)),
-                ]),
-            ),
-            ("statefulset", ctx(&[("service.storages", json!([storage()]))])),
-            (
-                "statefulset",
-                ctx(&[
-                    ("service.storages", json!([storage()])),
-                    ("service.legacy_deployment_matchlabels", json!(true)),
-                    ("service.legacy_volumeclaim_template", json!(true)),
                 ]),
             ),
             ("secret", ctx(&[])),

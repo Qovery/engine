@@ -1,4 +1,3 @@
-{{- if eq (len $.Values.service.storages) 0 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -31,8 +30,8 @@ spec:
   replicas: {{ $.Values.service.min_instances }}
   {{- end }}
   strategy:
-    type: {{ $.Values.service.advanced_settings.deployment_update_strategy_type }}
-    {{- if eq $.Values.service.advanced_settings.deployment_update_strategy_type "RollingUpdate" }}
+    type: {{ if gt (len $.Values.service.storages) 0 }}Recreate{{ else }}{{ $.Values.service.advanced_settings.deployment_update_strategy_type }}{{ end }}
+    {{- if and (eq (len $.Values.service.storages) 0) (eq $.Values.service.advanced_settings.deployment_update_strategy_type "RollingUpdate") }}
     rollingUpdate:
     {{- if eq (int $.Values.service.max_instances) 1 }}
       maxSurge: 1
@@ -287,6 +286,10 @@ spec:
                 command: {{ $.Values.service.advanced_settings.deployment_lifecycle_pre_stop_exec_command | toJson }}
             {{- end }}
           volumeMounts:
+            {{- range $s := $.Values.service.storages }}
+            - name: {{ if $.Values.service.legacy_volumeclaim_template }}{{ $s.id }}{{ else }}{{ $s.long_id }}{{ end }}
+              mountPath: {{ $s.mount_point | toJson }}
+            {{- end }}
             {{- range $mounted_file := $.Values.mounted_files }}
             - mountPath: {{ $mounted_file.mount_path | toJson }}
               subPath: content
@@ -304,6 +307,11 @@ spec:
               {{- end }}
             {{- end }}
       volumes:
+        {{- range $s := $.Values.service.storages }}
+        - name: {{ if $.Values.service.legacy_volumeclaim_template }}{{ $s.id }}{{ else }}{{ $s.long_id }}{{ end }}
+          persistentVolumeClaim:
+            claimName: {{ if $.Values.service.legacy_volumeclaim_template }}{{ $s.id }}{{ else }}{{ $s.long_id }}{{ end }}-{{ $.Values.service.name }}-0
+        {{- end }}
         {{- range $mounted_file := $.Values.mounted_files }}
         - name: {{ $mounted_file.kube_name }}
           secret:
@@ -322,4 +330,3 @@ spec:
           {{- end }}
           {{- end }}
         {{- end }}
-{{- end }}

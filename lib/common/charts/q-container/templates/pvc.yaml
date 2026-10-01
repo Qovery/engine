@@ -1,0 +1,35 @@
+{{- if gt (len $.Values.service.storages) 0 }}
+{{- if or (gt (int $.Values.service.min_instances) 1) (gt (int $.Values.service.max_instances) 1) }}
+{{- fail "A Deployment with PVC supports at most one replica" }}
+{{- end }}
+{{- range $s := $.Values.service.storages }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ if $.Values.service.legacy_volumeclaim_template }}{{ $s.id }}{{ else }}{{ $s.long_id }}{{ end }}-{{ $.Values.service.name }}-0
+  namespace: {{ $.Values.namespace }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    {{- if $.Values.service.legacy_volumeclaim_template }}
+    ownerId: FAKE
+    appId: {{ $.Values.service.short_id | quote }}
+    diskId: {{ $s.id | quote }}
+    diskType: {{ $s.storage_type | toJson }}
+    {{- else }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: {{ $.Values.service.type | quote }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    qovery.com/disk-id: {{ $s.long_id | quote }}
+    qovery.com/disk-type: {{ $s.storage_type | toJson }}
+    {{- end }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ $s.storage_type | toJson }}
+  resources:
+    requests:
+      storage: {{ $s.size_in_gib }}Gi
+{{- end }}
+{{- end }}
