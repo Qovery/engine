@@ -8,8 +8,9 @@ use crate::cmd::helm::{Helm, to_engine_error};
 use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
 use crate::environment::report::logger::EnvLogger;
-use crate::errors::EngineError;
-use crate::events::EnvironmentStep;
+use crate::errors::{EngineError, Tag};
+use crate::events::{EngineEvent, EnvironmentStep};
+use crate::infrastructure::action::explain_kube_client_error;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::InteractWithRegistry;
@@ -190,6 +191,17 @@ impl<'a> DeploymentTarget<'a> {
             Helm::new(Option::<&Path>::None, &[]).map_err(|e| to_engine_error(event_details, e))?
         };
 
+        let kube_client = infra_ctx
+            .mk_kube_client()
+            .map_err(|err| explain_kube_client_error(infra_ctx, event_details, err))
+            .inspect_err(|err| {
+                if err.tag() == &Tag::EksAccessEntryMissing {
+                    infra_ctx
+                        .kubernetes()
+                        .logger()
+                        .log(EngineEvent::Error(err.as_ref().clone(), None));
+                }
+            });
         Ok(DeploymentTarget {
             kubernetes,
             container_registry: infra_ctx.container_registry(),
@@ -197,7 +209,7 @@ impl<'a> DeploymentTarget<'a> {
             dns_provider: infra_ctx.dns_provider(),
             environment,
             docker: &infra_ctx.context().docker,
-            kube: infra_ctx.mk_kube_client()?,
+            kube: kube_client?,
             helm,
             abort,
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),

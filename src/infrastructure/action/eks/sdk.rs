@@ -8,6 +8,7 @@ use aws_sdk_eks::error::SdkError;
 use aws_sdk_eks::operation::delete_nodegroup::{DeleteNodegroupError, DeleteNodegroupOutput};
 use aws_sdk_eks::operation::describe_nodegroup::{DescribeNodegroupError, DescribeNodegroupOutput};
 use aws_sdk_eks::operation::describe_update::{DescribeUpdateError, DescribeUpdateOutput};
+use aws_sdk_eks::operation::list_access_entries::ListAccessEntriesError;
 use aws_sdk_eks::operation::list_clusters::{ListClustersError, ListClustersOutput};
 use aws_sdk_eks::operation::list_nodegroups::{ListNodegroupsError, ListNodegroupsOutput};
 use aws_sdk_eks::operation::update_nodegroup_version::{UpdateNodegroupVersionError, UpdateNodegroupVersionOutput};
@@ -38,6 +39,9 @@ pub trait QoveryAwsSdkConfigEks {
         cluster_id: String,
         nodegroup_id: String,
     ) -> Result<DeleteNodegroupOutput, SdkError<DeleteNodegroupError>>;
+
+    /// Returns the principal ARNs of all the access entries of the cluster
+    async fn list_access_entries(&self, cluster_name: &str) -> Result<Vec<String>, SdkError<ListAccessEntriesError>>;
 
     async fn get_role(&self, name: &str) -> Result<GetRoleOutput, SdkError<GetRoleError>>;
 
@@ -146,6 +150,27 @@ impl QoveryAwsSdkConfigEks for SdkConfig {
             .nodegroup_name(nodegroup_name)
             .send()
             .await
+    }
+
+    async fn list_access_entries(&self, cluster_name: &str) -> Result<Vec<String>, SdkError<ListAccessEntriesError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        let mut access_entries = Vec::new();
+        let mut next_token: Option<String> = None;
+
+        loop {
+            let output = client
+                .list_access_entries()
+                .cluster_name(cluster_name)
+                .set_next_token(next_token)
+                .send()
+                .await?;
+            access_entries.extend(output.access_entries().iter().cloned());
+
+            match output.next_token() {
+                Some(token) => next_token = Some(token.to_string()),
+                None => return Ok(access_entries),
+            }
+        }
     }
 
     async fn get_role(&self, name: &str) -> Result<GetRoleOutput, SdkError<GetRoleError>> {
