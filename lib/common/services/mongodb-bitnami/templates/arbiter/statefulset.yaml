@@ -7,18 +7,18 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     app.kubernetes.io/component: arbiter
     {{- if .Values.arbiter.labels }}
-    {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.labels "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.literal" (dict "value" .Values.arbiter.labels "context" $) | nindent 4 }}
     {{- end }}
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if or .Values.arbiter.annotations .Values.commonAnnotations }}
   annotations:
     {{- if .Values.arbiter.annotations }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.arbiter.annotations "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.arbiter.annotations "context" $) | nindent 4 }}
     {{- end }}
     {{- if .Values.commonAnnotations }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
     {{- end }}
   {{- end }}
 spec:
@@ -35,10 +35,10 @@ spec:
       labels: {{- include "common.labels.standard" . | nindent 8 }}
         app.kubernetes.io/component: arbiter
         {{- if .Values.arbiter.podLabels }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.podLabels "context" $) | nindent 8 }}
+        {{- include "common.tplvalues.literal" (dict "value" .Values.arbiter.podLabels "context" $) | nindent 8 }}
         {{- end }}
         {{- if .Values.commonLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
         {{- end }}
       {{- if or (include "mongodb.arbiter.createConfigmap" .) .Values.arbiter.podAnnotations }}
       annotations:
@@ -46,7 +46,7 @@ spec:
         checksum/configuration: {{ include (print $.Template.BasePath "/arbiter/configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- if .Values.arbiter.podAnnotations }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.podAnnotations "context" $) | nindent 8 }}
+        {{- include "common.tplvalues.literal" (dict "value" .Values.arbiter.podAnnotations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
     spec:
@@ -56,7 +56,7 @@ spec:
       {{- end }}
       serviceAccountName: {{ template "mongodb.serviceAccountName" . }}
       {{- if .Values.arbiter.affinity }}
-      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "common.tplvalues.literal" (dict "value" .Values.arbiter.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.arbiter.podAffinityPreset "component" "arbiter" "topologyKey" .Values.topologyKey "context" $) | nindent 10 }}
@@ -70,7 +70,7 @@ spec:
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.hostAliases "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.arbiter.tolerations }}
-      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "common.tplvalues.literal" (dict "value" .Values.arbiter.tolerations "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.arbiter.topologySpreadConstraints }}
       topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.arbiter.topologySpreadConstraints "context" $) | nindent 8 }}

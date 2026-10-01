@@ -14,11 +14,16 @@ use walkdir::WalkDir;
 /// Writes the context as values.yaml in an already prepared Helm chart.
 /// Values remain data: Helm must never evaluate them through `tpl`.
 pub(crate) fn write_chart_values(chart_dir: impl AsRef<Path>, context: &Context) -> Result<(), CommandError> {
+    write_values_file(chart_dir.as_ref().join("values.yaml"), context)
+}
+
+/// Writes serialized values while preserving the chart's own defaults.
+pub(crate) fn write_values_file(path: impl AsRef<Path>, context: &Context) -> Result<(), CommandError> {
     // The file is JSON, a YAML subset where every string is quoted. Helm parses YAML 1.1, so the plain
     // scalars serde_yaml emits for strings like `yes`, `off` or `1_000` would become bools and ints.
     let json = serde_json::to_string_pretty(&context.clone().into_json())
         .map_err(|_| CommandError::new_from_safe_message("Cannot serialize Helm chart values".to_string()))?;
-    fs::write(chart_dir.as_ref().join("values.yaml"), json)
+    fs::write(path, json)
         .map_err(|e| CommandError::new("Cannot write Helm chart values".to_string(), Some(e.to_string()), None))
 }
 

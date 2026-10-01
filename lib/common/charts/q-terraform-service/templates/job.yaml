@@ -1,0 +1,188 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $.Values.service.name | quote }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "terraform-service"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    qovery.com/deployment-id: {{ $.Values.deployment_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: "terraform-service"
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    qovery.com/service-version: {{ $.Values.service.version | quote }}
+    {{- range $key, $value := $.Values.annotations_group.job }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ $.Values.service.job_max_duration_in_sec }}
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        envId: {{ $.Values.environment_short_id | quote }}
+        qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+        qovery.com/service-type: "terraform-service"
+        qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+        qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+        qovery.com/deployment-id: {{ $.Values.deployment_id | quote }}
+        app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+        app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+        app.kubernetes.io/component: "terraform-service"
+        app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+        app.kubernetes.io/managed-by: "qovery"
+        app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+        {{- range $key, $value := $.Values.labels_group.common }}
+        {{ $key | toJson }}: {{ $value | toJson }}
+        {{- end }}
+      annotations:
+        qovery.com/service-version: {{ $.Values.service.version | quote }}
+        karpenter.sh/do-not-disrupt: "true"
+        {{- range $key, $value := $.Values.annotations_group.pods }}
+        {{ $key | toJson }}: {{ $value | toJson }}
+        {{- end }}
+    spec:
+      {{- if $.Values.service.tolerations }}
+      tolerations:
+        {{- range $key, $value := $.Values.service.tolerations }}
+        - key: {{ $key | toJson }}
+          operator: "Exists"
+          effect: {{ $value | toJson }}
+        {{- end }}
+      {{- end }}
+      securityContext:
+        fsGroup: 1000
+      affinity:
+        {{- if $.Values.service.advanced_settings.deployment_affinity_node_required }}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+        {{- range $key, $value := $.Values.service.advanced_settings.deployment_affinity_node_required }}
+                - key: {{ $key | toJson }}
+                  operator: In
+                  values:
+                  - {{ $value | toJson }}
+        {{- end }}
+        {{- end }}
+      restartPolicy: Never
+      {{- if ne $.Values.service.advanced_settings.security_service_account_name "" }}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ $.Values.service.advanced_settings.security_service_account_name | toJson }}
+      {{- else }}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ $.Values.service.name | quote }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ $.Values.service.advanced_settings.deployment_termination_grace_period_seconds }}
+      {{- if $.Values.registry }}
+      imagePullSecrets:
+        - name: {{ $.Values.registry.secret_name | quote }}
+      {{- end }}
+      volumes:
+        - name: output
+          emptyDir: {}
+        - name: backend-config-volume
+          secret:
+            secretName: {{ $.Values.backend_config.secret_name | quote }}
+        - name: persistent-volume
+          persistentVolumeClaim:
+            claimName: {{ printf "%s-pvc" $.Values.service.name | quote }}
+        {{- range $external_secret := $.Values.external_secrets }}
+          {{- range $entry := $external_secret.entries }}
+            {{- if $entry.mount_path }}
+        - name: {{ $entry.volume_name | quote }}
+          secret:
+            secretName: {{ $external_secret.secret_name | quote }}
+            defaultMode: 420
+            items:
+            - key: {{ $entry.env_var_key | toJson }}
+              path: {{ $entry.mount_path_relative | toJson }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+      initContainers:
+          - name: qovery-wait-container-output
+            # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
+            restartPolicy: Always # this tells that the initContainer is a sidecar
+            image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-07-15T14-06-16
+            command: ["/qovery-job-output-waiter", "--watch"]
+            volumeMounts:
+              - name: output
+                mountPath: /qovery-output
+            resources:
+              limits:
+                cpu: "100m"
+                memory: "128Mi"
+      containers:
+        - name: {{ $.Values.service.name | quote }}
+          image: {{ $.Values.service.image_full | quote }}
+          args:
+            {{- range $arg := $.Values.service.command_args }}
+            - {{ $arg | toJson }}
+            {{- end }}
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
+            - name: persistent-volume
+              mountPath: /persistent-volume
+              readOnly: false
+            - name: backend-config-volume
+              mountPath: /backend-config
+              readOnly: true
+            {{- range $external_secret := $.Values.external_secrets }}
+              {{- range $entry := $external_secret.entries }}
+                {{- if $entry.mount_path }}
+            - name: {{ $entry.volume_name | quote }}
+              mountPath: {{ $entry.mount_path | toJson }}
+              subPath: {{ $entry.mount_path_relative | toJson }}
+              readOnly: true
+                {{- end }}
+              {{- end }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ $.Values.service.name | quote }}
+          {{- if $.Values.external_secrets }}
+          env:
+            {{- range $external_secret := $.Values.external_secrets }}
+              {{- range $entry := $external_secret.entries }}
+            - name: {{ $entry.env_var_key | toJson }}
+                {{- if not $entry.mount_path }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $external_secret.secret_name | quote }}
+                  key: {{ $entry.env_var_key | toJson }}
+                {{- else }}
+              value: {{ $entry.mount_path | toJson }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+          {{- end }}
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: {{ $.Values.service.advanced_settings.security_read_only_root_filesystem }}
+          resources:
+            limits:
+              cpu: {{ $.Values.service.cpu_limit_in_milli | quote }}
+              memory: {{ $.Values.service.ram_limit_in_mib | quote }}
+              {{- if and $.Values.service.gpu_limit (gt ($.Values.service.gpu_limit | float64) 0.0) }}
+              nvidia.com/gpu: {{ $.Values.service.gpu_request }}
+              {{- end }}
+            requests:
+              cpu: {{ $.Values.service.cpu_request_in_milli | quote }}
+              memory: {{ $.Values.service.ram_request_in_mib | quote }}
+              {{- if and $.Values.service.gpu_request (gt ($.Values.service.gpu_request | float64) 0.0) }}
+              nvidia.com/gpu: {{ $.Values.service.gpu_request }}
+              {{- end }}

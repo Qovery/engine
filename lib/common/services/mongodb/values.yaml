@@ -1,5 +1,5 @@
 # Default values for the Qovery MongoDB 8.3+ chart (official mongo image, non-Bitnami).
-# The per-cloud `qovery-values.j2.yaml` overlays render the real values at deploy time.
+# The per-cloud `serialized qovery-values.yaml` overlays render the real values at deploy time.
 
 image:
   registry: ""

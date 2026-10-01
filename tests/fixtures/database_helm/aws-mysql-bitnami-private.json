@@ -1,0 +1,166 @@
+{
+  "auth": {
+    "database": "sanitized-name",
+    "password": "database-password",
+    "rootPassword": "database-password",
+    "username": "qovery"
+  },
+  "commonLabels": {
+    "app": "sanitized-name",
+    "databaseId": "id",
+    "databaseLongId": "long-id",
+    "envId": "environment-id",
+    "envLongId": "environment-long-id",
+    "projectLongId": "project-long-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database"
+  },
+  "fullnameOverride": "sanitized-name-master",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "nameOverride": "sanitized-name-master",
+  "primary": {
+    "affinity": {
+      "nodeAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": {
+          "nodeSelectorTerms": [
+            {
+              "matchExpressions": [
+                {
+                  "key": "kubernetes.io/arch",
+                  "operator": "In",
+                  "values": [
+                    "amd64"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "nodeAffinityPreset": {
+      "key": "kubernetes.io/arch",
+      "type": "hard",
+      "values": [
+        "amd64"
+      ]
+    },
+    "pdb": {
+      "create": false
+    },
+    "persistence": {
+      "annotations": {
+        "databaseId": "id",
+        "databaseName": "sanitized-name",
+        "envId": "environment-id",
+        "ownerId": "owner-id",
+        "qovery.com/environment-id": "environment-long-id",
+        "qovery.com/project-id": "project-long-id",
+        "qovery.com/service-id": "long-id",
+        "qovery.com/service-type": "database"
+      },
+      "labels": {
+        "app": "sanitized-name",
+        "databaseId": "id",
+        "databaseLongId": "long-id",
+        "envId": "environment-id",
+        "envLongId": "environment-long-id",
+        "projectLongId": "project-long-id",
+        "qovery.com/environment-id": "environment-long-id",
+        "qovery.com/project-id": "project-long-id",
+        "qovery.com/service-id": "long-id",
+        "qovery.com/service-type": "database"
+      },
+      "size": "20Gi",
+      "storageClass": "database-disk-type"
+    },
+    "podAnnotations": {
+      "pod.example": "test"
+    },
+    "podLabels": {
+      "app": "sanitized-name",
+      "databaseId": "id",
+      "databaseLongId": "long-id",
+      "envId": "environment-id",
+      "envLongId": "environment-long-id",
+      "projectLongId": "project-long-id",
+      "qovery.com/environment-id": "environment-long-id",
+      "qovery.com/project-id": "project-long-id",
+      "qovery.com/service-id": "long-id",
+      "qovery.com/service-type": "database",
+      "team": "data"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "requests": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      }
+    },
+    "service": {
+      "name": "service-name",
+      "type": "ClusterIP"
+    },
+    "tolerations": [
+      {
+        "effect": "NoSchedule",
+        "key": "dedicated",
+        "operator": "Exists"
+      }
+    ]
+  },
+  "rbac": {
+    "create": true
+  },
+  "readReplicas": {
+    "affinity": {
+      "nodeAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": {
+          "nodeSelectorTerms": [
+            {
+              "matchExpressions": [
+                {
+                  "key": "kubernetes.io/arch",
+                  "operator": "In",
+                  "values": [
+                    "amd64"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "nodeAffinityPreset": {
+      "key": "kubernetes.io/arch",
+      "type": "hard",
+      "values": [
+        "amd64"
+      ]
+    },
+    "tolerations": [
+      {
+        "effect": "NoSchedule",
+        "key": "dedicated",
+        "operator": "Exists"
+      }
+    ]
+  },
+  "volumePermissions": {
+    "enabled": true,
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-bitnami-shell"
+    }
+  }
+}

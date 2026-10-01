@@ -6,16 +6,16 @@ metadata:
   namespace: {{ .Release.Namespace | quote }}
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
     app.kubernetes.io/component: read
   {{- if or .Values.commonAnnotations .Values.readReplicas.service.annotations }}
   annotations:
     {{- if .Values.commonAnnotations }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
     {{- end }}
     {{- if .Values.readReplicas.service.annotations }}
-    {{- include "common.tplvalues.render" (dict "value" .Values.readReplicas.service.annotations "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.literal" (dict "value" .Values.readReplicas.service.annotations "context" $) | nindent 4 }}
     {{- end }}
   {{- end }}
 spec:

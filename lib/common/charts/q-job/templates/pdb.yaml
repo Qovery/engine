@@ -1,0 +1,33 @@
+{{- if not $.Values.cluster.is_karpenter_enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $.Values.service.name }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "job"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: "job"
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    qovery.com/service-version: {{ $.Values.service.version | quote }}
+    {{- range $key, $value := $.Values.annotations_group.job }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  minAvailable: 1
+  selector:
+    matchLabels:
+      qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+{{- end }}

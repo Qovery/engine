@@ -753,7 +753,7 @@ pub(crate) struct AgenticWorkflowTeraContext {
     pub(crate) user_environment_variables: Vec<EnvironmentVariable>,
     /// Base64-encoded Bedrock credentials for Secret `data`; empty for Claude.
     pub(crate) bedrock_credentials: Vec<EnvironmentVariable>,
-    /// One Secret and one volume mount per entry. `Vec` because Tera iterates it; the ordering
+    /// One Secret and one volume mount per entry. `Vec` because Helm iterates it; the ordering
     /// comes from the `BTreeSet` it is built from.
     pub(crate) mounted_files: Vec<MountedFile>,
     /// `None` when the Job runs the public base image and needs no pull secret.
@@ -796,18 +796,43 @@ mod tests {
     use crate::io_models::models::{EnvironmentVariable, MountedFile};
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
     use crate::io_models::variable_utils::VariableInfo;
-    use crate::tera_utils::render_one_off;
+    use crate::template::{generate_and_copy_all_files_into_dir, write_chart_values};
     use base64::Engine;
     use base64::engine::general_purpose;
     use serde::Deserialize;
     use std::collections::BTreeMap;
     use std::collections::BTreeSet;
+    use std::path::Path;
+    use std::process::Command;
     use tera::Context;
     use uuid::Uuid;
 
-    fn render_template(template: &str, context: AgenticWorkflowTeraContext) -> String {
-        let tera_context = Context::from_serialize(context).expect("agentic workflow tera context should serialize");
-        render_one_off(template, &tera_context).expect("template should render")
+    fn render_template(name: &str, context: AgenticWorkflowTeraContext) -> String {
+        let chart = tempfile::tempdir().expect("temporary chart directory");
+        let values = Context::from_serialize(context).expect("workflow context should serialize");
+        generate_and_copy_all_files_into_dir(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts/q-agentic-workflow"),
+            chart.path(),
+            &values,
+        )
+        .expect("chart should be prepared");
+        write_chart_values(chart.path(), &values).expect("chart values should be serialized");
+        let output = Command::new("helm")
+            .args(["template", "test", chart.path().to_str().expect("chart path")])
+            .output()
+            .expect("helm must be installed to test chart rendering");
+        assert!(
+            output.status.success(),
+            "helm template failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let rendered = String::from_utf8(output.stdout).expect("Helm output should be UTF-8");
+        // Selecting after rendering also handles intentionally empty templates.
+        rendered
+            .split("---\n")
+            .filter(|document| document.starts_with(&format!("# Source: q-agentic-workflow/templates/{name}.yaml\n")))
+            .map(|document| format!("---\n{document}"))
+            .collect()
     }
 
     fn build_agentic_workflow_tera_context() -> AgenticWorkflowTeraContext {
@@ -863,11 +888,11 @@ mod tests {
     }
 
     fn job_template() -> &'static str {
-        include_str!("../../../lib/common/charts/q-agentic-workflow/templates/job.j2.yaml")
+        "job"
     }
 
     fn mounted_files_secret_template() -> &'static str {
-        include_str!("../../../lib/common/charts/q-agentic-workflow/templates/mounted_files_secret.j2.yaml")
+        "mounted_files_secret"
     }
 
     /// `base64("{\"retries\":3}")`, as q-core sends it.
@@ -924,12 +949,11 @@ mod tests {
         assert!(rendered.contains("subPath: content"));
     }
 
-    /// The assertion above cannot tell the escaped form from the raw one — `yaml_encode` renders an
-    /// ordinary path identically. This one can: a mount path is customer-controlled, and a quote
+    /// The assertion above only covers an ordinary path. A mount path is customer-controlled, and a quote
     /// followed by a newline at container-spec indentation would otherwise add fields to the pod.
     #[test]
     fn job_mount_path_cannot_inject_manifest_fields() {
-        let payload = "/etc/config.json\"\n      hostPID: true\n      dummy: \"x";
+        let payload = "/etc/{{ fail \"must remain data\" }}/config.json\"\n      hostPID: true\n      dummy: \"x";
         let mut context = build_context_with_mounted_file();
         context.mounted_files[0].mount_path = payload.to_string();
 
@@ -1227,7 +1251,7 @@ mod tests {
     /// Quoted/newline region input must stay within the `AWS_REGION` scalar.
     #[test]
     fn aws_region_cannot_inject_manifest_fields() {
-        let payload = "eu-west-3\"\n      hostPID: true\n      dummy: \"x";
+        let payload = "{{ fail \"must remain data\" }} eu-west-3\"\n      hostPID: true\n      dummy: \"x";
         let mut context = build_bedrock_tera_context();
         context.service.bedrock = Some(BedrockTeraContext {
             region: payload.to_string(),
@@ -1271,7 +1295,7 @@ mod tests {
     }
 
     fn secret_template() -> &'static str {
-        include_str!("../../../lib/common/charts/q-agentic-workflow/templates/secret.j2.yaml")
+        "secret"
     }
 
     #[test]
@@ -1336,7 +1360,11 @@ mod tests {
 
         assert!(secret.contains("type: kubernetes.io/dockerconfigjson"), "got:\n{secret}");
         assert!(secret.contains("name: test-agentic-workflow-registry"), "got:\n{secret}");
-        assert!(secret.contains(".dockerconfigjson: eyJhdXRocyI6e319"), "got:\n{secret}");
+        let pull_secret = serde_yaml::Deserializer::from_str(&secret)
+            .map(|document| serde_yaml::Value::deserialize(document).expect("secret should parse"))
+            .find(|document| document["type"] == "kubernetes.io/dockerconfigjson")
+            .expect("registry pull secret should be rendered");
+        assert_eq!(pull_secret["data"][".dockerconfigjson"], "eyJhdXRocyI6e319");
     }
 
     /// Both templates gate on `docker_json_config`, so a registry carrying no credentials renders
@@ -1359,7 +1387,7 @@ mod tests {
     }
 
     fn prompt_config_map_template() -> &'static str {
-        include_str!("../../../lib/common/charts/q-agentic-workflow/templates/prompt_config_map.j2.yaml")
+        "prompt_config_map"
     }
 
     #[test]
@@ -1486,7 +1514,7 @@ mod tests {
         // on that: it is the last line of defence if the identifier filter ever loosens.
         let mut context = build_agentic_workflow_tera_context();
         context.user_environment_variables = vec![EnvironmentVariable {
-            key: "EVIL\ntype: Opaque\ninjected: true".to_string(),
+            key: "{{ fail \"must remain data\" }}\nEVIL\ntype: Opaque\ninjected: true".to_string(),
             value: general_purpose::STANDARD.encode("v"),
             is_secret: false,
         }];

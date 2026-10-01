@@ -42,8 +42,8 @@ pub fn eso_companion_release_name(kube_name: &str) -> String {
     format!("{truncated}{suffix}")
 }
 
-/// Tera context passed to `lib/common/charts/q-external-secret/templates/external_secret.j2.yaml`.
-/// All UUID fields are stored as strings because Tera serialises them as-is.
+/// Serialized chart values for `lib/common/charts/q-external-secret`.
+/// UUID fields are represented as strings in the generated values file.
 #[derive(Serialize)]
 pub struct EsoTeraContext {
     pub namespace: String,
@@ -213,7 +213,7 @@ fn install_external_secrets(
         event_details,
         tera::Context::from_serialize(tera_context).unwrap_or_default(),
         PathBuf::from(helm_chart_eso_dir(lib_root_directory)),
-        HelmChartValues::ChartDefaults,
+        HelmChartValues::SerializedContext,
         chart_info,
     );
 

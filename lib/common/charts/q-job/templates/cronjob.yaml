@@ -1,0 +1,297 @@
+{{- if $.Values.service.cronjob_schedule }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $.Values.service.name }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "job"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: "job"
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    {{- range $key, $value := $.Values.annotations_group.cronjob }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+spec:
+  schedule: {{ $.Values.service.cronjob_schedule | toJson }}
+  timeZone: {{ $.Values.service.cronjob_timezone | toJson }}
+  concurrencyPolicy: {{ $.Values.service.advanced_settings.cronjob_concurrency_policy }}
+  failedJobsHistoryLimit: {{ $.Values.service.advanced_settings.cronjob_failed_jobs_history_limit }}
+  successfulJobsHistoryLimit: {{ $.Values.service.advanced_settings.cronjob_success_jobs_history_limit }}
+  jobTemplate:
+    metadata:
+      name: {{ $.Values.service.name }}
+      labels:
+        envId: {{ $.Values.environment_short_id | quote }}
+        qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+        qovery.com/service-type: "job"
+        qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+        qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+        app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+        app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+        app.kubernetes.io/component: "job"
+        app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+        app.kubernetes.io/managed-by: "qovery"
+        app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+        {{- range $key, $value := $.Values.labels_group.common }}
+        {{ $key | toJson }}: {{ $value | toJson }}
+        {{- end }}
+      annotations:
+        qovery.com/service-version: {{ $.Values.service.version | quote }}
+        {{- range $key, $value := $.Values.annotations_group.job }}
+        {{ $key | toJson }}: {{ $value | toJson }}
+        {{- end }}
+    spec:
+      backoffLimit: {{ $.Values.service.max_nb_restart }}
+      activeDeadlineSeconds: {{ $.Values.service.max_duration_in_sec }}
+      {{- if $.Values.service.advanced_settings.job_delete_ttl_seconds_after_finished }}
+      ttlSecondsAfterFinished: {{ $.Values.service.advanced_settings.job_delete_ttl_seconds_after_finished }}
+      {{- end }}
+      parallelism: 1
+      template:
+        metadata:
+          labels:
+            envId: {{ $.Values.environment_short_id | quote }}
+            qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+            qovery.com/service-type: "job"
+            qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+            qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+            app.kubernetes.io/name: {{ $.Values.service.name | quote }}
+            app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+            app.kubernetes.io/component: "job"
+            app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+            app.kubernetes.io/managed-by: "qovery"
+            app.kubernetes.io/version: {{ $.Values.service.image_tag_label | quote }}
+            {{- range $key, $value := $.Values.labels_group.common }}
+            {{ $key | toJson }}: {{ $value | toJson }}
+            {{- end }}
+          annotations:
+            qovery.com/service-version: {{ $.Values.service.version | quote }}
+            karpenter.sh/do-not-disrupt: "true"
+            {{- range $key, $value := $.Values.annotations_group.pods }}
+            {{ $key | toJson }}: {{ $value | toJson }}
+            {{- end }}
+        spec:
+          {{- if $.Values.service.tolerations }}
+          tolerations:
+            {{- range $key, $value := $.Values.service.tolerations }}
+            - key: {{ $key | toJson }}
+              operator: "Exists"
+              effect: {{ $value | toJson }}
+            {{- end }}
+          {{- end }}
+          affinity:
+            {{- if or ($.Values.service.advanced_settings.deployment_affinity_node_required) ($.Values.service.deployment_affinity_node_preferred) }}
+            nodeAffinity:
+              {{- if $.Values.service.advanced_settings.deployment_affinity_node_required }}
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+              {{- range $key, $value := $.Values.service.advanced_settings.deployment_affinity_node_required }}
+                    - key: {{ $key | toJson }}
+                      operator: In
+                      values:
+                      - {{ $value | toJson }}
+              {{- end }}
+              {{- end }}
+              {{- if $.Values.service.deployment_affinity_node_preferred }}
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      {{- range $key, $value := $.Values.service.deployment_affinity_node_preferred }}
+                      - key: {{ $key | toJson }}
+                        operator: In
+                        values:
+                        - {{ $value | toJson }}
+                      {{- end }}
+              {{- end }}
+            {{- end }}
+          restartPolicy: OnFailure
+          automountServiceAccountToken: {{ $.Values.service.advanced_settings.security_automount_service_account_token }}
+          {{- if ne $.Values.service.advanced_settings.security_service_account_name "" }}
+          serviceAccountName: {{ $.Values.service.advanced_settings.security_service_account_name | toJson }}
+          {{- end }}
+          terminationGracePeriodSeconds: {{ $.Values.service.advanced_settings.deployment_termination_grace_period_seconds }}
+          {{- if $.Values.service.advanced_settings.network_dns_ndots }}
+          dnsConfig:
+            options:
+            - name: ndots
+              # quoted deliberately: the setting is numeric but the API field is a string
+              value: {{ $.Values.service.advanced_settings.network_dns_ndots | quote }}
+          {{- end }}
+          {{- if $.Values.registry }}
+          imagePullSecrets:
+            - name: {{ $.Values.registry.secret_name }}
+          {{- end }}
+          volumes:
+            {{- range $mounted_file := $.Values.mounted_files }}
+            - name: {{ $mounted_file.kube_name }}
+              secret:
+                secretName: {{ $mounted_file.kube_name }}
+            {{- end }}
+            {{- range $external_secret := $.Values.external_secrets }}
+              {{- range $entry := $external_secret.entries }}
+              {{- if $entry.mount_path }}
+            - name: {{ $entry.volume_name }}
+              secret:
+                secretName: {{ $external_secret.secret_name }}
+                defaultMode: 420
+                items:
+                  - key: {{ $entry.env_var_key | toJson }}
+                    path: {{ $entry.mount_path_relative | toJson }}
+              {{- end }}
+              {{- end }}
+            {{- end }}
+          containers:
+            - name: {{ $.Values.service.name }}
+              image: {{ $.Values.service.image_full | quote }}
+          {{- if $.Values.service.entrypoint }}
+              command:
+                - {{ $.Values.service.entrypoint | toJson }}
+          {{- end }}
+              args:
+                {{- range $arg := $.Values.service.command_args }}
+                - {{ $arg | toJson }}
+                {{- end }}
+              volumeMounts:
+                {{- range $mounted_file := $.Values.mounted_files }}
+                - mountPath: {{ $mounted_file.mount_path | toJson }}
+                  subPath: content
+                  name: {{ $mounted_file.kube_name }}
+                  readOnly: true
+                {{- end }}
+                {{- range $external_secret := $.Values.external_secrets }}
+                  {{- range $entry := $external_secret.entries }}
+                  {{- if $entry.mount_path }}
+                - mountPath: {{ $entry.mount_path | toJson }}
+                  subPath: {{ $entry.mount_path_relative | toJson }}
+                  name: {{ $entry.volume_name }}
+                  readOnly: true
+                  {{- end }}
+                  {{- end }}
+                {{- end }}
+              envFrom:
+                - secretRef:
+                    name: {{ $.Values.service.name }}
+
+              {{- if $.Values.external_secrets }}
+              env:
+                {{- range $external_secret := $.Values.external_secrets }}
+                  {{- range $entry := $external_secret.entries }}
+                - name: {{ $entry.env_var_key | toJson }}
+                    {{- if not $entry.mount_path }}
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $external_secret.secret_name }}
+                      key: {{ $entry.env_var_key | toJson }}
+                    {{- else }}
+                  value: {{ $entry.mount_path | toJson }}
+                    {{- end }}
+                  {{- end }}
+                {{- end }}
+              {{- end }}
+          {{- if $.Values.service.default_port }}
+              ports:
+                - containerPort: {{ $.Values.service.default_port }}
+                  name: {{ printf "p%v" $.Values.service.default_port | quote }}
+                  protocol: TCP
+          {{- end }}
+              {{- if $.Values.service.readiness_probe }}
+              readinessProbe:
+                {{- if $.Values.service.readiness_probe.type.tcp }}
+                tcpSocket:
+                  port: {{ $.Values.service.readiness_probe.port }}
+                  host: {{ $.Values.service.readiness_probe.type.tcp.host | toJson }}
+                {{- end }}
+                {{- if $.Values.service.readiness_probe.type.http }}
+                httpGet:
+                  port: {{ $.Values.service.readiness_probe.port }}
+                  path: {{ $.Values.service.readiness_probe.type.http.path | toJson }}
+                  scheme: {{ $.Values.service.readiness_probe.type.http.scheme }}
+                {{- end }}
+                {{- if $.Values.service.readiness_probe.type.exec }}
+                exec:
+                  command:
+                  {{- range $cmd := $.Values.service.readiness_probe.type.exec.commands }}
+                  - {{ $cmd | toJson }}
+                  {{- end }}
+                {{- end }}
+                {{- if $.Values.service.readiness_probe.type.grpc }}
+                grpc:
+                  port: {{ $.Values.service.readiness_probe.port }}
+                  service: {{ $.Values.service.readiness_probe.type.grpc.service | toJson }}
+                {{- end }}
+                initialDelaySeconds: {{ $.Values.service.readiness_probe.initial_delay_seconds }}
+                periodSeconds: {{ $.Values.service.readiness_probe.period_seconds }}
+                timeoutSeconds: {{ $.Values.service.readiness_probe.timeout_seconds }}
+                successThreshold: {{ $.Values.service.readiness_probe.success_threshold }}
+                failureThreshold: {{ $.Values.service.readiness_probe.failure_threshold }}
+              {{- end }}
+              {{- if $.Values.service.liveness_probe }}
+              livenessProbe:
+                {{- if $.Values.service.liveness_probe.type.tcp }}
+                tcpSocket:
+                  port: {{ $.Values.service.liveness_probe.port }}
+                  host: {{ $.Values.service.liveness_probe.type.tcp.host | toJson }}
+                {{- end }}
+                {{- if $.Values.service.liveness_probe.type.http }}
+                httpGet:
+                  port: {{ $.Values.service.liveness_probe.port }}
+                  path: {{ $.Values.service.liveness_probe.type.http.path | toJson }}
+                  scheme: {{ $.Values.service.liveness_probe.type.http.scheme }}
+                {{- end }}
+                {{- if $.Values.service.liveness_probe.type.exec }}
+                exec:
+                  command:
+                  {{- range $cmd := $.Values.service.liveness_probe.type.exec.commands }}
+                  - {{ $cmd | toJson }}
+                  {{- end }}
+                {{- end }}
+                {{- if $.Values.service.liveness_probe.type.grpc }}
+                grpc:
+                  port: {{ $.Values.service.liveness_probe.port }}
+                  service: {{ $.Values.service.liveness_probe.type.grpc.service | toJson }}
+                {{- end }}
+                initialDelaySeconds: {{ $.Values.service.liveness_probe.initial_delay_seconds }}
+                periodSeconds: {{ $.Values.service.liveness_probe.period_seconds }}
+                timeoutSeconds: {{ $.Values.service.liveness_probe.timeout_seconds }}
+                successThreshold: {{ $.Values.service.liveness_probe.success_threshold }}
+                failureThreshold: {{ $.Values.service.liveness_probe.failure_threshold }}
+              {{- end }}
+              securityContext:
+                readOnlyRootFilesystem: {{ $.Values.service.advanced_settings.security_read_only_root_filesystem }}
+              resources:
+                limits:
+                  {{- if $.Values.service.cpu_limit_in_milli }}
+                  cpu: {{ $.Values.service.cpu_limit_in_milli }}
+                  {{- end }}
+                  memory: {{ $.Values.service.ram_limit_in_mib }}
+                  {{- if and ($.Values.service.gpu_limit) (gt ($.Values.service.gpu_limit | int) 0) }}
+                  nvidia.com/gpu: {{ $.Values.service.gpu_limit }}
+                  {{- end }}
+                  {{- if $.Values.service.ephemeral_storage_in_gib }}
+                  ephemeral-storage: {{ $.Values.service.ephemeral_storage_in_gib }}
+                  {{- end }}
+                requests:
+                  cpu: {{ $.Values.service.cpu_request_in_milli }}
+                  memory: {{ $.Values.service.ram_request_in_mib }}
+                  {{- if and ($.Values.service.gpu_request) (gt ($.Values.service.gpu_request | int) 0) }}
+                  nvidia.com/gpu: {{ $.Values.service.gpu_request }}
+                  {{- end }}
+                  {{- if $.Values.service.ephemeral_storage_in_gib }}
+                  ephemeral-storage: {{ $.Values.service.ephemeral_storage_in_gib }}
+                  {{- end }}
+  {{- end }}

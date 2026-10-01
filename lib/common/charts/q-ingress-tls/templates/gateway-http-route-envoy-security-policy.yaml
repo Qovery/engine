@@ -1,0 +1,80 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- range $namespace_key, $gateway_http_routes := $.Values.gateway_http_routes_per_namespace }}
+{{- if (ge (int (len $gateway_http_routes)) 1) }}
+{{/*
+  Create one SecurityPolicy per HTTPRoute part.
+*/}}
+{{- $num_routes := (len $gateway_http_routes) }}
+{{- range $index2, $route := $gateway_http_routes }}
+{{- $route_index := $index2 }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ $.Values.sanitized_name }}-security-policy{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: {{ $.Values.sanitized_name }}{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  {{- if (eq $.Values.advanced_settings.network_gateway_api_enable_cors true) }}
+  cors:
+    allowOrigins:
+    {{- range $index4, $o := (splitList "," $.Values.advanced_settings.network_gateway_api_cors_allow_origin) }}
+    - {{ (toJson (trim $o)) }}
+    {{- end }}
+    allowMethods:
+    {{- range $index5, $m := (splitList "," $.Values.advanced_settings.network_gateway_api_cors_allow_methods) }}
+    - {{ (toJson (trim $m)) }}
+    {{- end }}
+    allowHeaders:
+    {{- range $index6, $h := (splitList "," $.Values.advanced_settings.network_gateway_api_cors_allow_headers) }}
+    - {{ (toJson (trim $h)) }}
+    {{- end }}
+  {{- end }}
+  {{- if (or (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) $.Values.advanced_settings.network_gateway_api_denylist_source_range) }}
+  authorization:
+    {{- if (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) }}
+    defaultAction: Deny
+    {{- else }}
+    defaultAction: Allow
+    {{- end }}
+    rules:
+    {{- if (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) }}
+    - action: Allow
+      principal:
+        clientCIDRs:
+        {{- range $index7, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_whitelist_source_range) }}
+        - {{ (toJson (trim $c)) }}
+        {{- end }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_gateway_api_denylist_source_range }}
+    - action: Deny
+      principal:
+        clientCIDRs:
+        {{- range $index8, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_denylist_source_range) }}
+        - {{ (toJson (trim $c)) }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- if $.Values.advanced_settings.network_gateway_api_basic_auth_env_var }}
+  basicAuth:
+    users:
+      name: htaccess-{{ $.Values.sanitized_name }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

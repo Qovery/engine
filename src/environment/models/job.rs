@@ -629,17 +629,12 @@ mod tests {
     use crate::environment::models::container::ClusterTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
     use crate::io_models::job::JobAdvancedSettings;
-    use crate::tera_utils::render_one_off;
     use std::collections::BTreeMap;
-    use tera::Context;
     use uuid::Uuid;
 
     #[test]
     fn renders_cronjob_template_with_required_cronjob_nodepool_affinity() {
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"),
-            build_job_tera_context(true),
-        );
+        let rendered = render_template("cronjob.yaml", build_job_tera_context(true));
 
         assert!(rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
         assert!(rendered.contains("karpenter.sh/nodepool"));
@@ -650,10 +645,7 @@ mod tests {
 
     #[test]
     fn renders_job_template_with_required_cronjob_nodepool_affinity() {
-        let rendered = render_template(
-            include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"),
-            build_job_tera_context(false),
-        );
+        let rendered = render_template("job.yaml", build_job_tera_context(false));
 
         assert!(rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
         assert!(rendered.contains("karpenter.sh/nodepool"));
@@ -666,7 +658,7 @@ mod tests {
     fn renders_job_template_with_ephemeral_storage() {
         let mut ctx = build_job_tera_context(false);
         ctx.service.ephemeral_storage_in_gib = Some("5Gi".to_string());
-        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"), ctx);
+        let rendered = render_template("job.yaml", ctx);
         assert_eq!(
             rendered.matches("ephemeral-storage: 5Gi").count(),
             2,
@@ -678,7 +670,7 @@ mod tests {
     fn renders_cronjob_template_with_ephemeral_storage() {
         let mut ctx = build_job_tera_context(true);
         ctx.service.ephemeral_storage_in_gib = Some("5Gi".to_string());
-        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"), ctx);
+        let rendered = render_template("cronjob.yaml", ctx);
         assert_eq!(
             rendered.matches("ephemeral-storage: 5Gi").count(),
             2,
@@ -689,7 +681,7 @@ mod tests {
     #[test]
     fn renders_job_template_without_ephemeral_storage_when_unset() {
         let ctx = build_job_tera_context(false);
-        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"), ctx);
+        let rendered = render_template("job.yaml", ctx);
         assert!(
             !rendered.contains("ephemeral-storage"),
             "ephemeral-storage should be absent when not set"
@@ -700,7 +692,7 @@ mod tests {
     fn renders_job_template_without_cpu_limit_when_unset() {
         let mut ctx = build_job_tera_context(false);
         ctx.service.cpu_limit_in_milli = None;
-        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"), ctx);
+        let rendered = render_template("job.yaml", ctx);
         assert_eq!(
             rendered.matches("cpu:").count(),
             3,
@@ -712,7 +704,7 @@ mod tests {
     fn renders_cronjob_template_without_cpu_limit_when_unset() {
         let mut ctx = build_job_tera_context(true);
         ctx.service.cpu_limit_in_milli = None;
-        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"), ctx);
+        let rendered = render_template("cronjob.yaml", ctx);
         assert_eq!(
             rendered.matches("cpu:").count(),
             1,
@@ -720,9 +712,61 @@ mod tests {
         );
     }
 
+    #[test]
+    fn helm_keeps_job_and_cronjob_inputs_as_literal_data() {
+        let payload = "\"\n  injected: true\n{{ fail \"must not execute\" }}";
+        for is_cron in [false, true] {
+            let mut context = serde_json::to_value(build_job_tera_context(is_cron)).unwrap();
+            context["service"]["command_args"] = serde_json::json!([payload]);
+            context["service"]["entrypoint"] = payload.into();
+            context["service"]["advanced_settings"]["security_service_account_name"] = payload.into();
+            context["labels_group"]["common"] = serde_json::json!({payload: payload});
+            context["annotations_group"]["pods"] = serde_json::json!({payload: payload});
+            context["service"]["liveness_probe"] = serde_json::json!({
+                "type": {"exec": {"commands": [payload]}},
+                "initial_delay_seconds": 1, "period_seconds": 2, "timeout_seconds": 3,
+                "success_threshold": 1, "failure_threshold": 4
+            });
+            let rendered = render_values(if is_cron { "cronjob.yaml" } else { "job.yaml" }, &context);
+            let document: serde_yaml::Value = serde_yaml::from_str(&rendered).unwrap();
+            let pod = if is_cron {
+                &document["spec"]["jobTemplate"]["spec"]["template"]
+            } else {
+                &document["spec"]["template"]
+            };
+            assert_eq!(pod["metadata"]["labels"][payload].as_str(), Some(payload));
+            assert_eq!(pod["metadata"]["annotations"][payload].as_str(), Some(payload));
+            assert_eq!(pod["spec"]["serviceAccountName"].as_str(), Some(payload));
+            let container = &pod["spec"]["containers"][0];
+            assert_eq!(container["args"][0].as_str(), Some(payload));
+            assert_eq!(container["command"][0].as_str(), Some(payload));
+            assert_eq!(container["livenessProbe"]["exec"]["command"][0].as_str(), Some(payload));
+            assert!(pod["spec"]["injected"].is_null());
+            assert!(container["injected"].is_null());
+        }
+    }
+
     fn render_template(template: &str, context: JobTeraContext) -> String {
-        let tera_context = Context::from_serialize(context).expect("job tera context should serialize");
-        render_one_off(template, &tera_context).expect("template should render")
+        render_values(template, &serde_json::to_value(context).expect("serialize job context"))
+    }
+
+    fn render_values(template: &str, context: &serde_json::Value) -> String {
+        let chart = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts/q-job");
+        let temp = tempfile::tempdir().expect("temporary values directory");
+        let values = temp.path().join("values.yaml");
+        std::fs::write(&values, serde_json::to_string(context).expect("serialize job values"))
+            .expect("write job values");
+        let output = std::process::Command::new("helm")
+            .args(["template", "test-job"])
+            .arg(chart)
+            .arg("--values")
+            .arg(values)
+            .arg("--show-only")
+            .arg(format!("templates/{template}"))
+            .output()
+            .expect("helm must be installed to exercise the job chart");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8(output.stdout).expect("Helm output must be UTF-8")
     }
 
     fn build_job_tera_context(is_cron_template: bool) -> JobTeraContext {

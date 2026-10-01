@@ -7,18 +7,18 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     app.kubernetes.io/component: primary
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
     {{- if .Values.primary.labels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.primary.labels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.primary.labels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if or .Values.commonAnnotations .Values.primary.annotations }}
   annotations:
     {{- if .Values.commonAnnotations }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
     {{- end }}
     {{- if .Values.primary.annotations }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.primary.annotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.primary.annotations "context" $ ) | nindent 4 }}
     {{- end }}
   {{- end }}
 spec:
@@ -36,10 +36,10 @@ spec:
       labels: {{- include "common.labels.standard" . | nindent 8 }}
         app.kubernetes.io/component: primary
         {{- if .Values.commonLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
         {{- end }}
         {{- if .Values.primary.podLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.primary.podLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.primary.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
       {{- if or (include "postgresql.primary.createConfigmap" .) (include "postgresql.primary.createExtendedConfigmap" .) .Values.primary.podAnnotations }}
       annotations:
@@ -50,7 +50,7 @@ spec:
         checksum/extended-configuration: {{ include (print $.Template.BasePath "/primary/extended-configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- if .Values.primary.podAnnotations }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.primary.podAnnotations "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.primary.podAnnotations "context" $ ) | nindent 8 }}
         {{- end }}
       {{- end }}
     spec:
@@ -63,7 +63,7 @@ spec:
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.primary.hostAliases "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.primary.affinity }}
-      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.primary.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "common.tplvalues.literal" (dict "value" .Values.primary.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.primary.podAffinityPreset "component" "primary" "context" $) | nindent 10 }}
@@ -74,7 +74,7 @@ spec:
       nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.primary.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.primary.tolerations }}
-      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.primary.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "common.tplvalues.literal" (dict "value" .Values.primary.tolerations "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.primary.topologySpreadConstraints }}
       topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.primary.topologySpreadConstraints "context" .) | nindent 8 }}
@@ -278,7 +278,7 @@ spec:
             {{- end }}
             {{- if .Values.primary.initdb.user }}
             - name: POSTGRESQL_INITSCRIPTS_USERNAME
-              value: {{ .Values.primary.initdb.user }}
+              value: {{ .Values.primary.initdb.user | quote }}
             {{- end }}
             {{- if .Values.primary.initdb.password }}
             - name: POSTGRESQL_INITSCRIPTS_PASSWORD
@@ -401,11 +401,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                {{- if (include "postgresql.database" .) }}
-                - exec pg_isready -U {{ default "postgres" $customUser | quote }} -d "dbname={{ include "postgresql.database" . }} {{- if and .Values.tls.enabled .Values.tls.certCAFilename }} sslcert={{ include "postgresql.tlsCert" . }} sslkey={{ include "postgresql.tlsCertKey" . }}{{- end }}" -h 127.0.0.1 -p {{ .Values.containerPorts.postgresql }}
-                {{- else }}
-                - exec pg_isready -U {{ default "postgres" $customUser | quote }} {{- if and .Values.tls.enabled .Values.tls.certCAFilename }} -d "sslcert={{ include "postgresql.tlsCert" . }} sslkey={{ include "postgresql.tlsCertKey" . }}"{{- end }} -h 127.0.0.1 -p {{ .Values.containerPorts.postgresql }}
-                {{- end }}
+                - {{ include "postgresql.probeCommand" . | quote }}
           {{- end }}
           {{- if .Values.primary.customLivenessProbe }}
           livenessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.primary.customLivenessProbe "context" $) | nindent 12 }}
@@ -415,11 +411,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                {{- if (include "postgresql.database" .) }}
-                - exec pg_isready -U {{ default "postgres" $customUser | quote }} -d "dbname={{ include "postgresql.database" . }} {{- if and .Values.tls.enabled .Values.tls.certCAFilename }} sslcert={{ include "postgresql.tlsCert" . }} sslkey={{ include "postgresql.tlsCertKey" . }}{{- end }}" -h 127.0.0.1 -p {{ .Values.containerPorts.postgresql }}
-                {{- else }}
-                - exec pg_isready -U {{ default "postgres" $customUser | quote }} {{- if and .Values.tls.enabled .Values.tls.certCAFilename }} -d "sslcert={{ include "postgresql.tlsCert" . }} sslkey={{ include "postgresql.tlsCertKey" . }}"{{- end }} -h 127.0.0.1 -p {{ .Values.containerPorts.postgresql }}
-                {{- end }}
+                - {{ include "postgresql.probeCommand" . | quote }}
           {{- end }}
           {{- if .Values.primary.customReadinessProbe }}
           readinessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.primary.customReadinessProbe "context" $) | nindent 12 }}
@@ -617,10 +609,10 @@ spec:
     - metadata:
         name: data
         {{- if .Values.primary.persistence.annotations }}
-        annotations: {{- include "common.tplvalues.render" (dict "value" .Values.primary.persistence.annotations "context" $) | nindent 10 }}
+        annotations: {{- include "common.tplvalues.literal" (dict "value" .Values.primary.persistence.annotations "context" $) | nindent 10 }}
         {{- end }}
         {{- if .Values.primary.persistence.labels }}
-        labels: {{- include "common.tplvalues.render" (dict "value" .Values.primary.persistence.labels "context" $) | nindent 10 }}
+        labels: {{- include "common.tplvalues.literal" (dict "value" .Values.primary.persistence.labels "context" $) | nindent 10 }}
         {{- end }}
       spec:
         accessModes:

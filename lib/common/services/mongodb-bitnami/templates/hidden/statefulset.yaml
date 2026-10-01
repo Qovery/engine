@@ -10,13 +10,13 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     app.kubernetes.io/component: hidden
     {{- if .Values.hidden.labels }}
-    {{- include "common.tplvalues.render" (dict "value" .Values.hidden.labels "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.labels "context" $) | nindent 4 }}
     {{- end }}
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if .Values.hidden.annotations }}
-  annotations: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.annotations "context" $) | nindent 4 }}
+  annotations: {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.annotations "context" $) | nindent 4 }}
   {{- end }}
 spec:
   serviceName: {{ printf "%s-hidden-headless" (include "mongodb.fullname" .) }}
@@ -33,10 +33,10 @@ spec:
       labels: {{- include "common.labels.standard" . | nindent 8 }}
         app.kubernetes.io/component: hidden
         {{- if .Values.hidden.podLabels }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.hidden.podLabels "context" $) | nindent 8 }}
+        {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.podLabels "context" $) | nindent 8 }}
         {{- end }}
         {{- if .Values.commonLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
         {{- end }}
       {{- if or (include "mongodb.hidden.createConfigmap" .) .Values.hidden.podAnnotations }}
       annotations:
@@ -44,7 +44,7 @@ spec:
         checksum/configuration: {{ include (print $.Template.BasePath "/hidden/configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- if .Values.hidden.podAnnotations }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.hidden.podAnnotations "context" $) | nindent 8 }}
+        {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.podAnnotations "context" $) | nindent 8 }}
         {{- end }}
       {{- end }}
     spec:
@@ -57,7 +57,7 @@ spec:
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.hostAliases "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.hidden.affinity }}
-      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.hidden.podAffinityPreset "component" "" "topologyKey" .Values.topologyKey "context" $) | nindent 10 }}
@@ -68,7 +68,7 @@ spec:
       nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.hidden.tolerations }}
-      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.tolerations "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.hidden.topologySpreadConstraints }}
       topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.topologySpreadConstraints "context" $) | nindent 8 }}
@@ -534,7 +534,7 @@ spec:
     - metadata:
         name: datadir
         {{- if .Values.hidden.persistence.annotations }}
-        annotations: {{- include "common.tplvalues.render" (dict "value" .Values.hidden.persistence.annotations "context" $) | nindent 10 }}
+        annotations: {{- include "common.tplvalues.literal" (dict "value" .Values.hidden.persistence.annotations "context" $) | nindent 10 }}
         {{- end }}
       spec:
         accessModes:

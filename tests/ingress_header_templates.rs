@@ -2,11 +2,14 @@
 //! header maps are interpolated into nginx config nested inside a YAML block scalar — two
 //! grammars deep, so neither YAML quoting nor a plain filter call is enough on its own.
 
-use qovery_engine::tera_utils::render_one_off;
+#[path = "helpers/native_helm.rs"]
+mod native_helm;
+
+use native_helm::render_router_template;
 use serde_json::json;
 use tera::Context;
 
-const INGRESS_HTTP: &str = include_str!("../lib/common/charts/q-ingress-tls/templates/ingress-http.j2.yaml");
+const INGRESS_HTTP: &str = include_str!("../lib/common/charts/q-ingress-tls/templates/ingress-http.yaml");
 
 fn render_with_headers(add_headers: serde_json::Value, proxy_set_headers: serde_json::Value) -> String {
     let mut context = Context::new();
@@ -67,7 +70,7 @@ fn render_with_headers(add_headers: serde_json::Value, proxy_set_headers: serde_
         }),
     );
 
-    render_one_off(INGRESS_HTTP, &context).expect("ingress template should render")
+    render_router_template(INGRESS_HTTP, &context).expect("ingress template should render")
 }
 
 fn configuration_snippet(rendered: &str) -> String {

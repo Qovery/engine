@@ -6,10 +6,10 @@ metadata:
   namespace: {{ include "mongodb.prometheusRule.namespace" . }}
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
     {{- if .Values.metrics.prometheusRule.additionalLabels }}
-    {{- include "common.tplvalues.render" (dict "value" .Values.metrics.prometheusRule.additionalLabels "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.literal" (dict "value" .Values.metrics.prometheusRule.additionalLabels "context" $) | nindent 4 }}
     {{- end }}
 spec:
   groups:

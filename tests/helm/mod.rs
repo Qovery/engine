@@ -1309,10 +1309,19 @@ pub fn managed_database_context() -> TestInfo {
         test_kube.context().execution_id()
     );
 
+    let mut context = test_env.databases[0]
+        .to_tera_context(&target)
+        .expect("Unable to get managed database context");
+    // Production obtains this endpoint from provisioning, then supplies it to the ExternalName chart.
+    let target_hostname = context.get("database_fqdn").expect("database endpoint").clone();
+    let source_fqdn = context.get("fqdn").expect("database public hostname").clone();
+    context.insert("target_hostname", &target_hostname);
+    context.insert("source_fqdn", &source_fqdn);
+    context.insert("database_long_id", test_env.databases[0].long_id());
+    context.insert("environment_id", &test_env.id);
+
     TestInfo {
-        context: test_env.databases[0]
-            .to_tera_context(&target)
-            .expect("Unable to get application context"),
+        context,
         event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
         temp_dir,
         service_folder_type: "databases".to_string(),
@@ -1325,6 +1334,7 @@ pub fn container_database_context() -> TestInfo {
     let infra_ctx = infra_ctx(test_kube.as_ref());
     let test_env = test_environment(test_kube.as_ref(), &infra_ctx.dns_provider().domain().to_string());
     let target = deployment_target(&test_env, &infra_ctx);
+    let database = test_container_database(test_kube.as_ref());
     let temp_dir = format!(
         "{}/.qovery-workspace/{}",
         test_kube.context().workspace_root_dir(),
@@ -1332,13 +1342,13 @@ pub fn container_database_context() -> TestInfo {
     );
 
     TestInfo {
-        context: test_env.databases[1]
-            .to_tera_context(&target)
-            .expect("Unable to get application context"),
+        context: database
+            .helm_values_context(&target)
+            .expect("Unable to get database Helm values"),
         event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
         temp_dir,
         service_folder_type: "databases".to_string(),
-        service_id: *test_env.databases[1].long_id(),
+        service_id: *database.long_id(),
     }
 }
 

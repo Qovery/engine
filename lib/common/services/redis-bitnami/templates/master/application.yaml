@@ -7,10 +7,10 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     app.kubernetes.io/component: master
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  annotations: {{- include "common.tplvalues.literal" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
   replicas: {{ .Values.master.count }}
@@ -35,13 +35,13 @@ spec:
       labels: {{- include "common.labels.standard" . | nindent 8 }}
         app.kubernetes.io/component: master
         {{- if .Values.master.podLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.master.podLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.master.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
         {{- if .Values.commonLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 8 }}
         {{- end }}
         {{- if and .Values.metrics.enabled .Values.metrics.podLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.metrics.podLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.metrics.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
       annotations:
         {{- if (include "redis.createConfigmap" .) }}
@@ -51,10 +51,10 @@ spec:
         checksum/scripts: {{ include (print $.Template.BasePath "/scripts-configmap.yaml") . | sha256sum }}
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
         {{- if .Values.master.podAnnotations }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.master.podAnnotations "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.master.podAnnotations "context" $ ) | nindent 8 }}
         {{- end }}
         {{- if and .Values.metrics.enabled .Values.metrics.podAnnotations }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.metrics.podAnnotations "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.metrics.podAnnotations "context" $ ) | nindent 8 }}
         {{- end }}
     spec:
       {{- include "redis.imagePullSecrets" . | nindent 6 }}
@@ -69,7 +69,7 @@ spec:
       priorityClassName: {{ .Values.master.priorityClassName | quote }}
       {{- end }}
       {{- if .Values.master.affinity }}
-      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.master.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "common.tplvalues.literal" (dict "value" .Values.master.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.master.podAffinityPreset "component" "master" "context" $) | nindent 10 }}
@@ -80,7 +80,7 @@ spec:
       nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.master.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.master.tolerations }}
-      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.master.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "common.tplvalues.literal" (dict "value" .Values.master.tolerations "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.master.topologySpreadConstraints }}
       topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.master.topologySpreadConstraints "context" $) | nindent 8 }}

@@ -1,0 +1,201 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- range $namespace_key, $gateway_http_routes := $.Values.gateway_http_routes_per_namespace }}
+{{- if (ge (int (len $gateway_http_routes)) 1) }}
+{{/*
+  Split routes to comply with Kubernetes Gateway API limits:
+  - Maximum 16 hostnames per HTTPRoute
+  - Maximum 16 rules per HTTPRoute
+
+  Each compacted route part contains:
+  - A deduplicated hostname set
+  - A deduplicated rule set shared by those hostnames
+*/}}
+{{- $num_routes := (len $gateway_http_routes) }}
+{{- range $index2, $route := $gateway_http_routes }}
+{{- $route_index := $index2 }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $.Values.sanitized_name }}{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {{- if (eq $.Values.has_wildcard_domain true) }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {{- else }}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {{- end }}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {{- range $key, $value := $.Values.annotations_group.gateway_api_routes }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  parentRefs:
+    {{- if (gt (int (len $.Values.certificate_alternative_names)) 0) }}
+    {{- if (eq $.Values.k8s_deploy_listenerset true) }}
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ $.Values.sanitized_name }}-listeners
+      namespace: {{ $namespace_key }}
+    {{- end }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {{- if (or (not $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) (eq (toString $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) "false")) }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {{- end }}
+    {{- else }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {{- if (or (not $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) (eq (toString $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) "false")) }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {{- end }}
+    {{- end }}
+  hostnames:
+    {{- range $index5, $hostname := $route.hostnames }}
+    - {{ (toJson $hostname) }}
+    {{- end }}
+  rules:
+    {{- range $index6, $rule := $route.rules }}
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ $rule.service_name | quote }}
+          port: {{ $rule.service_port }}
+          weight: {{ $rule.weight }}
+      matches:
+        - path:
+            type: {{ $rule.path_type }}
+            value: {{ (toJson $rule.path) }}
+      filters:
+       {{- if $rule.path_rewrite }}
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ $.Values.sanitized_name }}-rewrite-{{ $route_index }}-{{ $index6 }}
+       {{- end }}
+       {{- if $.Values.advanced_settings.network_gateway_api_add_headers }}
+        # Add custom response headers
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+              {{- range $header_name, $header_value := $.Values.advanced_settings.network_gateway_api_add_headers }}
+              - name: {{ (toJson $header_name) }}
+                value: {{ (toJson $header_value) }}
+              {{- end }}
+        {{- end }}
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            {{- if $.Values.advanced_settings.network_gateway_api_proxy_set_headers }}
+            # Add custom request headers (proxy_set_header equivalent)
+            add:
+            {{- range $header_name, $header_value := $.Values.advanced_settings.network_gateway_api_proxy_set_headers }}
+            - name: {{ (toJson $header_name) }}
+              value: {{ (toJson $header_value) }}
+            {{- end }}
+            {{- end }}
+            # Add Qovery specific headers for logging and tracing
+            set:
+            - name: "x-qovery-com-environment-id"
+              value: {{ $.Values.environment_long_id | quote }}
+            - name: "x-qovery-com-associated-service-id"
+              value: {{ $.Values.associated_service_long_id | quote }}
+    {{- end }}
+{{- end }}
+{{- if (and $.Values.advanced_settings.network_gateway_api_force_ssl_redirect (ne (toString $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) "false")) }}
+{{/*
+  SSL redirect routes are split exactly like the HTTPS routes.
+*/}}
+{{- range $index9, $route := $gateway_http_routes }}
+{{- $route_index := $index9 }}
+---
+# SSL redirect HTTPRoute (only when force_ssl_redirect is TRUE)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $.Values.sanitized_name }}-ssl-redir{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {{- if (eq $.Values.has_wildcard_domain true) }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {{- else }}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {{- end }}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {{- range $key, $value := $.Values.annotations_group.gateway_api_routes }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  parentRefs:
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+  hostnames:
+    {{- range $index12, $hostname := $route.hostnames }}
+    - {{ (toJson $hostname) }}
+    {{- end }}
+  rules:
+  # Rule 1: Do not redirect ACME HTTP-01 challenge requests.
+  # cert-manager dynamically creates its own HTTPRoute with a more-specific path
+  # (exact challenge token), which wins over this route by Gateway API precedence.
+  # This rule exists to ensure the catch-all redirect below does NOT intercept
+  # /.well-known/acme-challenge/ requests before cert-manager can handle them,
+  # which would otherwise cause an infinite renewal loop every ~60 days.
+  #
+  # Keep valid backendRefs so Envoy does not synthesize a 500 direct response
+  # for an otherwise backend-less rule.
+  # Reuse the principal route backend targets, but force a strictly positive
+  # weight so zero-weight business routing values cannot break ACME fallback.
+  - backendRefs:
+      {{- range $index13, $rule := $route.rules }}
+      - group: ""
+        kind: Service
+        name: {{ $rule.service_name | quote }}
+        port: {{ $rule.service_port }}
+        weight: 1
+      {{- end }}
+    matches:
+      - path:
+          type: PathPrefix
+          value: /.well-known/acme-challenge/
+  # Rule 2: Redirect all other HTTP traffic to HTTPS.
+  - filters:
+      - type: RequestRedirect
+        requestRedirect:
+          scheme: https
+          statusCode: 301
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

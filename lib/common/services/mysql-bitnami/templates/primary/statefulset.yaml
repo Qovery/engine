@@ -6,10 +6,10 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     app.kubernetes.io/component: primary
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  annotations: {{- include "common.tplvalues.literal" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
   replicas: 1
@@ -28,12 +28,12 @@ spec:
         checksum/configuration: {{ include (print $.Template.BasePath "/primary/configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- if .Values.primary.podAnnotations }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.primary.podAnnotations "context" $) | nindent 8 }}
+        {{- include "common.tplvalues.literal" (dict "value" .Values.primary.podAnnotations "context" $) | nindent 8 }}
         {{- end }}
       labels: {{- include "common.labels.standard" . | nindent 8 }}
         app.kubernetes.io/component: primary
         {{- if .Values.primary.podLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.primary.podLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.primary.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
     spec:
       serviceAccountName: {{ template "mysql.serviceAccountName" . }}
@@ -42,7 +42,7 @@ spec:
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.primary.hostAliases "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.primary.affinity }}
-      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.primary.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "common.tplvalues.literal" (dict "value" .Values.primary.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.primary.podAffinityPreset "context" $) | nindent 10 }}
@@ -53,7 +53,7 @@ spec:
       nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.primary.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.primary.tolerations }}
-      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.primary.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "common.tplvalues.literal" (dict "value" .Values.primary.tolerations "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.primary.priorityClassName }}
       priorityClassName: {{ .Values.primary.priorityClassName | quote }}
@@ -364,14 +364,14 @@ spec:
         labels: {{ include "common.labels.matchLabels" . | nindent 10 }}
           app.kubernetes.io/component: primary
           {{- if .Values.commonLabels }}
-          {{- include "common.tplvalues.render" (dict "value" .Values.commonLabels "context" $) | nindent 10 }}
+          {{- include "common.tplvalues.literal" (dict "value" .Values.commonLabels "context" $) | nindent 10 }}
           {{- end }}
         annotations:
           {{- if .Values.primary.persistence.annotations }}
-          {{- include "common.tplvalues.render" (dict "value" .Values.primary.persistence.annotations "context" $) | nindent 10 }}
+          {{- include "common.tplvalues.literal" (dict "value" .Values.primary.persistence.annotations "context" $) | nindent 10 }}
           {{- end }}
           {{- if .Values.commonAnnotations }}
-          {{- include "common.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 10 }}
+          {{- include "common.tplvalues.literal" (dict "value" .Values.commonAnnotations "context" $) | nindent 10 }}
           {{- end }}
       spec:
         accessModes:

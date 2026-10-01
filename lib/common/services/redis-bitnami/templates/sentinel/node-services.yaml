@@ -19,15 +19,15 @@ metadata:
   labels: {{- include "common.labels.standard" $ | nindent 4 }}
     app.kubernetes.io/component: node
     {{- if $.Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" $.Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" $.Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if or $.Values.sentinel.service.annotations $.Values.commonAnnotations }}
   annotations:
     {{- if $.Values.sentinel.service.annotations }}
-    {{- include "common.tplvalues.render" ( dict "value" $.Values.sentinel.service.annotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" $.Values.sentinel.service.annotations "context" $ ) | nindent 4 }}
     {{- end }}
     {{- if $.Values.commonAnnotations }}
-    {{- include "common.tplvalues.render" ( dict "value" $.Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" $.Values.commonAnnotations "context" $ ) | nindent 4 }}
     {{- end }}
   {{- end }}
 spec:

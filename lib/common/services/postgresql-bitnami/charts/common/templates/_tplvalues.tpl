@@ -11,3 +11,12 @@ Usage:
         {{- tpl (.value | toYaml) .context }}
     {{- end }}
 {{- end -}}
+
+{{/* Deployment values are data, including strings containing Go-template delimiters. */}}
+{{- define "common.tplvalues.literal" -}}
+    {{- if typeIs "string" .value -}}
+        {{- .value -}}
+    {{- else -}}
+        {{- .value | toYaml -}}
+    {{- end -}}
+{{- end -}}

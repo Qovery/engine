@@ -4,7 +4,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChart, ServiceChart};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
-use crate::template::{generate_and_copy_all_files_into_dir, write_chart_values};
+use crate::template::{generate_and_copy_all_files_into_dir, write_chart_values, write_values_file};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -26,6 +26,9 @@ pub enum HelmChartValues {
     ChartDefaults,
     /// Replace values.yaml with the serialized deployment context.
     SerializedContext,
+    /// Write qovery-values.yaml with the serialized context, preserving chart defaults.
+    /// The override must also be listed in ChartInfo::values_files.
+    SerializedOverride,
     /// Render a legacy values override and its sibling files, preserving chart defaults.
     /// The rendered override must also be listed in ChartInfo::values_files.
     TeraFile(PathBuf),
@@ -66,6 +69,9 @@ impl HelmDeployment {
             .and_then(|()| match &self.values {
                 HelmChartValues::ChartDefaults => Ok(()),
                 HelmChartValues::SerializedContext => write_chart_values(&self.helm_chart.path, &self.tera_context),
+                HelmChartValues::SerializedOverride => {
+                    write_values_file(Path::new(&self.helm_chart.path).join("qovery-values.yaml"), &self.tera_context)
+                }
                 HelmChartValues::TeraFile(custom_value) => {
                     let custom_value_dir_path = custom_value.parent().unwrap_or_else(|| Path::new("./"));
                     generate_and_copy_all_files_into_dir(
@@ -215,7 +221,7 @@ mod chart_preparation_tests {
     }
 
     #[test]
-    fn legacy_values_preserve_defaults_and_apply_custom_overrides() {
+    fn chart_values_preserve_defaults_and_apply_custom_overrides() {
         let source = tempfile::tempdir().expect("source directory");
         let overrides = tempfile::tempdir().expect("overrides directory");
         fs::create_dir(source.path().join("templates")).expect("templates directory");
@@ -253,10 +259,11 @@ data:
 
         for (values, expected_size) in [
             (HelmChartValues::ChartDefaults, "8Gi"),
+            (HelmChartValues::SerializedOverride, "10Gi"),
             (HelmChartValues::TeraFile(override_path), "10Gi"),
         ] {
             let destination = tempfile::tempdir().expect("destination directory");
-            let values_files = if matches!(values, HelmChartValues::TeraFile(_)) {
+            let values_files = if matches!(values, HelmChartValues::TeraFile(_) | HelmChartValues::SerializedOverride) {
                 vec![
                     destination
                         .path()
@@ -267,9 +274,18 @@ data:
             } else {
                 vec![]
             };
+            let values_context = if matches!(values, HelmChartValues::SerializedOverride) {
+                Context::from_value(json!({
+                    "name": "legacy-config",
+                    "primary": {"persistence": {"size": "10Gi"}},
+                }))
+                .expect("override values context")
+            } else {
+                context.clone()
+            };
             let deployment = HelmDeployment::new(
                 event_details(),
-                context.clone(),
+                values_context,
                 source.path().to_path_buf(),
                 values,
                 ChartInfo {

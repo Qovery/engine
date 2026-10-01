@@ -362,7 +362,7 @@ where
             event_details.clone(),
             self.to_tera_context(target)?,
             PathBuf::from(self.helm_chart_dir()),
-            HelmChartValues::ChartDefaults,
+            HelmChartValues::SerializedContext,
             chart,
         ))
     }
@@ -753,7 +753,7 @@ where
         event_details.clone(),
         tera_context,
         PathBuf::from(terraform.helm_chart_external_name_service_dir()),
-        HelmChartValues::ChartDefaults,
+        HelmChartValues::SerializedContext,
         chart,
     )
     .on_create(target)
@@ -786,7 +786,7 @@ where
         event_details.clone(),
         tera::Context::default(),
         PathBuf::from(terraform.helm_chart_external_name_service_dir()),
-        HelmChartValues::ChartDefaults,
+        HelmChartValues::SerializedContext,
         chart,
     )
     .on_delete(target)
