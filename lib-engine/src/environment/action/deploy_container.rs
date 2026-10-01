@@ -1,26 +1,24 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::pause_service::PauseServiceAction;
-use crate::environment::models::container::{Container, ContainerService, get_container_with_invalid_storage_size};
+use crate::environment::models::container::{Container, ContainerService};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::application::reporter::ApplicationDeploymentReporter;
 use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
-use crate::kubers_utils::{KubeDeleteMode, kube_delete_all_from_selector};
 use crate::runtime::block_on;
-use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
 use crate::environment::action::deploy_external_secrets::{
     clean_unused_secrets_generated_by_eso, uninstall_service_external_secret,
 };
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::action::utils::{
-    KubeObjectKind, delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary,
-    update_pvcs,
+    KubeObjectKind, delete_cached_image, delete_dangling_service_pvcs, delete_nlb_or_alb_service,
+    get_last_deployed_image, mirror_image_if_necessary, prepare_statefulset_for_deployment,
 };
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::infrastructure::models::kubernetes;
@@ -52,49 +50,46 @@ where
             let last_image = block_on(get_last_deployed_image(
                 target.kube.client(),
                 &self.kube_label_selector(),
-                if self.is_stateful() {
-                    KubeObjectKind::Statefulset
-                } else {
-                    KubeObjectKind::Deployment
-                },
+                KubeObjectKind::Deployment,
                 target.environment.namespace(),
-            ));
+            ))
+            .or_else(|| {
+                (!self.storages.is_empty()).then(|| {
+                    block_on(get_last_deployed_image(
+                        target.kube.client(),
+                        &self.kube_label_selector(),
+                        KubeObjectKind::Statefulset,
+                        target.environment.namespace(),
+                    ))
+                })?
+            });
 
             Ok(TaskContext {
                 last_deployed_image: last_image,
             })
         };
 
-        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
                 self.kube_label_selector(),
-                self.is_stateful(),
+                false,
                 Duration::from_secs(5 * 60),
                 event_details.clone(),
                 true,
             )
             .unpause_if_needed(target);
 
-            match get_container_with_invalid_storage_size(
-                self,
-                &target.kube,
-                target.environment.namespace(),
-                &event_details,
-            ) {
-                Ok(invalid_statefulset_storage) => {
-                    if let Some(invalid_statefulset_storage) = invalid_statefulset_storage {
-                        update_pvcs(
-                            self.as_service(),
-                            &invalid_statefulset_storage,
-                            target.environment.namespace(),
-                            &event_details,
-                            &target.kube,
-                        )?;
-                    }
-                }
-                Err(e) => logger.warning(e.to_string()),
-            };
+            if !self.storages.is_empty() {
+                prepare_statefulset_for_deployment(
+                    &target.kube,
+                    target.environment.namespace(),
+                    self.kube_name(),
+                    self.min_instances,
+                    self.max_instances,
+                    &event_details,
+                )?;
+            }
 
             let chart = ChartInfo {
                 name: self.helm_release_name(),
@@ -102,6 +97,7 @@ where
                 namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
                 k8s_selector: Some(self.kube_label_selector()),
+                take_ownership: !self.storages.is_empty(),
                 ..Default::default()
             };
 
@@ -174,7 +170,7 @@ where
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let pause_service = PauseServiceAction::new(
                     self.kube_label_selector(),
-                    self.is_stateful(),
+                    false,
                     Duration::from_secs(5 * 60),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
                     true,
@@ -195,11 +191,7 @@ where
             let last_image = block_on(get_last_deployed_image(
                 target.kube.client(),
                 &self.kube_label_selector(),
-                if self.is_stateful() {
-                    KubeObjectKind::Statefulset
-                } else {
-                    KubeObjectKind::Deployment
-                },
+                KubeObjectKind::Deployment,
                 target.environment.namespace(),
             ));
 
@@ -209,7 +201,7 @@ where
         };
 
         // Execute the deployment
-        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
@@ -226,38 +218,19 @@ where
 
             helm.on_delete(target)?;
 
-            // Delete pvc of statefulset if needed
-            // FIXME(ENG-1606): Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
-            if self.is_stateful() {
-                logger.info("🪓 Terminating network volume of the container".to_string());
-                if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
-                    &target.kube,
-                    &self.kube_label_selector(),
-                    target.environment.namespace(),
-                    KubeDeleteMode::Normal,
-                )) {
-                    return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
-                        event_details.clone(),
-                        self.kube_label_selector(),
-                        CommandError::new_from_safe_message(err.to_string()),
-                    )));
-                }
-
-                // Trying to delete PVCs using old labels
-                // TODO(benjaminch): should be removed once PVCs are migrated to new labels
-                if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
-                    &target.kube,
-                    &self.kube_legacy_label_selector(),
-                    target.environment.namespace(),
-                    KubeDeleteMode::Normal,
-                )) {
-                    return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
-                        event_details.clone(),
-                        self.kube_legacy_label_selector(),
-                        CommandError::new_from_safe_message(err.to_string()),
-                    )));
-                }
-            }
+            let storage_ids = self
+                .storages
+                .iter()
+                .flat_map(|storage| [storage.id.clone(), storage.long_id.to_string()])
+                .collect::<Vec<_>>();
+            delete_dangling_service_pvcs(
+                &target.kube,
+                target.environment.namespace(),
+                [&self.kube_label_selector(), &self.kube_legacy_label_selector()],
+                self.kube_name(),
+                &storage_ids,
+                &event_details,
+            )?;
 
             Ok(state)
         };
@@ -307,7 +280,7 @@ where
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let restart_service = RestartServiceAction::new(
                     self.kube_label_selector(),
-                    self.is_stateful(),
+                    false,
                     self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
                 );
                 restart_service.on_restart(target)
