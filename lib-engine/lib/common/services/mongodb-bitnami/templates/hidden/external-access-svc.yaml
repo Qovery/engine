@@ -14,16 +14,16 @@ metadata:
   labels: {{- include "common.labels.standard" $ | nindent 4 }}
     app.kubernetes.io/component: hidden
     {{- if $root.Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" $root.Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" $root.Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
     pod: {{ $targetPod }}
   {{- if or $root.Values.externalAccess.hidden.service.annotations $root.Values.commonAnnotations }}
   annotations:
     {{- if $root.Values.externalAccess.hidden.service.annotations }}
-    {{- include "common.tplvalues.render" ( dict "value" $root.Values.externalAccess.hidden.service.annotations "context" $) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" $root.Values.externalAccess.hidden.service.annotations "context" $) | nindent 4 }}
     {{- end }}
     {{- if $root.Values.commonAnnotations }}
-    {{- include "common.tplvalues.render" ( dict "value" $root.Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" $root.Values.commonAnnotations "context" $ ) | nindent 4 }}
     {{- end }}
   {{- end }}
 spec:

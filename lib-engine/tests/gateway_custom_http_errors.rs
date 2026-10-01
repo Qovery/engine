@@ -2,13 +2,15 @@
 //! codes are typed `Option<Vec<u16>>` but reach the template as the comma-separated
 //! string their serializer emits (`io_models::types::http_status_codes`).
 
-use qovery_engine::tera_utils::render_one_off;
+#[path = "helpers/native_helm.rs"]
+mod native_helm;
+
+use native_helm::render_router_template;
 use serde_json::json;
 use tera::Context;
 
-const HTTP_POLICY: &str = include_str!(
-    "../lib/common/charts/q-ingress-tls/templates/gateway-http-route-envoy-backend-traffic-policy.j2.yaml"
-);
+const HTTP_POLICY: &str =
+    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-http-route-envoy-backend-traffic-policy.yaml");
 
 fn render_with_custom_http_errors(
     service_custom_http_errors: serde_json::Value,
@@ -53,7 +55,7 @@ fn render_with_custom_http_errors(
         }),
     );
 
-    render_one_off(HTTP_POLICY, &context).expect("policy template should render")
+    render_router_template(HTTP_POLICY, &context).expect("policy template should render")
 }
 
 #[test]

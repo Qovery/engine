@@ -1,0 +1,60 @@
+{
+  "registry_name": "registry-name",
+  "repository_name": "repository-name",
+  "repository_name_minideb": "repository-name-minideb",
+  "repository_name_bitnami_shell": "repository-name-bitnami-shell",
+  "sanitized_name": "sanitized-name",
+  "service_name": "service-name",
+  "fqdn": "fqdn",
+  "database_login": "database-login",
+  "database_password": "database-password",
+  "database_db_name": "database-db-name",
+  "environment_id": "environment-id",
+  "environment_long_id": "environment-long-id",
+  "project_long_id": "project-long-id",
+  "id": "id",
+  "long_id": "long-id",
+  "owner_id": "owner-id",
+  "database_disk_type": "database-disk-type",
+  "version": "7",
+  "database_port": 5432,
+  "database_disk_size_in_gib": 20,
+  "ram_request_in_mib": "256Mi",
+  "ram_limit_in_mib": "512Mi",
+  "cpu_request_in_milli": "100m",
+  "cpu_limit_in_milli": "500m",
+  "aws_load_balancer_type": "external",
+  "labels_group": {
+    "common": {
+      "team": "data"
+    }
+  },
+  "annotations_group": {
+    "service": {
+      "service.example": "test"
+    },
+    "pods": {
+      "pod.example": "test"
+    },
+    "stateful_set": {
+      "stateful.example": "test"
+    }
+  },
+  "additional_annotations": [
+    {
+      "key": "extra.example",
+      "value": "test"
+    }
+  ],
+  "node_affinity": {
+    "kubernetes.io/arch": "amd64"
+  },
+  "toleration": {
+    "dedicated": "NoSchedule"
+  },
+  "node_affinity_type": "hard",
+  "node_affinity_key": "kubernetes.io/arch",
+  "node_affinity_values": [
+    "amd64"
+  ]
+}

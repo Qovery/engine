@@ -1,0 +1,79 @@
+{
+  "architecture": "standalone",
+  "auth": {
+    "enabled": true,
+    "password": "database-password"
+  },
+  "commonLabels": {
+    "envId": "environment-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database"
+  },
+  "fullnameOverride": "sanitized-name",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "master": {
+    "persistence": {
+      "annotations": {},
+      "labels": {
+        "envId": "environment-id",
+        "qovery.com/environment-id": "environment-long-id",
+        "qovery.com/project-id": "project-long-id",
+        "qovery.com/service-id": "long-id",
+        "qovery.com/service-type": "database"
+      },
+      "size": "20Gi",
+      "storageClass": "database-disk-type"
+    },
+    "podLabels": {
+      "envId": "environment-id",
+      "qovery.com/environment-id": "environment-long-id",
+      "qovery.com/project-id": "project-long-id",
+      "qovery.com/service-id": "long-id",
+      "qovery.com/service-type": "database"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "requests": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      }
+    },
+    "service": {
+      "annotations": {
+        "external-dns.alpha.kubernetes.io/hostname": "fqdn",
+        "external-dns.alpha.kubernetes.io/ttl": "300"
+      },
+      "name": "service-name",
+      "type": "LoadBalancer"
+    },
+    "serviceAccount": {
+      "create": true,
+      "name": "sanitized-name"
+    }
+  },
+  "nameOverride": "sanitized-name",
+  "rbac": {
+    "create": true
+  },
+  "sysctlImage": {
+    "enabled": true,
+    "registry": "registry-name",
+    "repository": "repository-name-bitnami-shell"
+  },
+  "volumePermissions": {
+    "enabled": true,
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-bitnami-shell"
+    }
+  }
+}

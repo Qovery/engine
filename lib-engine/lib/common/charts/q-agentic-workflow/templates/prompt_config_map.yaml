@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Values.service.kube_name }}-prompt
+  namespace: {{ $.Values.namespace }}
+  labels:
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "agentic-workflow"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+binaryData:
+  prompt.txt: {{ $.Values.service.prompt_b64 | toJson }}
+  inputs.json: {{ $.Values.service.inputs_json_b64 | toJson }}

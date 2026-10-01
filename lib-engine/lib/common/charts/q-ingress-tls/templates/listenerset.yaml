@@ -1,0 +1,51 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- if (eq $.Values.k8s_deploy_listenerset true) }}
+{{- if (gt (int (len $.Values.certificate_alternative_names)) 0) }}
+{{- range $namespace_key, $http_hosts := $.Values.http_hosts_per_namespace_gateway }}
+{{- if (ge (int (len $http_hosts)) 1) }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: {{ $.Values.sanitized_name }}-listeners
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: qovery-cluster-public-gateway
+    namespace: qovery
+  listeners:
+  {{- range $index3, $domain := $.Values.certificate_alternative_names }}
+  - name: {{ $.Values.sanitized_name }}-{{ (add $index3 1) }}-https
+    hostname: {{ (toJson $domain.domain) }}
+    protocol: HTTPS
+    port: 443
+    allowedRoutes:
+      namespaces:
+        from: Same
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: router-tls-{{ $.Values.id }}
+        namespace: {{ $namespace_key }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

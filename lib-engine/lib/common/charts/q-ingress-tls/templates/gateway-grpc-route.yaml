@@ -1,0 +1,143 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- range $namespace_key, $grpc_hosts := $.Values.grpc_hosts_per_namespace_gateway }}
+{{- if (ge (int (len $grpc_hosts)) 1) }}
+{{/*
+  Split routes to comply with Kubernetes Gateway API limits:
+  - Maximum 16 hostnames per GRPCRoute
+  - Maximum 16 rules per GRPCRoute
+
+  Why 1 host per route?
+  - Ensures per-domain routing without header matching
+  - Avoids cross-domain attribution when multiple hostnames share a route
+
+  When you have >8 hosts, multiple GRPCRoute resources are created:
+  - router-name-grpc (for 1-8 hosts)
+  - router-name-grpc-1, router-name-grpc-2, ... (for >8 hosts)
+*/}}
+{{- $max_hosts_per_route := 1 }}
+{{- $total_hosts := (len $grpc_hosts) }}
+{{- $num_routes := (int (ceil (divf $total_hosts $max_hosts_per_route))) }}
+{{- range $index2, $route_index := (until (int $num_routes)) }}
+{{- $start_idx := (mul $route_index $max_hosts_per_route) }}
+{{- $end_idx_calc := (add $start_idx $max_hosts_per_route) }}
+{{- $end_idx := $end_idx_calc }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: {{ $.Values.sanitized_name }}-grpc{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {{- if (eq $.Values.has_wildcard_domain true) }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {{- else }}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {{- end }}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {{- range $key, $value := $.Values.annotations_group.gateway_api_routes }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  parentRefs:
+    {{- if (gt (int (len $.Values.certificate_alternative_names)) 0) }}
+    {{- if (eq $.Values.k8s_deploy_listenerset true) }}
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ $.Values.sanitized_name }}-listeners
+      namespace: {{ $namespace_key }}
+    {{- end }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {{- if (or (not $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) (eq (toString $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) "false")) }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {{- end }}
+    {{- else }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {{- if (or (not $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) (eq (toString $.Values.advanced_settings.network_gateway_api_force_ssl_redirect) "false")) }}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {{- end }}
+    {{- end }}
+  hostnames:
+    {{- range $index5, $host := $grpc_hosts }}
+    {{- if (and (ge $index5 $start_idx) (lt $index5 $end_idx)) }}
+    - {{ (toJson $host.domain_name) }}
+    # TODO(QOV-1400): remove this code used for Gateway API double stack migration
+    - {{ (toJson (replace "-gtw." "-gtw.new-gateway-api." $host.domain_name)) }}
+    {{- end }}
+    {{- end }}
+  rules:
+    {{- range $index6, $host := $grpc_hosts }}
+    {{- if (and (ge $index6 $start_idx) (lt $index6 $end_idx)) }}
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: {{ $host.service_name | quote }}
+          port: {{ $host.service_port }}
+          weight: {{ $host.weight }}
+      {{- if (and (hasKey $host "grpc_service") (trim $host.grpc_service)) }}
+      # GRPCRoute uses method matching (service/method) instead of path matching
+      matches:
+        - method:
+            {{- if (and (hasKey $host "grpc_method") (trim $host.grpc_method)) }}
+            type: Exact
+            service: {{ (toJson (trim $host.grpc_service)) }}
+            method: {{ (toJson (trim $host.grpc_method)) }}
+            {{- else }}
+            type: Exact
+            service: {{ (toJson (trim $host.grpc_service)) }}
+            {{- end }}
+      {{- end }}
+      {{- if (or $.Values.advanced_settings.network_gateway_api_add_headers $.Values.advanced_settings.network_gateway_api_proxy_set_headers) }}
+      filters:
+        {{- if $.Values.advanced_settings.network_gateway_api_add_headers }}
+        # Add custom response headers
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+            {{- range $header_name, $header_value := $.Values.advanced_settings.network_gateway_api_add_headers }}
+            - name: {{ (toJson $header_name) }}
+              value: {{ (toJson $header_value) }}
+            {{- end }}
+        {{- end }}
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            {{- if $.Values.advanced_settings.network_gateway_api_proxy_set_headers }}
+            # Add custom request headers (proxy_set_header equivalent)
+            add:
+            {{- range $header_name, $header_value := $.Values.advanced_settings.network_gateway_api_proxy_set_headers }}
+            - name: {{ (toJson $header_name) }}
+              value: {{ (toJson $header_value) }}
+            {{- end }}
+            {{- end }}
+            # Add Qovery specific headers for logging and tracing
+            set:
+            - name: "x-qovery-com-environment-id"
+              value: {{ $.Values.environment_long_id | quote }}
+            - name: "x-qovery-com-associated-service-id"
+              value: {{ $.Values.associated_service_long_id | quote }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

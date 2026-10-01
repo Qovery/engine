@@ -1,0 +1,170 @@
+{
+  "annotations": {
+    "stateful.example": "test"
+  },
+  "arbiter": {
+    "annotations": {
+      "stateful.example": "test"
+    },
+    "nodeAffinityPreset": {
+      "key": "kubernetes.io/arch",
+      "type": "hard",
+      "values": [
+        "amd64"
+      ]
+    },
+    "podAnnotations": {
+      "pod.example": "test"
+    },
+    "service": {
+      "annotations": {
+        "service.example": "test"
+      },
+      "headless": {
+        "annotations": {
+          "service.example": "test"
+        }
+      }
+    }
+  },
+  "auth": {
+    "database": "database-db-name",
+    "password": "database-password",
+    "rootPassword": "database-password",
+    "username": "database-login"
+  },
+  "commonLabels": {
+    "databaseId": "id",
+    "databaseLongId": "long-id",
+    "envId": "environment-id",
+    "envLongId": "environment-long-id",
+    "projectLongId": "project-long-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database",
+    "team": "data"
+  },
+  "customReadinessProbe": {
+    "exec": {
+      "command": [
+        "mongosh",
+        "--eval",
+        "db.adminCommand('ping')"
+      ]
+    },
+    "failureThreshold": 6,
+    "initialDelaySeconds": 30,
+    "periodSeconds": 20,
+    "successThreshold": 1,
+    "timeoutSeconds": 10
+  },
+  "fullnameOverride": "sanitized-name",
+  "hidden": {
+    "annotations": {
+      "stateful.example": "test"
+    },
+    "nodeAffinityPreset": {
+      "key": "kubernetes.io/arch",
+      "type": "hard",
+      "values": [
+        "amd64"
+      ]
+    },
+    "podAnnotations": {
+      "pod.example": "test"
+    },
+    "service": {
+      "annotations": {
+        "service.example": "test"
+      }
+    }
+  },
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "nameOverride": "sanitized-name",
+  "nodeAffinityPreset": {
+    "key": "kubernetes.io/arch",
+    "type": "hard",
+    "values": [
+      "amd64"
+    ]
+  },
+  "persistence": {
+    "annotations": {
+      "databaseId": "id",
+      "databaseLongId": "long-id",
+      "envId": "environment-id",
+      "envLongId": "environment-long-id",
+      "projectLongId": "project-long-id",
+      "qovery.com/environment-id": "environment-long-id",
+      "qovery.com/project-id": "project-long-id",
+      "qovery.com/service-id": "long-id",
+      "qovery.com/service-type": "database"
+    },
+    "labels": {
+      "app": "sanitized-name",
+      "databaseId": "id",
+      "databaseLongId": "long-id",
+      "envId": "environment-id",
+      "envLongId": "environment-long-id",
+      "projectLongId": "project-long-id",
+      "qovery.com/environment-id": "environment-long-id",
+      "qovery.com/project-id": "project-long-id",
+      "qovery.com/service-id": "long-id",
+      "qovery.com/service-type": "database"
+    },
+    "size": "20Gi",
+    "storageClass": "database-disk-type"
+  },
+  "podAnnotations": {
+    "pod.example": "test"
+  },
+  "rbac": {
+    "create": true
+  },
+  "resources": {
+    "customLivenessProbe": null,
+    "exec": {
+      "command": [
+        "mongosh",
+        "--eval",
+        "db.adminCommand('ping')"
+      ]
+    },
+    "failureThreshold": 6,
+    "initialDelaySeconds": 30,
+    "limits": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "periodSeconds": 20,
+    "requests": {
+      "cpu": "100m",
+      "memory": "256Mi"
+    },
+    "successThreshold": 1,
+    "timeoutSeconds": 10
+  },
+  "service": {
+    "nameOverride": "service-name",
+    "ports": {
+      "mongodb": "5432"
+    },
+    "type": "ClusterIP"
+  },
+  "serviceAccount": {
+    "create": true,
+    "name": "sanitized-name"
+  },
+  "useStatefulSet": true,
+  "volumePermissions": {
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-minideb"
+    }
+  }
+}

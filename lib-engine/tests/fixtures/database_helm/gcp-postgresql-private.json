@@ -1,0 +1,87 @@
+{
+  "affinity": {
+    "nodeAffinity": {
+      "requiredDuringSchedulingIgnoredDuringExecution": {
+        "nodeSelectorTerms": [
+          {
+            "matchExpressions": [
+              {
+                "key": "kubernetes.io/arch",
+                "operator": "In",
+                "values": [
+                  "amd64"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "auth": {
+    "database": "database-db-name",
+    "password": "database-password",
+    "username": "database-login"
+  },
+  "commonLabels": {
+    "databaseId": "id",
+    "databaseLongId": "long-id",
+    "envId": "environment-id",
+    "envLongId": "environment-long-id",
+    "projectLongId": "project-long-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database",
+    "team": "data"
+  },
+  "fullnameOverride": "sanitized-name",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "persistence": {
+    "annotations": {
+      "databaseId": "id",
+      "databaseName": "sanitized-name",
+      "envId": "environment-id",
+      "ownerId": "owner-id"
+    },
+    "size": "20Gi",
+    "storageClass": "database-disk-type"
+  },
+  "podAnnotations": {
+    "pod.example": "test"
+  },
+  "resources": {
+    "limits": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "requests": {
+      "cpu": "100m",
+      "memory": "256Mi"
+    }
+  },
+  "service": {
+    "headless": {
+      "annotations": {
+        "service.example": "test"
+      }
+    },
+    "name": "service-name",
+    "port": 5432,
+    "type": "ClusterIP"
+  },
+  "statefulsetAnnotations": {
+    "stateful.example": "test"
+  },
+  "tolerations": [
+    {
+      "effect": "NoSchedule",
+      "key": "dedicated",
+      "operator": "Exists"
+    }
+  ]
+}

@@ -80,9 +80,9 @@ Return the name for a custom database to create
 */}}
 {{- define "postgresql.database" -}}
 {{- if .Values.global.postgresql.auth.database }}
-    {{- printf "%s" (tpl .Values.global.postgresql.auth.database $) -}}
+    {{- printf "%s" .Values.global.postgresql.auth.database -}}
 {{- else if .Values.auth.database -}}
-    {{- printf "%s" (tpl .Values.auth.database $) -}}
+    {{- printf "%s" .Values.auth.database -}}
 {{- end -}}
 {{- end -}}
 
@@ -286,16 +286,11 @@ Return true if TLS is enabled for LDAP connection
 Get the readiness probe command
 */}}
 {{- define "postgresql.readinessProbeCommand" -}}
-{{- $customUser := include "postgresql.username" . }}
-- |
-{{- if (include "postgresql.database" .) }}
-  exec pg_isready -U {{ default "postgres" $customUser | quote }} -d "dbname={{ include "postgresql.database" . }} {{- if .Values.tls.enabled }} sslcert={{ include "postgresql.tlsCert" . }} sslkey={{ include "postgresql.tlsCertKey" . }}{{- end }}" -h 127.0.0.1 -p {{ .Values.containerPorts.postgresql }}
-{{- else }}
-  exec pg_isready -U {{ default "postgres" $customUser | quote }} {{- if .Values.tls.enabled }} -d "sslcert={{ include "postgresql.tlsCert" . }} sslkey={{ include "postgresql.tlsCertKey" . }}"{{- end }} -h 127.0.0.1 -p {{ .Values.containerPorts.postgresql }}
-{{- end }}
-{{- if contains "bitnami/" .Values.image.repository }}
-  [ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]
+{{- $command := include "postgresql.probeCommandWithTls" (dict "root" . "tls" .Values.tls.enabled) -}}
+{{- if contains "bitnami/" .Values.image.repository -}}
+{{- $command = printf "%s\n[ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]" $command -}}
 {{- end -}}
+- {{ $command | quote }}
 {{- end -}}
 
 {{/*
@@ -395,5 +390,30 @@ Return the path to the CA cert file.
     {{- printf "%s-crt" (include "common.names.fullname" .) -}}
 {{- else -}}
     {{ required "A secret containing TLS certificates is required when TLS is enabled" .Values.tls.certificatesSecret }}
+{{- end -}}
+{{- end -}}
+
+{{/* Keep deployment credentials literal in shell probes and quote the complete YAML scalar. */}}
+{{- define "postgresql.shellQuote" -}}
+{{- printf "'%s'" (replace "'" "'\"'\"'" .) -}}
+{{- end -}}
+{{- define "postgresql.probeCommand" -}}
+{{- include "postgresql.probeCommandWithTls" (dict "root" . "tls" (and .Values.tls.enabled .Values.tls.certCAFilename)) -}}
+{{- end -}}
+{{- define "postgresql.probeCommandWithTls" -}}
+{{- $tls := .tls -}}
+{{- with .root -}}
+{{- $user := default "postgres" (include "postgresql.username" .) -}}
+{{- $database := include "postgresql.database" . -}}
+{{- $connection := "" -}}
+{{- if $database -}}
+{{- $connection = printf "dbname=%s" $database -}}
+{{- end -}}
+{{- if $tls -}}
+{{- $connection = printf "%s sslcert=%s sslkey=%s" $connection (include "postgresql.tlsCert" .) (include "postgresql.tlsCertKey" .) -}}
+{{- end -}}
+{{- printf "exec pg_isready -U %s" (include "postgresql.shellQuote" $user) -}}
+{{- if $connection -}}{{- printf " -d %s" (include "postgresql.shellQuote" $connection) -}}{{- end -}}
+{{- printf " -h 127.0.0.1 -p %v" .Values.containerPorts.postgresql -}}
 {{- end -}}
 {{- end -}}

@@ -1,0 +1,93 @@
+{
+  "auth": {
+    "database": "database-db-name",
+    "password": "database-password",
+    "rootPassword": "database-password",
+    "username": "database-login"
+  },
+  "commonLabels": {
+    "envId": "environment-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database"
+  },
+  "customLivenessProbe": {
+    "exec": {
+      "command": [
+        "mongosh",
+        "--eval",
+        "assert.eq(db.adminCommand('ping').ok, 1)"
+      ]
+    },
+    "failureThreshold": 6,
+    "initialDelaySeconds": 30,
+    "periodSeconds": 20,
+    "successThreshold": 1,
+    "timeoutSeconds": 10
+  },
+  "customReadinessProbe": {
+    "exec": {
+      "command": [
+        "mongosh",
+        "--eval",
+        "assert.eq(db.adminCommand('ping').ok, 1)"
+      ]
+    },
+    "failureThreshold": 6,
+    "initialDelaySeconds": 30,
+    "periodSeconds": 20,
+    "successThreshold": 1,
+    "timeoutSeconds": 10
+  },
+  "fullnameOverride": "sanitized-name",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "nameOverride": "sanitized-name",
+  "persistence": {
+    "annotations": {},
+    "labels": {
+      "envId": "environment-id",
+      "qovery.com/environment-id": "environment-long-id",
+      "qovery.com/project-id": "project-long-id",
+      "qovery.com/service-id": "long-id",
+      "qovery.com/service-type": "database"
+    },
+    "size": "20Gi",
+    "storageClass": "database-disk-type"
+  },
+  "rbac": {
+    "create": true
+  },
+  "resources": {
+    "limits": {
+      "cpu": "500m",
+      "memory": "512Mi"
+    },
+    "requests": {
+      "cpu": "100m",
+      "memory": "256Mi"
+    }
+  },
+  "service": {
+    "nameOverride": "service-name",
+    "ports": {
+      "mongodb": "5432"
+    },
+    "type": "ClusterIP"
+  },
+  "serviceAccount": {
+    "create": true,
+    "name": "sanitized-name"
+  },
+  "useStatefulSet": true,
+  "volumePermissions": {
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-minideb"
+    }
+  }
+}

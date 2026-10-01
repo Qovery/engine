@@ -7,6 +7,7 @@ pub mod aws;
 pub mod azure;
 pub mod container;
 pub mod database;
+mod database_helm;
 pub(crate) mod database_utils;
 pub mod domain;
 pub mod environment;

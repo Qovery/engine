@@ -1,0 +1,92 @@
+{
+  "audit": {
+    "logConnectitrue": true,
+    "logDisconnections": true,
+    "logHostname": true
+  },
+  "auth": {
+    "database": "database-db-name",
+    "password": "database-password",
+    "postgresPassword": "database-password",
+    "username": "database-login"
+  },
+  "commonLabels": {
+    "envId": "environment-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database"
+  },
+  "fullnameOverride": "sanitized-name",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "nameOverride": "sanitized-name",
+  "primary": {
+    "extraEnvVars": [
+      {
+        "name": "POSTGRESQL_REPLICATION_USE_PASSFILE",
+        "value": "false"
+      }
+    ],
+    "initdb": {
+      "password": "database-password",
+      "user": "database-login"
+    },
+    "persistence": {
+      "annotations": {},
+      "labels": {
+        "envId": "environment-id",
+        "qovery.com/environment-id": "environment-long-id",
+        "qovery.com/project-id": "project-long-id",
+        "qovery.com/service-id": "long-id",
+        "qovery.com/service-type": "database"
+      },
+      "size": "20Gi",
+      "storageClass": "database-disk-type"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "requests": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      }
+    },
+    "service": {
+      "annotations": {
+        "external-dns.alpha.kubernetes.io/hostname": "fqdn",
+        "external-dns.alpha.kubernetes.io/ttl": "300"
+      },
+      "name": "service-name",
+      "type": "LoadBalancer"
+    }
+  },
+  "rbac": {
+    "create": true
+  },
+  "readReplicas": {
+    "extraEnvVars": [
+      {
+        "name": "POSTGRESQL_REPLICATION_USE_PASSFILE",
+        "value": "false"
+      }
+    ],
+    "podAnnotations": null
+  },
+  "serviceAccount": {
+    "create": true,
+    "name": "sanitized-name"
+  },
+  "volumePermissions": {
+    "enabled": true,
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-bitnami-shell"
+    }
+  }
+}

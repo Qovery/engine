@@ -741,8 +741,107 @@ mod tests {
     use super::*;
     use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
-    use crate::tera_utils::render_one_off;
+    use crate::template::{generate_and_copy_all_files_into_dir, write_chart_values};
+    use serde::Deserialize;
+    use std::path::Path;
+    use std::process::Command;
     use tera::Context;
+
+    fn render_chart(context: &Context) -> Result<String, String> {
+        let chart = tempfile::tempdir().unwrap();
+        generate_and_copy_all_files_into_dir(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts/q-terraform-service"),
+            chart.path(),
+            context,
+        )
+        .unwrap();
+        write_chart_values(chart.path(), context).unwrap();
+        let output = Command::new("helm")
+            .args(["template", "test"])
+            .arg(chart.path())
+            .output()
+            .expect("helm must be installed");
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).into_owned());
+        }
+        Ok(String::from_utf8(output.stdout).unwrap())
+    }
+
+    #[test]
+    fn terraform_chart_preserves_literal_template_data_and_scalar_types() {
+        let payload = "on\n---\nkind: Injected\n{{ fail \"must remain literal\" }}";
+        let mut context = minimal_pdb_context(false);
+        context.service.command_args = vec![payload.to_string(), "on".to_string(), "00123".to_string()];
+        context.service.image_full = payload.to_string();
+        context.service.persistence_storage_type = payload.to_string();
+        context.backend_config.configs = vec![payload.to_string(), "second line".to_string()];
+        let mut values = Context::from_serialize(context).unwrap();
+        values.insert("labels_group", &serde_json::json!({"common": {payload: payload}}));
+        let rendered = render_chart(&values).unwrap();
+        let documents: Vec<serde_yaml::Value> = serde_yaml::Deserializer::from_str(&rendered)
+            .map(|doc| serde_yaml::Value::deserialize(doc).unwrap())
+            .filter(|doc| !doc.is_null())
+            .collect();
+        assert_eq!(documents.len(), 8);
+        assert!(documents.iter().all(|doc| doc["kind"] != "Injected"));
+        let job = documents.iter().find(|doc| doc["kind"] == "Job").unwrap();
+        assert_eq!(job["metadata"]["labels"][payload], payload);
+        let container = &job["spec"]["template"]["spec"]["containers"][0];
+        assert_eq!(container["image"], payload);
+        assert_eq!(container["args"][0], payload);
+        assert_eq!(container["args"][1], "on");
+        assert_eq!(container["args"][2], "00123");
+        let backend = documents
+            .iter()
+            .find(|doc| doc["metadata"]["name"] == "backend-config")
+            .unwrap();
+        assert_eq!(backend["stringData"]["config"], format!("{payload}\nsecond line"));
+        let pvc = documents
+            .iter()
+            .find(|doc| doc["kind"] == "PersistentVolumeClaim")
+            .unwrap();
+        assert_eq!(pvc["spec"]["storageClassName"], payload);
+    }
+
+    #[test]
+    fn terraform_chart_renders_registry_gpu_and_external_secret_mounts() {
+        let mut context = minimal_pdb_context(true);
+        context.service.gpu_request = Some(1);
+        context.service.gpu_limit = Some(1);
+        context.service.advanced_settings.security_service_account_name = "custom-account".to_string();
+        let mut values = Context::from_serialize(context).unwrap();
+        values.insert(
+            "registry",
+            &serde_json::json!({"secret_name": "registry", "docker_json_config": "e30="}),
+        );
+        values.insert("external_secrets", &serde_json::json!([{
+            "secret_name": "external",
+            "entries": [
+                {"env_var_key": "TOKEN", "mount_path": null},
+                {"env_var_key": "CONFIG", "volume_name": "config", "mount_path": "/config/{{ literal }}", "mount_path_relative": "config"}
+            ]
+        }]));
+        let rendered = render_chart(&values).unwrap();
+        let documents: Vec<serde_yaml::Value> = serde_yaml::Deserializer::from_str(&rendered)
+            .map(|doc| serde_yaml::Value::deserialize(doc).unwrap())
+            .filter(|doc| !doc.is_null())
+            .collect();
+        assert!(!documents.iter().any(|doc| doc["kind"] == "PodDisruptionBudget"));
+        let job = documents.iter().find(|doc| doc["kind"] == "Job").unwrap();
+        let pod = &job["spec"]["template"]["spec"];
+        assert_eq!(pod["serviceAccountName"], "custom-account");
+        assert_eq!(pod["imagePullSecrets"][0]["name"], "registry");
+        let container = &pod["containers"][0];
+        assert_eq!(container["resources"]["limits"]["nvidia.com/gpu"], 1);
+        assert_eq!(container["env"][0]["valueFrom"]["secretKeyRef"]["key"], "TOKEN");
+        assert_eq!(container["env"][1]["value"], "/config/{{ literal }}");
+        assert_eq!(container["volumeMounts"][3]["mountPath"], "/config/{{ literal }}");
+        let registry = documents
+            .iter()
+            .find(|doc| doc["metadata"]["name"] == "registry")
+            .unwrap();
+        assert_eq!(registry["data"][".dockerconfigjson"], "e30=");
+    }
 
     #[test]
     fn test_keep_existing_pvc_size_if_larger() {
@@ -959,8 +1058,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rendered = render_one_off(
-            include_str!("../../../lib/common/charts/q-terraform-service/templates/job.j2.yaml"),
+        let rendered = render_chart(
             &Context::from_serialize(TerraformServiceTeraContext {
                 organization_long_id: Uuid::new_v4(),
                 project_long_id: Uuid::new_v4(),
@@ -1021,11 +1119,8 @@ mod tests {
 
     #[test]
     fn terraform_job_does_not_restart_failed_container() {
-        let rendered = render_one_off(
-            include_str!("../../../lib/common/charts/q-terraform-service/templates/job.j2.yaml"),
-            &Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"),
-        )
-        .expect("template should render");
+        let rendered = render_chart(&Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"))
+            .expect("template should render");
 
         assert!(rendered.contains("restartPolicy: Never"));
         assert!(!rendered.contains("restartPolicy: OnFailure"));
@@ -1082,11 +1177,8 @@ mod tests {
 
     #[test]
     fn pdb_template_rendered_when_karpenter_disabled() {
-        let rendered = render_one_off(
-            include_str!("../../../lib/common/charts/q-terraform-service/templates/pdb.j2.yaml"),
-            &Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"),
-        )
-        .expect("template should render");
+        let rendered = render_chart(&Context::from_serialize(minimal_pdb_context(false)).expect("should serialize"))
+            .expect("template should render");
 
         assert!(rendered.contains("PodDisruptionBudget"));
         assert!(rendered.contains("terraform-service"));
@@ -1095,11 +1187,8 @@ mod tests {
 
     #[test]
     fn pdb_template_not_rendered_when_karpenter_enabled() {
-        let rendered = render_one_off(
-            include_str!("../../../lib/common/charts/q-terraform-service/templates/pdb.j2.yaml"),
-            &Context::from_serialize(minimal_pdb_context(true)).expect("should serialize"),
-        )
-        .expect("template should render");
+        let rendered = render_chart(&Context::from_serialize(minimal_pdb_context(true)).expect("should serialize"))
+            .expect("template should render");
 
         assert!(!rendered.contains("PodDisruptionBudget"));
     }

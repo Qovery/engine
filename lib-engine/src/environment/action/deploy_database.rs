@@ -404,7 +404,7 @@ where
         event_details.clone(),
         tera_context,
         PathBuf::from(db.helm_chart_external_name_service_dir()),
-        HelmChartValues::ChartDefaults,
+        HelmChartValues::SerializedContext,
         chart,
     );
 
@@ -861,12 +861,9 @@ where
             };
             let helm = HelmDeployment::new(
                 event_details.clone(),
-                self.to_tera_context(target)?,
+                self.helm_values_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                HelmChartValues::TeraFile(PathBuf::from(format!(
-                    "{}/qovery-values.j2.yaml",
-                    self.helm_chart_values_dir()
-                ))),
+                HelmChartValues::SerializedOverride,
                 chart,
             );
 

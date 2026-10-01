@@ -1,0 +1,67 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- range $namespace_key, $grpc_hosts := $.Values.grpc_hosts_per_namespace_gateway }}
+{{- if (ge (int (len $grpc_hosts)) 1) }}
+{{/*
+  Create one SecurityPolicy per GRPCRoute part.
+  See gateway-grpc-route.yaml for details on why routes are split.
+*/}}
+{{- $max_hosts_per_route := 1 }}
+{{- $total_hosts := (len $grpc_hosts) }}
+{{- $num_routes := (int (ceil (divf $total_hosts $max_hosts_per_route))) }}
+{{- range $index2, $route_index := (until (int $num_routes)) }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: {{ $.Values.sanitized_name }}-grpc-security-policy{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: GRPCRoute
+    name: {{ $.Values.sanitized_name }}-grpc{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  {{- if (or (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) $.Values.advanced_settings.network_gateway_api_denylist_source_range) }}
+  authorization:
+    {{- if (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) }}
+    defaultAction: Deny
+    {{- else }}
+    defaultAction: Allow
+    {{- end }}
+    rules:
+    {{- if (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) }}
+    - action: Allow
+      principal:
+        clientCIDRs:
+        {{- range $index4, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_whitelist_source_range) }}
+        - {{ (toJson (trim $c)) }}
+        {{- end }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_gateway_api_denylist_source_range }}
+    - action: Deny
+      principal:
+        clientCIDRs:
+        {{- range $index5, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_denylist_source_range) }}
+        - {{ (toJson (trim $c)) }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- if $.Values.advanced_settings.network_gateway_api_basic_auth_env_var }}
+  basicAuth:
+    users:
+      name: htaccess-{{ $.Values.sanitized_name }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

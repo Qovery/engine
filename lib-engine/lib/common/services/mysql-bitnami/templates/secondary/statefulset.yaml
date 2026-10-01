@@ -7,10 +7,10 @@ metadata:
   labels: {{- include "common.labels.standard" . | nindent 4 }}
     app.kubernetes.io/component: secondary
     {{- if .Values.commonLabels }}
-    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- include "common.tplvalues.literal" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  annotations: {{- include "common.tplvalues.literal" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
   replicas: {{ .Values.secondary.replicaCount }}
@@ -29,12 +29,12 @@ spec:
         checksum/configuration: {{ include (print $.Template.BasePath "/secondary/configmap.yaml") . | sha256sum }}
         {{- end }}
         {{- if .Values.secondary.podAnnotations }}
-        {{- include "common.tplvalues.render" (dict "value" .Values.secondary.podAnnotations "context" $) | nindent 8 }}
+        {{- include "common.tplvalues.literal" (dict "value" .Values.secondary.podAnnotations "context" $) | nindent 8 }}
         {{- end }}
       labels: {{- include "common.labels.standard" . | nindent 8 }}
         app.kubernetes.io/component: secondary
         {{- if .Values.secondary.podLabels }}
-        {{- include "common.tplvalues.render" ( dict "value" .Values.secondary.podLabels "context" $ ) | nindent 8 }}
+        {{- include "common.tplvalues.literal" ( dict "value" .Values.secondary.podLabels "context" $ ) | nindent 8 }}
         {{- end }}
     spec:
       serviceAccountName: {{ include "mysql.serviceAccountName" . }}
@@ -43,7 +43,7 @@ spec:
       hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.secondary.hostAliases "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.secondary.affinity }}
-      affinity: {{- include "common.tplvalues.render" (dict "value" .Values.secondary.affinity "context" $) | nindent 8 }}
+      affinity: {{- include "common.tplvalues.literal" (dict "value" .Values.secondary.affinity "context" $) | nindent 8 }}
       {{- else }}
       affinity:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.secondary.podAffinityPreset "context" $) | nindent 10 }}
@@ -54,7 +54,7 @@ spec:
       nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.secondary.nodeSelector "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.secondary.tolerations }}
-      tolerations: {{- include "common.tplvalues.render" (dict "value" .Values.secondary.tolerations "context" $) | nindent 8 }}
+      tolerations: {{- include "common.tplvalues.literal" (dict "value" .Values.secondary.tolerations "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.secondary.priorityClassName }}
       priorityClassName: {{ .Values.secondary.priorityClassName | quote }}
@@ -344,14 +344,14 @@ spec:
         labels: {{ include "common.labels.matchLabels" . | nindent 10 }}
           app.kubernetes.io/component: secondary
           {{- if .Values.commonLabels }}
-          {{- include "common.tplvalues.render" (dict "value" .Values.commonLabels "context" $) | nindent 10 }}
+          {{- include "common.tplvalues.literal" (dict "value" .Values.commonLabels "context" $) | nindent 10 }}
           {{- end }}
         annotations:
           {{- if .Values.secondary.persistence.annotations }}
-          {{- include "common.tplvalues.render" (dict "value" .Values.secondary.persistence.annotations "context" $) | nindent 10 }}
+          {{- include "common.tplvalues.literal" (dict "value" .Values.secondary.persistence.annotations "context" $) | nindent 10 }}
           {{- end }}
           {{- if .Values.commonAnnotations }}
-          {{- include "common.tplvalues.render" (dict "value" .Values.commonAnnotations "context" $) | nindent 10 }}
+          {{- include "common.tplvalues.literal" (dict "value" .Values.commonAnnotations "context" $) | nindent 10 }}
           {{- end }}
       spec:
         accessModes:

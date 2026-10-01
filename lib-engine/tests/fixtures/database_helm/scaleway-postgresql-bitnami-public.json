@@ -1,0 +1,128 @@
+{
+  "audit": {
+    "logConnectitrue": true,
+    "logDisconnections": true,
+    "logHostname": true
+  },
+  "auth": {
+    "database": "database-db-name",
+    "password": "database-password",
+    "postgresPassword": "database-password",
+    "username": "database-login"
+  },
+  "commonLabels": {
+    "databaseId": "id",
+    "databaseLongId": "long-id",
+    "envId": "environment-id",
+    "envLongId": "environment-long-id",
+    "projectLongId": "project-long-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database",
+    "team": "data"
+  },
+  "fullnameOverride": "sanitized-name",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "nameOverride": "sanitized-name",
+  "primary": {
+    "annotations": {
+      "stateful.example": "test"
+    },
+    "extraEnvVars": [
+      {
+        "name": "POSTGRESQL_REPLICATION_USE_PASSFILE",
+        "value": "false"
+      }
+    ],
+    "initdb": {
+      "password": "database-password",
+      "user": "database-login"
+    },
+    "persistence": {
+      "annotations": {
+        "databaseId": "id",
+        "databaseName": "sanitized-name",
+        "envId": "environment-id",
+        "ownerId": "owner-id"
+      },
+      "labels": {
+        "app": "sanitized-name",
+        "databaseId": "id",
+        "databaseLongId": "long-id",
+        "envId": "environment-id",
+        "envLongId": "environment-long-id",
+        "projectLongId": "project-long-id",
+        "qovery.com/environment-id": "environment-long-id",
+        "qovery.com/project-id": "project-long-id",
+        "qovery.com/service-id": "long-id",
+        "qovery.com/service-type": "database"
+      },
+      "size": "20Gi",
+      "storageClass": "database-disk-type"
+    },
+    "podAnnotations": {
+      "pod.example": "test"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "requests": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      }
+    },
+    "service": {
+      "annotations": {
+        "external-dns.alpha.kubernetes.io/hostname": "fqdn",
+        "external-dns.alpha.kubernetes.io/ttl": "300",
+        "extra.example": "test",
+        "service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm": "leastconn",
+        "service.beta.kubernetes.io/scw-loadbalancer-health-check-type": "tcp",
+        "service.beta.kubernetes.io/scw-loadbalancer-protocol-http": "false",
+        "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1": "false",
+        "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2": "false",
+        "service.beta.kubernetes.io/scw-loadbalancer-use-hostname": "false",
+        "service.example": "test"
+      },
+      "headless": {
+        "annotations": {
+          "service.example": "test"
+        }
+      },
+      "name": "service-name",
+      "type": "LoadBalancer"
+    }
+  },
+  "rbac": {
+    "create": true
+  },
+  "readReplicas": {
+    "extraEnvVars": [
+      {
+        "name": "POSTGRESQL_REPLICATION_USE_PASSFILE",
+        "value": "false"
+      }
+    ],
+    "podAnnotations": {
+      "pod.example": "test"
+    }
+  },
+  "serviceAccount": {
+    "create": true,
+    "name": "sanitized-name"
+  },
+  "volumePermissions": {
+    "enabled": true,
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-bitnami-shell"
+    }
+  }
+}

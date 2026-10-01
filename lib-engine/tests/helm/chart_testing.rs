@@ -11,7 +11,7 @@ use qovery_engine::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, read_dir};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use uuid::Uuid;
 
 use super::router_context;
@@ -37,16 +37,16 @@ fn generate_template(chart_info: &ChartInfo, temp_dir: &str, service_type_folder
 
 fn get_kube_resources(
     chart_original_path: &str,
-    chart_info: ChartInfo,
-    render_custom_values_file: Option<PathBuf>,
+    mut chart_info: ChartInfo,
+    values: HelmChartValues,
     test_info: &TestInfo,
     chart_id: &Uuid,
 ) -> HashMap<String, DynamicObject> {
-    let values = if chart_info.name == "q-container" {
-        HelmChartValues::SerializedContext
-    } else {
-        render_custom_values_file.map_or(HelmChartValues::ChartDefaults, HelmChartValues::TeraFile)
-    };
+    if matches!(values, HelmChartValues::SerializedOverride) {
+        chart_info
+            .values_files
+            .push(format!("{}/qovery-values.yaml", chart_info.path));
+    }
     let helm_deployment = HelmDeployment::new(
         test_info.event_details.clone(),
         test_info.context.clone(),
@@ -135,7 +135,7 @@ fn q_ingress_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -187,7 +187,7 @@ fn q_container_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -246,7 +246,7 @@ fn q_application_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -305,11 +305,22 @@ fn q_container_psql_test() {
     let resources = get_kube_resources(
         format!("{}/common/services/{}", lib_dir(), chart_folder).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedOverride,
         &test_info,
         &uuid,
     );
-    assert!(!resources.is_empty());
+    let statefulset = resources
+        .values()
+        .find(|resource| resource.types.as_ref().is_some_and(|types| types.kind == "StatefulSet"))
+        .expect("database StatefulSet should be rendered");
+    assert_eq!(
+        statefulset.metadata.name.as_deref(),
+        test_info
+            .context
+            .get("fullnameOverride")
+            .and_then(|value| value.as_str()),
+        "serialized database overrides must be applied to the vendor chart",
+    );
 }
 
 #[cfg(feature = "test-local-kube")]
@@ -357,11 +368,22 @@ fn q_managed_psql_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
-    assert!(!resources.is_empty());
+    let service = resources
+        .values()
+        .find(|resource| resource.types.as_ref().is_some_and(|types| types.kind == "Service"))
+        .expect("managed database ExternalName Service should be rendered");
+    assert_eq!(service.data["spec"]["type"], "ExternalName");
+    assert_eq!(
+        service.data["spec"]["externalName"].as_str(),
+        test_info
+            .context
+            .get("target_hostname")
+            .and_then(|value| value.as_str()),
+    );
 }
 
 #[cfg(feature = "test-local-kube")]
@@ -409,7 +431,7 @@ fn q_job_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -484,7 +506,7 @@ fn q_application_with_ndots_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -587,7 +609,7 @@ fn q_container_with_ndots_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -690,7 +712,7 @@ fn q_job_with_ndots_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );
@@ -808,7 +830,7 @@ fn q_container_with_none_ndots_test() {
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
         chart.chart_info,
-        None,
+        HelmChartValues::SerializedContext,
         &test_info,
         &uuid,
     );

@@ -1,17 +1,16 @@
-use qovery_engine::tera_utils::register_filters;
-use serde_json::json;
-use tera::{Context, Tera};
+#[path = "helpers/native_helm.rs"]
+mod native_helm;
 
-const HTTP_TEMPLATE: &str = include_str!(
-    "../lib/common/charts/q-ingress-tls/templates/gateway-http-route-envoy-backend-traffic-policy.j2.yaml"
-);
-const GRPC_TEMPLATE: &str = include_str!(
-    "../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route-envoy-backend-traffic-policy.j2.yaml"
-);
-const HTTP_ROUTE_TEMPLATE: &str =
-    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-http-route.j2.yaml");
-const GRPC_ROUTE_TEMPLATE: &str =
-    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route.j2.yaml");
+use native_helm::render_router_template;
+use serde_json::json;
+use tera::Context;
+
+const HTTP_TEMPLATE: &str =
+    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-http-route-envoy-backend-traffic-policy.yaml");
+const GRPC_TEMPLATE: &str =
+    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route-envoy-backend-traffic-policy.yaml");
+const HTTP_ROUTE_TEMPLATE: &str = include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-http-route.yaml");
+const GRPC_ROUTE_TEMPLATE: &str = include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route.yaml");
 
 #[derive(Clone, Default)]
 struct RetrySettings {
@@ -116,10 +115,7 @@ fn render_http_policy_with_retry(
     service_retry: RetrySettings,
     cluster_retry: RetrySettings,
 ) -> String {
-    let mut tera = Tera::default();
-    register_filters(&mut tera);
-    tera.add_raw_template("template", HTTP_TEMPLATE)
-        .expect("HTTP template should parse");
+    let template = HTTP_TEMPLATE;
 
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
@@ -179,7 +175,7 @@ fn render_http_policy_with_retry(
         &resolved_retry.per_try_timeout_seconds,
     );
 
-    tera.render("template", &context).expect("HTTP template should render")
+    render_router_template(template, &context).expect("HTTP template should render")
 }
 
 fn render_grpc_policy(settings: PolicyRenderSettings) -> String {
@@ -191,10 +187,7 @@ fn render_grpc_policy_with_retry(
     service_retry: RetrySettings,
     cluster_retry: RetrySettings,
 ) -> String {
-    let mut tera = Tera::default();
-    register_filters(&mut tera);
-    tera.add_raw_template("template", GRPC_TEMPLATE)
-        .expect("gRPC template should parse");
+    let template = GRPC_TEMPLATE;
 
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
@@ -257,7 +250,7 @@ fn render_grpc_policy_with_retry(
         &resolved_retry.per_try_timeout_seconds,
     );
 
-    tera.render("template", &context).expect("gRPC template should render")
+    render_router_template(template, &context).expect("gRPC template should render")
 }
 
 fn assert_route_policy_materializes_compression_and_timeout(
@@ -311,10 +304,7 @@ fn assert_route_policy_materializes_compression_and_timeout(
 }
 
 fn render_http_route() -> String {
-    let mut tera = Tera::default();
-    register_filters(&mut tera);
-    tera.add_raw_template("template", HTTP_ROUTE_TEMPLATE)
-        .expect("HTTP route template should parse");
+    let template = HTTP_ROUTE_TEMPLATE;
 
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
@@ -360,15 +350,11 @@ fn render_http_route() -> String {
         }),
     );
 
-    tera.render("template", &context)
-        .expect("HTTP route template should render")
+    render_router_template(template, &context).expect("HTTP route template should render")
 }
 
 fn render_grpc_route() -> String {
-    let mut tera = Tera::default();
-    register_filters(&mut tera);
-    tera.add_raw_template("template", GRPC_ROUTE_TEMPLATE)
-        .expect("gRPC route template should parse");
+    let template = GRPC_ROUTE_TEMPLATE;
 
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
@@ -409,8 +395,7 @@ fn render_grpc_route() -> String {
         }),
     );
 
-    tera.render("template", &context)
-        .expect("gRPC route template should render")
+    render_router_template(template, &context).expect("gRPC route template should render")
 }
 
 #[test]

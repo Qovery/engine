@@ -69,7 +69,7 @@ where
         event_details.clone(),
         job.to_tera_context(target)?,
         PathBuf::from(job.helm_chart_dir()),
-        HelmChartValues::ChartDefaults,
+        HelmChartValues::SerializedContext,
         chart,
     );
 

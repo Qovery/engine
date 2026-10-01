@@ -37,7 +37,7 @@ spec:
       {{- end }}
       containers:
         - name: postgresql
-          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ printf "%s/%s:%s" .Values.image.registry .Values.image.repository .Values.image.tag | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             runAsUser: 999
@@ -64,7 +64,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - exec pg_isready -U {{ .Values.auth.username | quote }} -d {{ .Values.auth.database | quote }} -h 127.0.0.1 -p 5432
+                - 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432'
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
@@ -74,7 +74,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - exec pg_isready -U {{ .Values.auth.username | quote }} -d {{ .Values.auth.database | quote }} -h 127.0.0.1 -p 5432
+                - 'exec pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" -h 127.0.0.1 -p 5432'
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5

@@ -1,0 +1,194 @@
+{
+  "audit": {
+    "logConnectitrue": true,
+    "logDisconnections": true,
+    "logHostname": true
+  },
+  "auth": {
+    "database": "database-db-name",
+    "password": "database-password",
+    "postgresPassword": "database-password",
+    "username": "database-login"
+  },
+  "commonLabels": {
+    "databaseId": "id",
+    "databaseLongId": "long-id",
+    "envId": "environment-id",
+    "envLongId": "environment-long-id",
+    "projectLongId": "project-long-id",
+    "qovery.com/environment-id": "environment-long-id",
+    "qovery.com/project-id": "project-long-id",
+    "qovery.com/service-id": "long-id",
+    "qovery.com/service-type": "database",
+    "team": "data"
+  },
+  "fullnameOverride": "sanitized-name",
+  "image": {
+    "registry": "registry-name",
+    "repository": "repository-name",
+    "tag": "7"
+  },
+  "nameOverride": "sanitized-name",
+  "primary": {
+    "affinity": {
+      "nodeAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": {
+          "nodeSelectorTerms": [
+            {
+              "matchExpressions": [
+                {
+                  "key": "kubernetes.io/arch",
+                  "operator": "In",
+                  "values": [
+                    "amd64"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "annotations": {
+      "stateful.example": "test"
+    },
+    "extraEnvVars": [
+      {
+        "name": "POSTGRESQL_REPLICATION_USE_PASSFILE",
+        "value": "false"
+      }
+    ],
+    "initdb": {
+      "password": "database-password",
+      "user": "database-login"
+    },
+    "nodeAffinityPreset": {
+      "key": "kubernetes.io/arch",
+      "type": "hard",
+      "values": [
+        "amd64"
+      ]
+    },
+    "persistence": {
+      "annotations": {
+        "databaseId": "id",
+        "databaseName": "sanitized-name",
+        "envId": "environment-id",
+        "ownerId": "owner-id"
+      },
+      "labels": {
+        "app": "sanitized-name",
+        "databaseId": "id",
+        "databaseLongId": "long-id",
+        "envId": "environment-id",
+        "envLongId": "environment-long-id",
+        "projectLongId": "project-long-id",
+        "qovery.com/environment-id": "environment-long-id",
+        "qovery.com/project-id": "project-long-id",
+        "qovery.com/service-id": "long-id",
+        "qovery.com/service-type": "database"
+      },
+      "size": "20Gi",
+      "storageClass": "database-disk-type"
+    },
+    "podAnnotations": {
+      "pod.example": "test"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      },
+      "requests": {
+        "cpu": "100m",
+        "memory": "256Mi"
+      }
+    },
+    "service": {
+      "annotations": {
+        "external-dns.alpha.kubernetes.io/hostname": "fqdn",
+        "external-dns.alpha.kubernetes.io/ttl": "300",
+        "extra.example": "test",
+        "service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled": "true",
+        "service.beta.kubernetes.io/aws-load-balancer-nlb-target-type": "ip",
+        "service.beta.kubernetes.io/aws-load-balancer-scheme": "internet-facing",
+        "service.beta.kubernetes.io/aws-load-balancer-type": "external",
+        "service.example": "test"
+      },
+      "headless": {
+        "annotations": {
+          "service.example": "test"
+        }
+      },
+      "name": "service-name",
+      "type": "LoadBalancer"
+    },
+    "tolerations": [
+      {
+        "effect": "NoSchedule",
+        "key": "dedicated",
+        "operator": "Exists"
+      }
+    ]
+  },
+  "rbac": {
+    "create": true
+  },
+  "readReplicas": {
+    "affinity": {
+      "nodeAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": {
+          "nodeSelectorTerms": [
+            {
+              "matchExpressions": [
+                {
+                  "key": "kubernetes.io/arch",
+                  "operator": "In",
+                  "values": [
+                    "amd64"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "extraEnvVars": [
+      {
+        "name": "POSTGRESQL_REPLICATION_USE_PASSFILE",
+        "value": "false"
+      }
+    ],
+    "nodeAffinityPreset": {
+      "key": "kubernetes.io/arch",
+      "type": "hard",
+      "values": [
+        "amd64"
+      ]
+    },
+    "podAnnotations": {
+      "cluster-autoscaler.kubernetes.io/safe-to-evict": "false",
+      "karpenter.sh/do-not-disrupt": "true",
+      "pod.example": "test"
+    },
+    "tolerations": [
+      {
+        "effect": "NoSchedule",
+        "key": "dedicated",
+        "operator": "Exists"
+      }
+    ]
+  },
+  "serviceAccount": {
+    "create": true,
+    "name": "sanitized-name"
+  },
+  "volumePermissions": {
+    "enabled": true,
+    "image": {
+      "registry": "registry-name",
+      "repository": "repository-name-bitnami-shell"
+    }
+  }
+}

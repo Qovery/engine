@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $.Values.service.name | quote }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "terraform-service"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    {{- range $key, $value := $.Values.annotations_group.deployment }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $.Values.service.name | quote }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "terraform-service"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    {{- range $key, $value := $.Values.annotations_group.deployment }}
+      {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch", "delete", "list"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update", "patch", "delete", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $.Values.service.name | quote }}
+  labels:
+    envId: {{ $.Values.environment_short_id | quote }}
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "job"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+  annotations:
+    {{- range $key, $value := $.Values.annotations_group.deployment }}
+      {{ $key | toJson }}: {{ $value | toJson }}
+    {{- end }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $.Values.service.name | quote }}
+roleRef:
+  kind: Role
+  name: {{ $.Values.service.name | quote }}
+  apiGroup: rbac.authorization.k8s.io

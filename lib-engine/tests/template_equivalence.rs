@@ -1,16 +1,8 @@
-//! Proves the YAML escaping pass did not change what Kubernetes receives.
+//! Compares native Helm manifests with frozen Tera fixtures from before the migration.
 //!
-//! For every chart template the pass touched, this renders the pre-escaping version kept under
-//! `tests/fixtures/pre_escaping/` alongside the current one from the same context, and compares
-//! the parsed objects. Quoting differs by design; the resulting manifest must not.
-//!
-//! A fixture that renders nothing fails the case rather than passing vacuously — the context
-//! below therefore has to satisfy each template's render condition, which is what the per-case
-//! overrides are for.
-//!
-//! The fixtures are the templates as `main` carries them, so a template that legitimately changes
-//! upstream makes its case fail until the fixture is refreshed; the failure message carries the
-//! command.
+//! Both versions receive the same context. Parsed Kubernetes objects must remain equivalent,
+//! apart from runtime timestamps, formatting-dependent checksums, and base64 whitespace.
+//! Per-case overrides exercise conditional resources and probe variants.
 
 // the shared context is one large object literal
 #![recursion_limit = "512"]
@@ -38,18 +30,8 @@ fn fixture(family: &str, name: &str) -> String {
     ))
 }
 
-fn current(family: &str, name: &str) -> String {
-    read(format!(
-        "{}/lib/common/charts/{family}/templates/{name}.j2.yaml",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-}
-
-/// q-container now consumes the serialized context as values, without a Tera pass.
+/// Production chart preparation serializes context into values, then Helm renders the templates.
 fn render_current(family: &str, name: &str, context: &Context) -> Result<String, tera::Error> {
-    if family != "q-container" {
-        return render_one_off(&current(family, name), context);
-    }
     let chart = tempfile::tempdir().expect("temporary chart");
     let event_details = EventDetails::new(
         None,
@@ -62,7 +44,7 @@ fn render_current(family: &str, name: &str, context: &Context) -> Result<String,
     HelmDeployment::new(
         event_details,
         context.clone(),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts/q-container"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("lib/common/charts/{family}")),
         HelmChartValues::SerializedContext,
         ChartInfo {
             path: chart.path().to_string_lossy().into_owned(),
@@ -87,8 +69,7 @@ fn render_current(family: &str, name: &str, context: &Context) -> Result<String,
     Ok(String::from_utf8(output.stdout).expect("Helm output should be UTF-8"))
 }
 
-/// Helm renders the manifest as a Go template before applying it, so the comparison runs on what
-/// Kubernetes would parse. Charts keep a few sprig calls in `{% raw %}` blocks on purpose.
+/// Normalize runtime-only Helm actions in the legacy fixtures before comparing parsed objects.
 fn parse_as_kubernetes_would(rendered: &str) -> Vec<Json> {
     let helm_action = regex::Regex::new(r"\{\{.*?\}\}").expect("valid regex");
     let helm_rendered = helm_action.replace_all(rendered, "helm-rendered");
@@ -106,6 +87,16 @@ fn parse_as_kubernetes_would(rendered: &str) -> Vec<Json> {
             ] {
                 if let Some(value) = doc.pointer_mut(pointer) {
                     *value = json!("helm-rendered");
+                }
+            }
+            // Kubernetes base64 decoding ignores CRLF in legacy block-scalar secret data.
+            if doc["kind"] == "Secret"
+                && let Some(data) = doc.get_mut("data").and_then(Json::as_object_mut)
+            {
+                for value in data.values_mut() {
+                    if let Some(encoded) = value.as_str() {
+                        *value = json!(encoded.replace(['\r', '\n'], ""));
+                    }
                 }
             }
             doc
@@ -147,11 +138,7 @@ fn assert_family_equivalent(family: &str, cases: Vec<(&str, Context)>) {
         } else if before != after {
             failures.push(format!(
                 "{family}/{name}: the rendered manifest differs from the fixture.\n\
-                 Either the escaping changed what Kubernetes receives — the case this guards — or \
-                 the template moved on for an unrelated reason and the fixture is stale. For the \
-                 latter, refresh it:\n  \
-                 git show origin/main:lib-engine/lib/common/charts/{family}/templates/{name}.j2.yaml \
-                 > lib-engine/tests/fixtures/pre_escaping/{family}/{name}.j2.yaml\n\
+                 Review the behavioral difference against the frozen pre-migration fixture.\n\
                  before: {before:?}\nafter:  {after:?}"
             ));
         }
@@ -290,7 +277,7 @@ fn base() -> Json {
             "job_max_duration_in_sec": 300,
             "max_duration_in_sec": 300,
             "max_nb_restart": 1,
-            "persistence_size_in_gib": 10,
+            "persistence_size_in_gib": "10Gi",
             "persistence_storage_type": "gp3",
             "inputs_json_b64": "e30=",
             "prompt_b64": "cHJvbXB0",
@@ -414,7 +401,7 @@ fn probe_variants() -> Vec<[(&'static str, Json); 2]> {
     ]
 }
 
-/// The keda autoscaling shape, shared between its case and the coverage check.
+/// The KEDA autoscaling shape used by the manifest and literal-values cases.
 fn keda_autoscaling() -> Json {
     json!({
         "type": "keda",
@@ -429,29 +416,6 @@ fn keda_autoscaling() -> Json {
                                       "spec": null,
                                       "raw_yaml": "secretTargetRef:\n  - parameter: token\n    name: s\n    key: k" }],
     })
-}
-
-/// Overrides only some cases take, shared with the coverage check so a site exercised by one case
-/// is not reported as untested.
-fn case_overrides() -> Vec<Vec<(&'static str, Json)>> {
-    vec![
-        // Cover the Bedrock-only Job and Secret branches.
-        vec![
-            ("service.bedrock", json!({ "region": "eu-west-3" })),
-            (
-                "bedrock_credentials",
-                json!([{ "key": "AWS_BEARER_TOKEN_BEDROCK", "value": "YmVkcm9jay10b2tlbg==", "is_secret": true }]),
-            ),
-        ],
-        vec![("service.autoscaling", keda_autoscaling())],
-        vec![
-            ("advanced_settings.network_gateway_api_sticky_session_enable", json!(true)),
-            (
-                "advanced_settings.network_gateway_api_sticky_session_type",
-                json!({ "Header": { "name": "Mcp-Session-Id" } }),
-            ),
-        ],
-    ]
 }
 
 fn ctx(overrides: &[(&str, Json)]) -> Context {
@@ -614,6 +578,21 @@ fn escaping_preserves_q_ingress_tls_manifests() {
         ("http_hosts_per_namespace_nginx", json!({ "app-ns": [http_host()] })),
         ("grpc_hosts_per_namespace_nginx", json!({ "app-ns": [http_host()] })),
     ];
+    let mut no_rewrite = http_host();
+    no_rewrite["path_rewrite"] = Json::Null;
+    let null_rewrites = [
+        ("k8s_remove_nginx", json!(false)),
+        ("http_hosts_per_namespace_nginx", json!({"app-ns": [no_rewrite.clone()]})),
+        ("grpc_hosts_per_namespace_nginx", json!({"app-ns": [no_rewrite.clone()]})),
+    ];
+    let mixed_rewrites = [
+        ("k8s_remove_nginx", json!(false)),
+        (
+            "http_hosts_per_namespace_nginx",
+            json!({"app-ns": [no_rewrite.clone(), http_host()]}),
+        ),
+        ("grpc_hosts_per_namespace_nginx", json!({"app-ns": [no_rewrite, http_host()]})),
+    ];
     let gateway = [
         ("http_hosts_per_namespace_gateway", json!({ "app-ns": [http_host()] })),
         ("grpc_hosts_per_namespace_gateway", json!({ "app-ns": [http_host()] })),
@@ -633,6 +612,10 @@ fn escaping_preserves_q_ingress_tls_manifests() {
         vec![
             ("ingress-http", ctx(&nginx)),
             ("ingress-grpc", ctx(&nginx)),
+            ("ingress-http", ctx(&null_rewrites)),
+            ("ingress-grpc", ctx(&null_rewrites)),
+            ("ingress-http", ctx(&mixed_rewrites)),
+            ("ingress-grpc", ctx(&mixed_rewrites)),
             // renders only when basic auth is configured
             (
                 "secret-htaccess",
@@ -651,107 +634,33 @@ fn escaping_preserves_q_ingress_tls_manifests() {
     );
 }
 
-/// An escaped site proves nothing if the context leaves its value empty: both templates then
-/// render the same nothing. This is how the `network_dns_ndots` regression slipped through — the
-/// context typed it as a string, so the comparison never saw the number the engine really sends.
-/// Loop variables are exempt: they are exercised through the collection they iterate.
+/// Deployment charts must contain only native Helm templates; frozen fixtures are excluded.
 #[test]
-fn every_escaped_site_is_exercised_by_the_context() {
-    const LOOP_VARIABLES: &[&str] = &[
-        "key",
-        "value",
-        "ev",
-        "entry",
-        "host",
-        "rule",
-        "s",
-        "port",
-        "scaler",
-        "trigger_auth",
-        "mounted_file",
-        "annotation",
-        "header_name",
-        "header_value",
-        "arg",
-        "cmd",
-        "code",
-        "h",
-        "c",
-        "m",
-        "o",
-        "domain",
-        "hostname",
-        "line",
-        "trigger",
-        "status_code",
-        "safe_header_name",
-        // loop variable over `service.ports_layer4_public`
-        "l4_ports",
-        // `{% set %}` local, read from the hosts map the router cases populate
-        "path_rewrite",
-    ];
-
-    let escaped = regex::Regex::new(r"\{\{ ([^}|]+?) \| [^}]*yaml_encode").expect("valid regex");
-    let variants: Vec<Vec<(&str, Json)>> = probe_variants()
-        .into_iter()
-        .map(|pair| pair.to_vec())
-        .chain(case_overrides())
-        .collect();
-    let contexts: Vec<Json> = std::iter::once(base())
-        .chain(variants.into_iter().map(|overrides| {
-            let mut variant = base();
-            for (path, value) in overrides {
-                set(&mut variant, path, value);
-            }
-            variant
-        }))
-        .collect();
-    let mut unexercised: Vec<String> = vec![];
-
-    for family in std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts"))
-        .expect("charts readable")
-    {
-        let templates = family.expect("entry").path().join("templates");
-        if !templates.is_dir() {
-            continue;
-        }
-        for template in std::fs::read_dir(&templates).expect("templates readable") {
-            let path = template.expect("entry").path();
-            if !path.to_string_lossy().ends_with(".j2.yaml") {
+fn service_charts_are_native_helm() {
+    let mut template_count = 0;
+    for directory in ["lib/common/charts", "lib/common/services"] {
+        for entry in walkdir::WalkDir::new(Path::new(env!("CARGO_MANIFEST_DIR")).join(directory)) {
+            let entry = entry.expect("chart entry");
+            if !entry.file_type().is_file() {
                 continue;
             }
-            let text = std::fs::read_to_string(&path).expect("template readable");
-            for capture in escaped.captures_iter(&text) {
-                let expression = capture[1].trim();
-                let mut segments = expression.split('.');
-                let root = segments.next().unwrap_or_default();
-                if LOOP_VARIABLES.contains(&root) {
-                    continue;
-                }
-                let segments: Vec<&str> = segments.collect();
-                let exercised = contexts.iter().any(|context| {
-                    let mut cursor = &context[root];
-                    for segment in &segments {
-                        cursor = &cursor[*segment];
-                    }
-                    !(cursor.is_null()
-                        || cursor.as_str() == Some("")
-                        || cursor.as_array().is_some_and(|a| a.is_empty())
-                        || cursor.as_object().is_some_and(|o| o.is_empty()))
-                });
-                if !exercised {
-                    unexercised.push(format!("{expression}  ({})", path.display()));
-                }
+            let path = entry.path();
+            assert!(
+                !entry.file_name().to_string_lossy().contains(".j2."),
+                "legacy Tera file in service chart: {}",
+                path.display()
+            );
+            if !matches!(path.extension().and_then(|ext| ext.to_str()), Some("yaml" | "yml" | "tpl")) {
+                continue;
             }
+            let content = std::fs::read_to_string(path).expect("read chart template");
+            assert!(
+                !content.contains("{%") && !content.contains("{#"),
+                "Tera directive in service chart: {}",
+                path.display()
+            );
+            template_count += 1;
         }
     }
-
-    unexercised.sort();
-    unexercised.dedup();
-    assert!(
-        unexercised.is_empty(),
-        "{} escaped site(s) are compared but never exercised — give them a value in `base()`:\n{}",
-        unexercised.len(),
-        unexercised.join("\n")
-    );
+    assert!(template_count > 0, "no chart templates were checked");
 }

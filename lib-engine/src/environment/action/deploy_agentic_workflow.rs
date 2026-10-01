@@ -29,7 +29,7 @@ impl DeploymentAction for AgenticWorkflow {
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                HelmChartValues::ChartDefaults,
+                HelmChartValues::SerializedContext,
                 chart,
             );
 
@@ -113,7 +113,7 @@ impl DeploymentAction for AgenticWorkflow {
                 event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                HelmChartValues::ChartDefaults,
+                HelmChartValues::SerializedContext,
                 chart,
             );
 
