@@ -5,7 +5,11 @@ use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_terraform::TerraformDeployment;
+use crate::environment::action::managed_db_start::{
+    AwsManagedDb, DEFAULT_POLL_INTERVAL, StartFailure, StartPolicy, SystemClock, start_until_available,
+};
 use crate::environment::action::pause_service::PauseServiceAction;
+use crate::environment::models::abort::AbortStatus;
 use crate::environment::models::database::{
     Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed, get_database_with_invalid_storage_size,
 };
@@ -438,41 +442,36 @@ where
         credentials
     };
 
-    // If the database is not in the available state, try to start it
-    match get_managed_database_status(db.db_type(), db_instance_id, &credentials) {
-        Ok(status) if status == DB_READY_STATE => {}
-        Ok(_) | Err(_) => {
-            let _ = start_stop_managed_database(db.db_type(), db_instance_id, &credentials, false);
+    let database = AwsManagedDb {
+        db_type: db.db_type(),
+        id: db_instance_id,
+        credentials: &credentials,
+    };
+    let policy = StartPolicy {
+        timeout: Duration::from_secs(60 * 30),
+        poll_interval: DEFAULT_POLL_INTERVAL,
+        fail_on_unreadable_state: true,
+    };
+    start_until_available(
+        &database,
+        &SystemClock,
+        &policy,
+        &|| target.abort.status() != AbortStatus::None,
+        &mut |line| logger.info(format!("Database `{db_instance_id}` {line}")),
+    )
+    .map_err(|failure| {
+        if failure == StartFailure::Aborted {
+            return Box::new(EngineError::new_task_cancellation_requested(event_details));
         }
-    }
-
-    let ret = await_db_state(
-        Duration::from_secs(60 * 30),
-        db.db_type(),
-        db_instance_id,
-        &credentials,
-        DB_READY_STATE,
-    );
-
-    match ret {
-        Ok(_) => Ok(()),
-        // timeout
-        Err(None) => Err(Box::new(EngineError::new_database_failed_to_start_after_several_retries(
+        Box::new(EngineError::new_database_failed_to_start_after_several_retries(
             event_details,
             db.id.to_string(),
             db.db_type().to_string(),
-            Some(CommandError::new_from_safe_message(format!(
-                "Timeout reached waiting for the database to be in {DB_READY_STATE} state"
-            ))),
-        ))),
-        // Error ;'(
-        Err(Some((cmd_err, msg))) => Err(Box::new(EngineError::new_database_failed_to_start_after_several_retries(
-            event_details,
-            db.id.to_string(),
-            db.db_type().to_string(),
-            Some(CommandError::new_from_legacy_command_error(cmd_err, Some(msg))),
-        ))),
-    }
+            Some(CommandError::new_from_safe_message(
+                failure.describe(db_instance_id, policy.timeout),
+            )),
+        ))
+    })
 }
 
 #[async_trait]

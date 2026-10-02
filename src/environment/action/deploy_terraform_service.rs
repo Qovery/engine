@@ -7,6 +7,9 @@ use crate::environment::action::deploy_external_secrets::{
 };
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_job::job::JobRunError;
+use crate::environment::action::managed_db_start::{
+    AwsManagedDb, DEFAULT_POLL_INTERVAL, StartFailure, StartPolicy, SystemClock, start_until_available,
+};
 use crate::environment::action::{DeploymentAction, log_job_output_error};
 use crate::environment::models::abort::AbortStatus;
 use crate::environment::models::terraform_service::{
@@ -545,15 +548,6 @@ enum WaitFailure {
     TimedOut,
 }
 
-impl WaitFailure {
-    fn describe(&self, instance_id: &str, state: &str) -> String {
-        match self {
-            WaitFailure::Aborted => format!("Aborted while waiting for database `{instance_id}` to be {state}"),
-            WaitFailure::TimedOut => format!("Timed out waiting for database `{instance_id}` to be {state}"),
-        }
-    }
-}
-
 /// Polls until the instance reaches `state`, honouring the service's timeout and abort.
 fn await_adopted_instance_state(
     instance: &AdoptedInstance,
@@ -642,26 +636,36 @@ fn ensure_adopted_managed_db_available<T: CloudProvider>(
     };
 
     let credentials = aws_credentials(target, &instance);
-    match get_managed_database_status(instance.db_type, &instance.id, &credentials) {
-        Ok(status) if status == DB_READY_STATE => return Ok(()),
-        Ok(_) | Err(_) => {
-            logger.info(format!("Starting the adopted database instance `{}`", instance.id));
-            let _ = start_stop_managed_database(instance.db_type, &instance.id, &credentials, false);
-        }
-    }
-
-    await_adopted_instance_state(&instance, &credentials, DB_READY_STATE, terraform.timeout, target, logger).map_err(
-        |failure| {
-            Box::new(EngineError::new_database_failed_to_start_after_several_retries(
-                event_details.clone(),
-                instance.id.clone(),
-                instance.db_type.to_string(),
-                Some(CommandError::new_from_safe_message(
-                    failure.describe(&instance.id, DB_READY_STATE),
-                )),
-            ))
-        },
+    let database = AwsManagedDb {
+        db_type: instance.db_type,
+        id: &instance.id,
+        credentials: &credentials,
+    };
+    let policy = StartPolicy {
+        timeout: terraform.timeout,
+        poll_interval: DEFAULT_POLL_INTERVAL,
+        fail_on_unreadable_state: false,
+    };
+    start_until_available(
+        &database,
+        &SystemClock,
+        &policy,
+        &|| target.abort.status() != AbortStatus::None,
+        &mut |line| logger.info(format!("Database `{}` {line}", instance.id)),
     )
+    .map_err(|failure| {
+        if failure == StartFailure::Aborted {
+            return Box::new(EngineError::new_task_cancellation_requested(event_details.clone()));
+        }
+        Box::new(EngineError::new_database_failed_to_start_after_several_retries(
+            event_details.clone(),
+            instance.id.clone(),
+            instance.db_type.to_string(),
+            Some(CommandError::new_from_safe_message(
+                failure.describe(&instance.id, policy.timeout),
+            )),
+        ))
+    })
 }
 
 /// Whether this run changes infrastructure. Plan-only, init, unlock and noop are reads and must not
