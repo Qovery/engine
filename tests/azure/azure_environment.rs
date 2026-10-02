@@ -2114,6 +2114,7 @@ fn azure_aks_deploy_terraform_service() {
             environment_vars_with_infos: Default::default(),
             external_secrets: BTreeMap::new(),
             managed_db_connectivity: None,
+            pausable_instance: None,
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },

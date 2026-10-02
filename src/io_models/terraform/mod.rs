@@ -220,6 +220,18 @@ pub struct TerraformService {
     pub build_settings: Option<BuildSettings>,
     #[serde(default)]
     pub managed_db_connectivity: Option<ManagedDbConnectivity>,
+    /// Cloud database instance this service owns, so pausing the service stops it and resuming starts it.
+    /// Sent for any blueprint database, fresh or migrated.
+    #[serde(default)]
+    pub pausable_instance: Option<PausableInstance>,
+}
+
+/// What pause/resume needs to drive the instance.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct PausableInstance {
+    pub instance_identifier: String,
+    pub database_kind: AdoptedDatabaseKind,
+    pub target_hostname: String,
 }
 
 /// Set only for a blueprint that adopted a managed database, so its terraform service owns the
@@ -325,6 +337,7 @@ impl TerraformService {
 
         let external_secrets = self.external_secrets;
         let managed_db_connectivity = self.managed_db_connectivity;
+        let pausable_instance = self.pausable_instance;
 
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged | Kind::EksAnywhere => {
@@ -357,6 +370,7 @@ impl TerraformService {
                     terraform_credentials_domain,
                     external_secrets.clone(),
                     managed_db_connectivity.clone(),
+                    pausable_instance.clone(),
                 )?)
             }
             Kind::ScwKapsule | Kind::ScwSelfManaged => {
@@ -389,6 +403,7 @@ impl TerraformService {
                     terraform_credentials_domain,
                     external_secrets.clone(),
                     managed_db_connectivity.clone(),
+                    pausable_instance.clone(),
                 )?)
             }
             Kind::Gke | Kind::GkeSelfManaged => Box::new(models::terraform_service::TerraformService::<GCP>::new(
@@ -420,6 +435,7 @@ impl TerraformService {
                 terraform_credentials_domain,
                 external_secrets.clone(),
                 managed_db_connectivity.clone(),
+                pausable_instance.clone(),
             )?),
             Kind::Aks | Kind::AksSelfManaged => Box::new(models::terraform_service::TerraformService::<Azure>::new(
                 context,
@@ -450,6 +466,7 @@ impl TerraformService {
                 terraform_credentials_domain,
                 external_secrets.clone(),
                 managed_db_connectivity.clone(),
+                pausable_instance.clone(),
             )?),
             Kind::OnPremiseSelfManaged => Box::new(models::terraform_service::TerraformService::<OnPremise>::new(
                 context,
@@ -480,6 +497,7 @@ impl TerraformService {
                 terraform_credentials_domain,
                 external_secrets.clone(),
                 managed_db_connectivity.clone(),
+                pausable_instance.clone(),
             )?),
         };
 
@@ -811,6 +829,7 @@ mod tests {
             environment_vars_with_infos: BTreeMap::new(),
             external_secrets: BTreeMap::new(),
             managed_db_connectivity: None,
+            pausable_instance: None,
             advanced_settings: TerraformServiceAdvancedSettings::default(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),
@@ -820,6 +839,18 @@ mod tests {
             dockerfile_fragment: None,
             build_settings: None,
         }
+    }
+
+    #[test]
+    fn a_payload_with_a_field_this_engine_does_not_know_still_parses() {
+        // Core ships fields before the engines that read them are deployed.
+        let mut payload = serde_json::to_value(create_test_terraform_service("test")).expect("must serialize");
+        payload
+            .as_object_mut()
+            .expect("an object")
+            .insert("a_field_from_a_newer_core".to_string(), serde_json::json!({"any": "value"}));
+
+        assert!(serde_json::from_value::<TerraformService>(payload).is_ok());
     }
 
     #[test]

@@ -19,8 +19,8 @@ use crate::io_models::models::ExternalSecret;
 use crate::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
-use crate::io_models::terraform::ManagedDbConnectivity;
 use crate::io_models::terraform::TerraformServiceAdvancedSettings;
+use crate::io_models::terraform::{ManagedDbConnectivity, PausableInstance};
 use crate::io_models::variable_utils::VariableInfo;
 use crate::runtime::block_on;
 use crate::utilities::{sanitize_k8s_label_value, to_short_id};
@@ -77,6 +77,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) terraform_credentials: TerraformCredentials,
     pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) managed_db_connectivity: Option<ManagedDbConnectivity>,
+    pub(crate) pausable_instance: Option<PausableInstance>,
     pub(crate) aws_apn_id: AwsApnId,
 }
 
@@ -110,6 +111,7 @@ impl<T: CloudProvider> TerraformService<T> {
         terraform_credentials: TerraformCredentials,
         external_secrets: BTreeMap<String, ExternalSecret>,
         managed_db_connectivity: Option<ManagedDbConnectivity>,
+        pausable_instance: Option<PausableInstance>,
     ) -> Result<Self, TerraformServiceError> {
         let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.clone()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
@@ -159,6 +161,7 @@ impl<T: CloudProvider> TerraformService<T> {
             terraform_credentials,
             external_secrets,
             managed_db_connectivity,
+            pausable_instance,
             aws_apn_id: context.aws_apn_id().clone(),
         })
     }

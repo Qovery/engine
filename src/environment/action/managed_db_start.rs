@@ -84,6 +84,16 @@ pub(super) enum StartFailure {
 }
 
 impl StartFailure {
+    /// AWS no longer knows the instance, e.g. a destroy already removed it.
+    pub(super) fn instance_is_gone(&self) -> bool {
+        match self {
+            StartFailure::Rejected(answer) => {
+                answer.contains("DBInstanceNotFound") || answer.contains("DBClusterNotFound")
+            }
+            StartFailure::Unreadable(_) | StartFailure::TimedOut { .. } | StartFailure::Aborted => false,
+        }
+    }
+
     pub(super) fn describe(&self, database_id: &str, timeout: Duration) -> String {
         match self {
             StartFailure::Rejected(answer) => format!("AWS refused to start database `{database_id}`: {answer}"),
@@ -532,6 +542,16 @@ mod tests {
             1,
             "the backoff start at 60 s lands on the timeout and must not be sent"
         );
+    }
+
+    #[test]
+    fn knows_when_the_instance_no_longer_exists() {
+        assert!(StartFailure::Rejected("An error occurred (DBInstanceNotFound) ...".to_string()).instance_is_gone());
+        assert!(
+            StartFailure::Rejected("An error occurred (DBClusterNotFoundFault) ...".to_string()).instance_is_gone()
+        );
+        assert!(!StartFailure::Rejected(DENIED.to_string()).instance_is_gone());
+        assert!(!StartFailure::Aborted.instance_is_gone());
     }
 
     #[test]

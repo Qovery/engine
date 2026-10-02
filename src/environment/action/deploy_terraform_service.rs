@@ -24,7 +24,7 @@ use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::service::{self, Action, Service};
 use crate::infrastructure::models::cloud_provider::{self, DeploymentTarget};
-use crate::io_models::terraform::{AdoptedDatabaseKind, ManagedDbConnectivity};
+use crate::io_models::terraform::{AdoptedDatabaseKind, PausableInstance};
 use crate::runtime::block_on;
 use k8s_openapi::api::batch::v1::Job as K8sJob;
 use k8s_openapi::api::core::v1::Pod;
@@ -505,13 +505,12 @@ fn get_adopted_managed_db<T: CloudProvider>(
         return None;
     }
 
-    stoppable_adopted_instance(terraform.managed_db_connectivity.as_ref()?)
+    drivable_instance(terraform.pausable_instance.as_ref()?)
 }
 
-/// The cloud-agnostic half of [adopted_instance]: what the payload itself says can be driven.
-fn stoppable_adopted_instance(connectivity: &ManagedDbConnectivity) -> Option<AdoptedInstance> {
-    let id = connectivity.instance_identifier.as_ref()?.trim().to_string();
-    let db_type = match connectivity.database_kind.as_ref()? {
+fn drivable_instance(instance: &PausableInstance) -> Option<AdoptedInstance> {
+    let id = instance.instance_identifier.trim().to_string();
+    let db_type = match instance.database_kind {
         AdoptedDatabaseKind::Postgresql => service::DatabaseType::PostgreSQL,
         AdoptedDatabaseKind::Mysql => service::DatabaseType::MySQL,
         AdoptedDatabaseKind::Mongodb => service::DatabaseType::MongoDB,
@@ -521,7 +520,7 @@ fn stoppable_adopted_instance(connectivity: &ManagedDbConnectivity) -> Option<Ad
 
     // `<id>.<hash>.<region>.rds.amazonaws.com` both corroborates the catalog-supplied identifier and
     // carries the region: the adopted instance need not live in the cluster's.
-    let (endpoint_id, rest) = connectivity.target_hostname.split_once('.')?;
+    let (endpoint_id, rest) = instance.target_hostname.split_once('.')?;
     if id.is_empty() || endpoint_id != id {
         return None;
     }
@@ -653,6 +652,17 @@ fn ensure_adopted_managed_db_available<T: CloudProvider>(
         &|| target.abort.status() != AbortStatus::None,
         &mut |line| logger.info(format!("Database `{}` {line}", instance.id)),
     )
+    .or_else(|failure| {
+        // A destroy that already removed the instance, then failed later, must stay retriable.
+        if matches!(terraform.terraform_action, TerraformAction::TerraformDestroy) && failure.instance_is_gone() {
+            logger.info(format!(
+                "Database `{}` no longer exists, nothing to start before the destroy",
+                instance.id
+            ));
+            return Ok(());
+        }
+        Err(failure)
+    })
     .map_err(|failure| {
         if failure == StartFailure::Aborted {
             return Box::new(EngineError::new_task_cancellation_requested(event_details.clone()));
@@ -798,43 +808,29 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::stoppable_adopted_instance;
+    use super::drivable_instance;
     use crate::infrastructure::models::cloud_provider::service;
-    use crate::io_models::terraform::{AdoptedDatabaseKind, ManagedDbConnectivity};
-    use uuid::Uuid;
-
-    fn connectivity(
-        identifier: Option<&str>,
-        kind: Option<AdoptedDatabaseKind>,
-        hostname: &str,
-    ) -> ManagedDbConnectivity {
-        ManagedDbConnectivity {
-            service_name: "z94067f00-postgresql".to_string(),
-            target_hostname: hostname.to_string(),
-            source_fqdn: "z94067f00-postgresql.example.com".to_string(),
-            publicly_accessible: false,
-            database_id: "z94067f00".to_string(),
-            database_long_id: Uuid::new_v4(),
-            instance_identifier: identifier.map(str::to_string),
-            database_kind: kind,
-        }
-    }
+    use crate::io_models::terraform::{AdoptedDatabaseKind, ManagedDbConnectivity, PausableInstance};
 
     const ENDPOINT: &str = "prod-billing-db.cfx9tmpl.eu-west-3.rds.amazonaws.com";
 
+    fn pausable(identifier: &str, kind: AdoptedDatabaseKind, hostname: &str) -> PausableInstance {
+        PausableInstance {
+            instance_identifier: identifier.to_string(),
+            database_kind: kind,
+            target_hostname: hostname.to_string(),
+        }
+    }
+
     #[test]
-    fn drives_an_adopted_instance_the_endpoint_corroborates() {
+    fn drives_an_instance_the_endpoint_corroborates() {
         // The real RDS id from the blueprint's db_identifier output, not the Qovery service name.
-        let resolved = stoppable_adopted_instance(&connectivity(
-            Some("prod-billing-db"),
-            Some(AdoptedDatabaseKind::Postgresql),
-            ENDPOINT,
-        ))
-        .expect("should resolve");
+        let resolved = drivable_instance(&pausable("prod-billing-db", AdoptedDatabaseKind::Postgresql, ENDPOINT))
+            .expect("should resolve");
 
         assert_eq!(resolved.id, "prod-billing-db");
         assert_eq!(resolved.db_type, service::DatabaseType::PostgreSQL);
-        // Taken from the endpoint, not the cluster: an adopted instance need not share the region.
+        // Taken from the endpoint, not the cluster: the instance need not share the region.
         assert_eq!(resolved.region, "eu-west-3");
     }
 
@@ -842,50 +838,20 @@ mod tests {
     fn refuses_an_identifier_the_endpoint_does_not_corroborate() {
         // The identifier selects what gets stopped and comes from a customer-authored catalog output.
         assert!(
-            stoppable_adopted_instance(&connectivity(
-                Some("someone-elses-database"),
-                Some(AdoptedDatabaseKind::Postgresql),
-                ENDPOINT,
-            ))
-            .is_none()
+            drivable_instance(&pausable("someone-elses-database", AdoptedDatabaseKind::Postgresql, ENDPOINT)).is_none()
         );
+        assert!(drivable_instance(&pausable("   ", AdoptedDatabaseKind::Postgresql, ENDPOINT)).is_none());
     }
 
     #[test]
     fn refuses_a_kind_with_no_stopped_state_or_none_this_engine_knows() {
-        assert!(
-            stoppable_adopted_instance(&connectivity(
-                Some("prod-billing-db"),
-                Some(AdoptedDatabaseKind::Redis),
-                ENDPOINT
-            ))
-            .is_none()
-        );
+        assert!(drivable_instance(&pausable("prod-billing-db", AdoptedDatabaseKind::Redis, ENDPOINT)).is_none());
         // A kind a newer core invented: skip this service rather than guess at an AWS command.
-        assert!(
-            stoppable_adopted_instance(&connectivity(
-                Some("prod-billing-db"),
-                Some(AdoptedDatabaseKind::Unsupported),
-                ENDPOINT,
-            ))
-            .is_none()
-        );
+        assert!(drivable_instance(&pausable("prod-billing-db", AdoptedDatabaseKind::Unsupported, ENDPOINT)).is_none());
     }
 
     #[test]
-    fn refuses_a_payload_without_the_pause_fields() {
-        assert!(
-            stoppable_adopted_instance(&connectivity(None, Some(AdoptedDatabaseKind::Postgresql), ENDPOINT)).is_none()
-        );
-        assert!(stoppable_adopted_instance(&connectivity(Some("prod-billing-db"), None, ENDPOINT)).is_none());
-        assert!(
-            stoppable_adopted_instance(&connectivity(Some("   "), Some(AdoptedDatabaseKind::Postgresql), ENDPOINT))
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn a_payload_from_a_core_that_predates_these_fields_still_parses() {
+    fn a_connectivity_from_a_core_that_predates_the_pause_fields_still_parses() {
         // Engines outlive the core: a block written before these fields must still deploy.
         let json = r#"{
             "service_name": "z94067f00-postgresql",
@@ -900,7 +866,22 @@ mod tests {
 
         assert_eq!(connectivity.instance_identifier, None);
         assert_eq!(connectivity.database_kind, None);
-        assert!(stoppable_adopted_instance(&connectivity).is_none());
+    }
+
+    #[test]
+    fn parses_the_pausable_instance_core_sends_for_a_blueprint_database() {
+        let json = r#"{
+            "instance_identifier": "orders-db",
+            "database_kind": "MYSQL",
+            "target_hostname": "orders-db.ab12cd.eu-west-1.rds.amazonaws.com"
+        }"#;
+
+        let instance: PausableInstance = serde_json::from_str(json).expect("must parse");
+        let resolved = drivable_instance(&instance).expect("should resolve");
+
+        assert_eq!(resolved.id, "orders-db");
+        assert_eq!(resolved.db_type, service::DatabaseType::MySQL);
+        assert_eq!(resolved.region, "eu-west-1");
     }
 
     #[test]
