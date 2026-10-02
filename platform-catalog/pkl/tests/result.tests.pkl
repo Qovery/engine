@@ -10,6 +10,10 @@ local sampleField: contract.Field = new {
   label = "Retention period"
 }
 
+local readOnlyField: contract.Field = (sampleField) { readOnly = true }
+
+local sampleEntry: contract.ResolvedValue = new { key = "retentionWeeks"; value = "12" }
+
 local sampleViolation: contract.Violation = new {
   code = "VALUE_OUT_OF_RANGE"
   fieldPath = "retentionWeeks"
@@ -29,6 +33,7 @@ facts {
           List(sampleField),
           List(),
           List(),
+          List(),
           () -> new Mapping { ["deploymentMode"] = "SingleBinary" },
         )
     )
@@ -46,6 +51,7 @@ facts {
           List(),
           List(),
           List(sampleViolation),
+          List(),
           unreachableCompiler,
         )
     )
@@ -54,10 +60,10 @@ facts {
 
   ["non-COMPILE operations never evaluate the compiler"] {
     result
-      .envelope(contract.describeOperation, List(), List(), List(), unreachableCompiler)
+      .envelope(contract.describeOperation, List(), List(), List(), List(), unreachableCompiler)
       .helmValues == null
     result
-      .envelope(contract.validateOperation, List(), List(), List(), unreachableCompiler)
+      .envelope(contract.validateOperation, List(), List(), List(), List(), unreachableCompiler)
       .helmValues == null
     result
       .envelope(
@@ -65,9 +71,37 @@ facts {
         List(),
         List(),
         List(),
+        List(),
         unreachableCompiler,
       )
       .helmValues == null
+  }
+
+  ["resolved values are rendered only when there is one"] {
+    let (
+      none =
+        result.envelope(
+          contract.validateOperation,
+          List(sampleField),
+          List(),
+          List(),
+          List(),
+          unreachableCompiler,
+        )
+    )
+    let (
+      one =
+        result.envelope(
+          contract.validateOperation,
+          List(readOnlyField),
+          List(),
+          List(),
+          List(sampleEntry),
+          unreachableCompiler,
+        )
+    )
+      !new JsonRenderer {}.renderValue(none).contains("resolvedValues")
+        && one.resolvedValues == List(sampleEntry)
   }
 
   ["gatedHelmValues applies the same gate directly"] {

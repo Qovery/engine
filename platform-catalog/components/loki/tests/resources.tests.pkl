@@ -7,10 +7,51 @@ import "fixtures.pkl"
 
 local profiles = resourcesSetting.profiles
 
-// Requirement list for Slice 4.7 resource profiles (q-core docs-v2/slice-4-7-source3-resource-profiles.md).
+// Resource profile requirements (q-core doc-features/engine-v2/guides/pkl-models.md).
 
 local function withProfile(base: Mapping, profileName: String): Mapping =
   (base) { ["resources.profile"] = profileName }
+
+local contextualOperations = List(contract.resolveRequirementsOperation, contract.validateOperation, contract.compileOperation)
+local highAvailabilityProfile: Mapping = (fixtures.s3Profile) { ["highAvailability"] = true }
+local topologies: List<Pair<Mapping, List<String>>> = List(
+  Pair(fixtures.pvcProfile, List("singleBinary")),
+  Pair(highAvailabilityProfile, List("read", "write", "backend", "gateway")),
+)
+
+// The published budgets, cpu (m) and memory (Mi) requests: the memory limit is twice the request
+// and no preset sets a CPU limit.
+local publishedBudgets: Mapping<String, Mapping<String, Pair<Int, Int>>> = new {
+  ["SMALL"] = new Mapping { ["workload"] = Pair(100, 512); ["gateway"] = Pair(50, 64) }
+  ["MEDIUM"] = new Mapping { ["workload"] = Pair(300, 1024); ["gateway"] = Pair(100, 128) }
+  ["LARGE"] = new Mapping { ["workload"] = Pair(1000, 2048); ["gateway"] = Pair(250, 256) }
+}
+
+local function entry(entryKey: String, entryValue: String?): contract.ResolvedValue =
+  new { key = entryKey; value = entryValue }
+
+local function expectedEntries(profileName: String, targetKeys: List<String>): List<contract.ResolvedValue> =
+  targetKeys.flatMap((targetKey) ->
+    let (budget = publishedBudgets[profileName][if (targetKey == "gateway") "gateway" else "workload"])
+      List(
+        entry("resources.\(targetKey).requests.cpuMilli", "\(budget.first)"),
+        entry("resources.\(targetKey).limits.cpuMilli", null),
+        entry("resources.\(targetKey).requests.memoryMi", "\(budget.second)"),
+        entry("resources.\(targetKey).limits.memoryMi", "\(budget.second * 2)"),
+      )
+  )
+
+local function resourceKeys(result: contract.EvaluationResult): List<String> =
+  fixtures.fieldKeys(result).filter((key) -> key.startsWith("resources."))
+
+local function readOnlyFields(result: contract.EvaluationResult): List<contract.ConfigurationField> =
+  result.fields.filter((field) -> field is contract.Field && field.readOnly == true)
+
+local function readOnlyKeys(result: contract.EvaluationResult): List<String> =
+  readOnlyFields(result).map((field) -> field.key)
+
+local function resolvedValue(result: contract.EvaluationResult, key: String): String? =
+  result.resolvedValues!!.find((candidate) -> candidate.key == key).value
 
 local function customSingleBinary(cpuMilli: Any, memoryMi: Any): Mapping =
   (withProfile(fixtures.pvcProfile, "CUSTOM")) {
@@ -121,6 +162,10 @@ facts {
         }
     )
       validationCodes(config).isEmpty && resourcesOf(config, "singleBinary") == mediumBudget
+    // A MEDIUM seed stored under a CUSTOM key never replaces the selected preset's value.
+    let (seeded = (withProfile(fixtures.pvcProfile, "SMALL")) { ["resources.singleBinary.requests.cpuMilli"] = 300 })
+      resolvedValue(fixtures.resolveRequirements(seeded, fixtures.awsCustomer), "resources.singleBinary.requests.cpuMilli")
+        == "100"
   }
 
   ["custom values for inactive topology targets are ignored and never compiled"] {
@@ -160,18 +205,52 @@ facts {
     !fixtures.fieldKeys(customHighAvailability).contains("resources.singleBinary.requests.cpuMilli")
   }
 
-  ["a non-CUSTOM profile exposes no editable custom field and publishes the budgets instead"] {
-    // Without read-only rendering in the contract, an exposed field would be editable yet
-    // ignored. The selector's description carries the preset budgets for the active topology.
-    !fixtures.fieldKeys(smallDraft).any((key) -> key.startsWith("resources.") && key != "resources.profile")
-    (fixtures.field(smallDraft, "resources.profile").description as String)
-      .contains("SMALL: singleBinary 100m/512Mi (limit 1024Mi)")
+  ["a preset shows its budgets for the active topology as read-only fields"] {
+    for (profileName in List("SMALL", "MEDIUM", "LARGE")) {
+      for (topology in topologies) {
+        for (operation in contextualOperations) {
+          let (
+            result =
+              fixtures.evaluate(operation, withProfile(topology.first, profileName), fixtures.awsCustomer, fixtures.s3Inputs)
+          )
+          let (expected = expectedEntries(profileName, topology.second))
+          let (expectedKeys = expected.map((entry) -> entry.key))
+            resourceKeys(result) == List("resources.profile") + expectedKeys
+              && readOnlyKeys(result) == expectedKeys
+              && result.resolvedValues == expected
+              && result.violations.isEmpty
+              && readOnlyFields(result).every((field) ->
+                field.description == "Set by the \(profileName) preset. Select CUSTOM to edit."
+              )
+        }
+      }
+    }
+    fixtures.field(smallDraft, "resources.profile").description == profiles.description
+  }
+
+  ["CHART_DEFAULT keeps the resource fields hidden and DESCRIBE marks nothing read-only"] {
+    for (draft in List(fixtures.pvcProfile, withProfile(highAvailabilityProfile, "CHART_DEFAULT"))) {
+      let (result = fixtures.resolveRequirements(draft, fixtures.awsCustomer))
+        resourceKeys(result) == List("resources.profile") && result.resolvedValues == null
+    }
+    let (
+      described =
+        fixtures.evaluate(contract.describeOperation, withProfile(fixtures.pvcProfile, "SMALL"), fixtures.awsCustomer, new Mapping {})
+    )
+      readOnlyKeys(described).isEmpty && described.resolvedValues == null
   }
 
   ["CUSTOM exposes the active topology fields seeded with the MEDIUM recommendation"] {
     fixtures.field(customDraft, "resources.singleBinary.requests.cpuMilli").defaultValue == "300"
     fixtures.field(customDraft, "resources.singleBinary.limits.cpuMilli").defaultValue == null
     fixtures.field(customDraft, "resources.singleBinary.limits.memoryMi").defaultValue == "2048"
+    readOnlyKeys(customDraft).isEmpty
+    customDraft.resolvedValues == null
+    customDraft.fields
+      .filter((field) -> field.key.startsWith("resources."))
+      .every((field) -> field.description == fixtures.field(contextFreeDescribe, field.key).description)
+    fixtures.field(customDraft, "resources.singleBinary.limits.cpuMilli").description
+      == "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling."
   }
 
   ["every custom field is a number with the unit bounds"] {

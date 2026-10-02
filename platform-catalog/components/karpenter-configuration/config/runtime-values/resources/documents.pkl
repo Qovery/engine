@@ -3,7 +3,8 @@ module qovery.engine.platform.karpenterConfiguration.resources.documents
 
 import "pkl:yaml"
 
-// Parsing runs during VALIDATE and COMPILE only. q-core recovers indexed syntax violations via DESCRIBE.
+// Parsing runs during VALIDATE and COMPILE only. When it throws, q-core reports indexed syntax
+// violations from RESOLVE_REQUIREMENTS on the same draft, which must therefore never parse.
 // No cluster access or template execution.
 local parser = new yaml.Parser { useMapping = true; maxCollectionAliases = 32 }
 

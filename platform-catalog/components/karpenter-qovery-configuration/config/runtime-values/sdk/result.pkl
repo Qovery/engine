@@ -18,12 +18,14 @@ function envelope(
   resultFields: List<contract.ConfigurationField>,
   resultRequiredInputs: List<contract.LogicalInput>,
   resultViolations: List<contract.Violation>,
+  resultResolvedValues: List<contract.ResolvedValue>,
   compiler: () -> Mapping,
 ): contract.EvaluationResult = new contract.EvaluationResult {
   fields = resultFields
   requiredInputs = resultRequiredInputs
   violations = resultViolations
   helmValues = gatedHelmValues(operation, resultViolations, compiler)
+  resolvedValues = if (resultResolvedValues.isEmpty) null else resultResolvedValues
 }
 
 function gatedHelmValues(

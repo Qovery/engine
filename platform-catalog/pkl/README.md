@@ -33,12 +33,12 @@ request)` implements the four operations once:
 
 | Declaration | Where it lives in a bundle | What the evaluator derives |
 | --- | --- | --- |
-| `IntSetting`, `BoolSetting`, `StringSetting`, `EnumSetting` | `<setting>/setting.pkl` | `Field` descriptor, applied default, `INVALID_TYPE`, `VALUE_OUT_OF_RANGE`, `LENGTH_OUT_OF_RANGE`, `VALUE_NOT_ALLOWED`, activity (`activeWhen`), conditional requirement (`requiredWhen`) |
+| `IntSetting`, `BoolSetting`, `StringSetting`, `EnumSetting` | `<setting>/setting.pkl` | `Field` descriptor, applied default, `INVALID_TYPE`, `VALUE_OUT_OF_RANGE`, `LENGTH_OUT_OF_RANGE`, `VALUE_NOT_ALLOWED`, activity (`activeWhen`), conditional requirement (`requiredWhen`), read-only rendering with its `resolvedValues` entry and description (`readOnlyWhen`, `readOnlyValue`, `readOnlyDescription`) |
 | `Option` (value, provider, inputs, compileInputs) and `Availability` | `<enum setting>/setting.pkl`, or one file per option | Narrowed `allowedValues` with a cluster context, `RESOLVE_REQUIREMENTS`, `REQUIRED_INPUT_MISSING` and `INPUT_PATTERN_MISMATCH` at the right phase, the availability violation of a selected unavailable option |
 | `Component.inputs` | Declarations in `<setting>/inputs.pkl`, assembled in `settings.pkl` | Unconditional logical inputs, exposed during RESOLVE_REQUIREMENTS and checked during VALIDATE/COMPILE using the same presence/format checks as option inputs |
 | `Rule` | `<blamed setting>/dependencies.pkl` | One violation per violated rule, on the operations it declares |
 | `Fragment` | `<setting>/helm.pkl` | `helmValues`, deep-merged in declaration order; a leaf written by two fragments throws |
-| `ResourceProfiles` (targets, preset budgets, recommended preset) | `resources/setting.pkl` | The profile selector, four CUSTOM fields per active target pre-filled with the recommendation, `REQUIRED_RESOURCE_REQUEST_MISSING`, `LIMIT_BELOW_REQUEST`, and the `<target>.resources` blocks |
+| `ResourceProfiles` (targets, preset budgets, recommended preset) | `resources/setting.pkl` | The profile selector, four CUSTOM fields per active target pre-filled with the recommendation and read-only with the selected preset's budget, `REQUIRED_RESOURCE_REQUEST_MISSING`, `LIMIT_BELOW_REQUEST`, and the `<target>.resources` blocks |
 | `ObjectSetting`, `ArraySetting` (nested settings) | `<setting>/setting.pkl` | `ObjectField` / `ArrayField` descriptors with the new-row prototype and one descriptor list per current row, defaults at every level, `INVALID_TYPE` / `UNKNOWN_FIELD` / `LENGTH_OUT_OF_RANGE` / `DUPLICATE_ITEM` on indexed paths, and the active-value projection |
 
 Every predicate, contextual description and Helm fragment receives one `Scope`: `config` (the
@@ -74,6 +74,7 @@ What a declaration means for a draft, in one table:
 | Array absent | empty `itemFields` | size bounds apply (`LENGTH_OUT_OF_RANGE` on `minItems`) | `[]` |
 | Row of the wrong shape | the prototype at that index | `INVALID_TYPE` at `key[i]` | never compiled |
 | Inactive member (`activeWhen` false) | not listed | not validated; the unknown-key check still knows it | dropped; the stored draft keeps it |
+| Inactive top-level scalar whose `readOnlyWhen` holds | DESCRIBE unchanged; contextual: `readOnly`, no default, not required, its value in `resolvedValues` | not validated | dropped; the stored draft keeps it |
 | Unknown key, at any level | unchanged | `UNKNOWN_FIELD` on the parent path | never compiled |
 
 ## What belongs here

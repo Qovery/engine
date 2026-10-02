@@ -623,7 +623,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -958,7 +958,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1038,7 +1038,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1118,7 +1118,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1229,7 +1229,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1572,7 +1572,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1683,7 +1683,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1794,7 +1794,7 @@
           "required": false,
           "defaultValue": "CHART_DEFAULT",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads. Preset budgets, listed here temporarily until the Console shows them as read-only fields \u2014 SMALL: singleBinary 100m/512Mi (limit 1024Mi); MEDIUM: singleBinary 300m/1024Mi (limit 2048Mi); LARGE: singleBinary 1000m/2048Mi (limit 4096Mi)",
+          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [

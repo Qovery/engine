@@ -157,9 +157,10 @@ objects explicitly; this does not migrate resources from another release.
 
 **Consumer rollout prerequisite:** do not publish/activate this descriptor on current strict
 q-core readers until they accept optional `format` and `templates`. The q-core companion change validates declared YAML fields before returning compilation results.
-If Pkl parsing fails during VALIDATE or COMPILE, q-core obtains DESCRIBE for the same draft
-and returns indexed syntax violations. DESCRIBE and RESOLVE_REQUIREMENTS must remain independent
-of manifest parsing: resolution preserves AWS input requirements even for malformed YAML. Resource
+If Pkl parsing fails during VALIDATE or COMPILE, q-core evaluates RESOLVE_REQUIREMENTS for the
+same draft and returns its indexed syntax violations. DESCRIBE and RESOLVE_REQUIREMENTS must remain
+independent of manifest parsing: resolution preserves AWS input requirements even for malformed YAML,
+and a parsing rule on RESOLVE_REQUIREMENTS would turn that recovery into an evaluation failure. Resource
 identity and collision checks run during VALIDATE and COMPILE. This avoids a second evaluation
 on valid requests. Its syntax limits include one mapping document and at
 most 32 collection aliases, matching this model. The console then renders the format and template choices through

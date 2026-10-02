@@ -70,6 +70,8 @@ class Field {
   label: String
   description: String?
   sensitive: Boolean = false
+  // Absent when false. The field takes no input: its value for this draft is in resolvedValues.
+  readOnly: Boolean(this, !required, !sensitive, defaultValue == null)? = null
   constraints: Constraints = new {}
 }
 
@@ -77,8 +79,13 @@ typealias ConfigurationField = Field | StructuredField(this is ObjectField || th
 
 // Nested keys are literal, relative object member names, never dotted paths or array indices.
 // Nested secrets are deliberately unsupported until consumers implement recursive redaction.
+// Nested read-only fields are unsupported: resolvedValues keys are top-level keys.
 typealias NestedField =
-  ConfigurationField(!sensitive, key.matches(Regex("[A-Za-z_][A-Za-z0-9_-]*")))
+  ConfigurationField(
+    !sensitive,
+    !(this is Field) || readOnly == null,
+    key.matches(Regex("[A-Za-z_][A-Za-z0-9_-]*")),
+  )
 typealias ObjectFields = List<NestedField>(map((field) -> field.key).isDistinct)
 
 class ObjectField extends StructuredField {
@@ -131,9 +138,25 @@ class Violation {
   message: String
 }
 
+// The value of a read-only field for this draft, string-encoded like Field.defaultValue; null means
+// none, such as no CPU limit. Entries rather than a Mapping, which would drop the null values.
+class ResolvedValue {
+  key: String
+  value: String?
+}
+
 class EvaluationResult {
   fields: List<ConfigurationField> = List()
   requiredInputs: List<LogicalInput> = List()
   violations: List<Violation> = List()
   helmValues: Mapping? = null
+  // One entry per read-only field, in field order, and nothing else. Absent rather than empty, so
+  // a result without read-only fields keeps the bytes earlier readers know.
+  resolvedValues: List<ResolvedValue>?(
+    this == null || !isEmpty,
+    (this ?? List()).map((entry) -> entry.key)
+      == fields
+        .filter((field) -> field is Field && field.readOnly == true)
+        .map((field) -> field.key),
+  ) = null
 }

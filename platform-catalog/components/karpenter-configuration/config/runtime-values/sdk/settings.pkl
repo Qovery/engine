@@ -91,8 +91,9 @@ abstract class Setting {
   sensitive: Boolean = false
 
   // The setting exists for the current draft only while this holds. Inactive settings are not
-  // validated and not compiled. Top-level settings are still listed by a context-free DESCRIBE;
-  // nested settings are never listed while inactive, so a row's shape follows its own values.
+  // validated and not compiled. Top-level settings are still listed by a context-free DESCRIBE,
+  // and an inactive top-level scalar may be listed read-only (see readOnlyWhen); nested settings
+  // are never listed while inactive, so a row's shape follows its own values.
   activeWhen: Predicate = (_) -> true
 
   // Optional description for contextual operations, when it depends on the draft or the cluster.
@@ -122,12 +123,14 @@ abstract class Setting {
 
 // Nested members are described and validated by the same machinery as top-level settings, except
 // for what only makes sense at the top: an enum's availability rules, the cluster inputs its
-// options activate, and sensitivity (the contract has no recursive redaction yet). Declaring them
-// on a nested setting is refused at declaration rather than silently ignored.
+// options activate, sensitivity (the contract has no recursive redaction yet) and read-only
+// rendering (resolved values are keyed by top-level key). Declaring them on a nested setting is
+// refused at declaration rather than silently ignored.
 const function nestable(members: List<Setting>): Boolean =
   members.every((member) ->
     (
       !member.sensitive
+        && !(member is ScalarSetting && member.readOnlyWhen != null)
         && (
           !(member is EnumSetting)
             || (
@@ -136,11 +139,20 @@ const function nestable(members: List<Setting>): Boolean =
             )
         )
     )
-      || throw("Nested setting \(member.key) cannot declare availability rules, option inputs or sensitivity; only a top-level setting can")
+      || throw("Nested setting \(member.key) cannot declare availability rules, option inputs, sensitivity or a read-only condition; only a top-level setting can")
   )
 
 abstract class ScalarSetting extends Setting {
   fieldType: contract.FieldType
+
+  // Outside DESCRIBE, an inactive setting is listed read-only while this holds: no default, never
+  // required, and readOnlyValue as its entry in resolvedValues. It stays inactive, so a value sent
+  // back for it is stored but neither validated nor compiled. The contract refuses a sensitive one.
+  readOnlyWhen: Predicate?(this == null || readOnlyValue != null) = null
+  // The value shown while read-only, of the setting's type; null means none.
+  readOnlyValue: ((Scope) -> Any?)? = null
+  // Replaces the description while read-only, when the editing help no longer applies.
+  readOnlyDescription: ((Scope) -> String)? = null
 
   // Rendered as the Console default without ever being applied by the evaluator. Only composite
   // declarations use it (resources.pkl pre-fills CUSTOM fields with a recommendation the customer
@@ -158,6 +170,12 @@ abstract class ScalarSetting extends Setting {
   function defaultText(): String? =
     let (value = defaultValue() ?? suggestedValue())
       if (value == null) null else "\(value)"
+
+  function readOnlyText(scope: Scope): String? =
+    let (value = readOnlyValue!!.apply(scope))
+      if (value == null) null
+      else if (accepts(value)) "\(value)"
+      else throw("Read-only value of \(key) must be \(typeName())")
 }
 
 class IntSetting extends ScalarSetting {
@@ -381,8 +399,21 @@ function fields(
   includeInactive: Boolean,
 ): List<contract.ConfigurationField> =
   settings
-    .filter((setting) -> includeInactive || setting.activeWhen.apply(scope))
+    .filter((setting) ->
+      includeInactive || setting.activeWhen.apply(scope) || rendersReadOnly(setting, operation, scope)
+    )
     .map((setting) -> field(setting, operation, scope))
+
+// DESCRIBE never lists a read-only field; evaluate.pkl derives resolvedValues from this same test.
+function rendersReadOnly(setting: Setting, operation: contract.Operation, scope: Scope): Boolean =
+  operation != contract.describeOperation
+    && setting is ScalarSetting
+    && setting.readOnlyWhen != null
+    && !setting.activeWhen.apply(scope)
+    && setting.readOnlyWhen.apply(scope)
+
+function resolvedValue(setting: ScalarSetting, scope: Scope): contract.ResolvedValue =
+  new { key = setting.key; value = setting.readOnlyText(scope) }
 
 function field(setting: Setting, operation: contract.Operation, scope: Scope): contract.ConfigurationField =
   if (setting is ObjectSetting)
@@ -397,18 +428,22 @@ function field(setting: Setting, operation: contract.Operation, scope: Scope): c
   else if (setting is ArraySetting)
     arrayField(setting, operation, scope)
   else if (setting is ScalarSetting)
-    new contract.Field {
-      key = setting.key
-      type = setting.fieldType
-      required = isRequired(setting, scope)
-      defaultValue = setting.defaultText()
-      label = setting.label
-      description = describe(setting, operation, scope)
-      sensitive = setting.sensitive
-      constraints = setting.constraints(scope)
-      format = if (setting is StringSetting) setting.format else null
-      templates = if (setting is StringSetting) setting.templates else null
-    }
+    let (asReadOnly = rendersReadOnly(setting, operation, scope))
+      new contract.Field {
+        key = setting.key
+        type = setting.fieldType
+        required = !asReadOnly && isRequired(setting, scope)
+        defaultValue = if (asReadOnly) null else setting.defaultText()
+        label = setting.label
+        description =
+          if (asReadOnly && setting.readOnlyDescription != null) setting.readOnlyDescription.apply(scope)
+          else describe(setting, operation, scope)
+        sensitive = setting.sensitive
+        readOnly = if (asReadOnly) true else null
+        constraints = setting.constraints(scope)
+        format = if (setting is StringSetting) setting.format else null
+        templates = if (setting is StringSetting) setting.templates else null
+      }
   else
     throw("Unsupported setting \(setting.key)")
 

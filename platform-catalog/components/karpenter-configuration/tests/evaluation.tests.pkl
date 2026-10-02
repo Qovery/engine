@@ -2,6 +2,7 @@ amends "pkl:test"
 
 import "../config/runtime-values/contract.pkl"
 import "../config/runtime-values/nodePools/helm.pkl" as nodePoolsHelm
+import "../config/runtime-values/resources/documents.pkl" as resourcesDocuments
 import "../config/runtime-values/sdk/evaluate.pkl" as sdkEvaluate
 import "../config/runtime-values/sdk/request.pkl" as sdkRequest
 import "../config/runtime-values/settings.pkl"
@@ -101,6 +102,20 @@ facts {
         "RESERVED_HELM_ANNOTATION",
       )
     }
+  }
+  ["a malformed manifest still resolves, so q-core can report its YAML error from RESOLVE_REQUIREMENTS"] {
+    let (malformed = resourceConfig("apiVersion: karpenter.sh/v1\nkind: [NodePool\n"))
+    let (result = evaluate(malformed, "RESOLVE_REQUIREMENTS"))
+    let (
+      row =
+        (result.fields.find((field) -> field.key == "resources") as contract.ArrayField).itemFields!![0]
+    )
+      module
+        .catch(() -> resourcesDocuments.parse(malformed["resources"][0]))
+        .contains("Error parsing YAML")
+        && (row.find((field) -> field.key == "manifest") as contract.Field).format
+          == "kubernetes-resource-yaml"
+        && result.helmValues == null
   }
   ["raw YAML resources preserve ordinary application annotations"] {
     let (

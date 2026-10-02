@@ -25,14 +25,14 @@ import "../sdk/resources.pkl" as sdkResources
 // Pending before the slice closes: confirm the SMALL/LARGE anchors and the gateway numbers against
 // the fleet's advanced-settings override distribution (loki.* keys in cluster advanced settings).
 // Changing a number requires a new bundle version and a new root template release, announced with
-// the old and new budgets (q-core docs-v2/slice-4-7-source3-resource-profiles.md).
+// the old and new budgets (q-core doc-features/engine-v2/guides/pkl-models.md).
 
 // Single-binary mode runs one workload; high availability runs the four simple-scalable ones. The
 // flag is read through the highAvailability declaration.
 
 profiles: sdkResources.ResourceProfiles = new {
   description =
-    "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads."
+    "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads."
 
   targets = List(
     new sdkResources.Target { key = "singleBinary"; label = "Single binary"; activeWhen = (scope) -> !highAvailabilitySetting.enabled(scope) },

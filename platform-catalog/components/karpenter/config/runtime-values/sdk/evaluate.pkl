@@ -66,8 +66,19 @@ function evaluate(component: Component, evaluationRequest: Mapping): contract.Ev
       settings.fields(component.settings, operation, scope, isDescribe),
       if (isDescribe) List() else component.inputs + requiredInputs(active, scope),
       if (isDescribe) List() else violations(component, active, operation, profileConfig, scope),
+      resolvedValues(component, operation, scope),
       () -> compile(component, scope),
     )
+
+// One entry per setting that settings.fields lists read-only, in the same order.
+local function resolvedValues(
+  component: Component,
+  operation: contract.Operation,
+  scope: settings.Scope,
+): List<contract.ResolvedValue> =
+  component.settings
+    .filter((setting) -> settings.rendersReadOnly(setting, operation, scope))
+    .map((setting) -> settings.resolvedValue(setting as settings.ScalarSetting, scope))
 
 // The Helm values of a validated draft: the fragments of the features that are in play (no setting,
 // or at least one active setting), over the active configuration only (see settings.activeConfig).

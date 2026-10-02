@@ -1,6 +1,8 @@
 amends "pkl:test"
 
 import "../contract.pkl"
+import "../sdk/evaluate.pkl"
+import "../sdk/request.pkl"
 import "../sdk/settings.pkl"
 
 local retention: settings.IntSetting = new {
@@ -47,6 +49,61 @@ local noContext = scopeOf(new Mapping {}, null)
 local aws = scopeOf(new Mapping {}, new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" })
 local custom = scopeOf(new Mapping { ["mode"] = "CUSTOM" }, null)
 local pvc = scopeOf(new Mapping { ["mode"] = "pvc" }, null)
+
+// A preset-like pair: under SMALL the CPU budget is shown read-only with the preset's values,
+// under CUSTOM it is an editable required field, and AUTO shows nothing.
+local cpuBudget: settings.IntSetting = (seeded) {
+  key = "cpu"
+  activeWhen = (scope) -> scope.config["mode"] == "CUSTOM"
+  readOnlyWhen = (scope) -> scope.config["mode"] == "SMALL"
+  readOnlyValue = (_) -> 100
+}
+local cpuLimit: settings.IntSetting = (cpuBudget) {
+  key = "cpuLimit"
+  suggested = null
+  requiredWhen = (_) -> false
+  readOnlyValue = (_) -> null
+}
+local budgetMode: settings.EnumSetting = (mode) {
+  default = "AUTO"
+  options = List("AUTO", "SMALL", "CUSTOM").map((name) -> new settings.Option { value = name })
+  availability = List()
+}
+local budgets: evaluate.Component = new {
+  label = "Demo"
+  features = List(new evaluate.Feature {
+    settings = List(budgetMode, cpuBudget, cpuLimit)
+    rules = List()
+    fragment = (scope) -> scope.config
+  })
+}
+local function evaluateComponent(component: evaluate.Component, operation: contract.Operation, profileConfig: Mapping): contract.EvaluationResult =
+  evaluate.evaluate(component, request.build(operation, profileConfig, null, new Mapping {}, List()))
+local function evaluateBudgets(operation: contract.Operation, profileConfig: Mapping): contract.EvaluationResult =
+  evaluateComponent(budgets, operation, profileConfig)
+local contextualOperations = List(contract.resolveRequirementsOperation, contract.validateOperation, contract.compileOperation)
+local small = scopeOf(new Mapping { ["mode"] = "SMALL" }, null)
+local auto = scopeOf(new Mapping { ["mode"] = "AUTO" }, null)
+local readOnlyCpu: contract.Field = new {
+  key = "cpu"
+  type = contract.numberFieldType
+  required = false
+  label = "CPU"
+  readOnly = true
+  constraints = new { min = 1; max = 64000 }
+}
+local alwaysReadOnly: settings.IntSetting = (cpuBudget) { readOnlyWhen = (_) -> true }
+local describedBudget: settings.IntSetting = (cpuBudget) {
+  description = "static"
+  readOnlyDescription = (scope) -> "set by \(scope.config["mode"])"
+}
+local alwaysReadOnlyBudgets: evaluate.Component = (budgets) {
+  features = List(new evaluate.Feature {
+    settings = List(budgetMode, alwaysReadOnly)
+    rules = List()
+    fragment = (scope) -> scope.config
+  })
+}
 
 facts {
   ["integer bounds report only the configured limits"] {
@@ -144,4 +201,69 @@ facts {
     settings.context(new Mapping { ["kubernetesVersion"] = "custom-version" }).kubernetesVersion == "custom-version"
   }
 
+  ["a read-only setting is listed only outside DESCRIBE, while inactive, without default or requirement"] {
+    settings.field(cpuBudget, contract.describeOperation, small).readOnly == null
+    settings.field(cpuBudget, contract.describeOperation, small).defaultValue == "300"
+    for (operation in contextualOperations) {
+      settings.fields(List(cpuBudget), operation, small, false) == List(readOnlyCpu)
+      settings.fields(List((cpuBudget) { required = true }), operation, small, false) == List(readOnlyCpu)
+      settings.fields(List(cpuBudget), operation, auto, false).isEmpty
+      settings.fields(List(cpuBudget), operation, custom, false).single.readOnly == null
+      settings.fields(List(cpuBudget), operation, custom, false).single.required
+    }
+    evaluateBudgets(contract.describeOperation, new Mapping { ["mode"] = "SMALL" }).resolvedValues == null
+    evaluateBudgets(contract.resolveRequirementsOperation, new Mapping { ["mode"] = "AUTO" }).resolvedValues == null
+  }
+
+  ["an active setting stays editable and validated while its read-only condition holds"] {
+    for (operation in contextualOperations) {
+      settings.field(alwaysReadOnly, operation, custom).readOnly == null
+      settings.field(alwaysReadOnly, operation, custom).required
+    }
+    evaluateComponent(alwaysReadOnlyBudgets, contract.resolveRequirementsOperation, new Mapping { ["mode"] = "CUSTOM" })
+      .resolvedValues == null
+    evaluateComponent(alwaysReadOnlyBudgets, contract.validateOperation, new Mapping { ["mode"] = "CUSTOM" })
+      .violations
+      .map((violation) -> violation.code)
+      == List("REQUIRED_RESOURCE_REQUEST_MISSING")
+  }
+
+  ["a read-only description replaces the description only while the field is read-only"] {
+    for (operation in contextualOperations) {
+      settings.field(describedBudget, operation, small).description == "set by SMALL"
+      settings.field(describedBudget, operation, custom).description == "static"
+      settings.field((describedBudget) { readOnlyDescription = null }, operation, small).description == "static"
+    }
+    settings.field(describedBudget, contract.describeOperation, small).description == "static"
+  }
+
+  ["a resolved value is string-encoded and a null one is rendered as its key alone"] {
+    let (renderer = new JsonRenderer {})
+      renderer.renderValue(evaluateBudgets(contract.resolveRequirementsOperation, new Mapping { ["mode"] = "SMALL" }).resolvedValues)
+        == renderer.renderValue(
+          new Listing {
+            new Mapping { ["key"] = "cpu"; ["value"] = "100" }
+            new Mapping { ["key"] = "cpuLimit" }
+          },
+        )
+  }
+
+  ["a value sent back for a read-only key is stored but neither validated nor compiled"] {
+    for (operation in List(contract.validateOperation, contract.compileOperation)) {
+      let (result = evaluateBudgets(operation, new Mapping { ["mode"] = "SMALL"; ["cpu"] = 999999; ["cpuLimit"] = "x" }))
+        result.violations.isEmpty
+          && result.resolvedValues!!.map((entry) -> entry.value) == List("100", null)
+          && result.helmValues == (if (operation == contract.compileOperation) new Mapping { ["mode"] = "SMALL" } else null)
+    }
+  }
+
+  ["only a top-level, non-sensitive setting with a typed value can be read-only"] {
+    module.catch(() -> new settings.ObjectSetting { key = "group"; label = "Group"; fields = List(cpuBudget) }.fields)
+      .contains("read-only condition")
+    module.catch(() -> (cpuBudget) { readOnlyValue = null }.readOnlyWhen).contains("Type constraint")
+    module.catch(() -> settings.field((cpuBudget) { sensitive = true }, contract.validateOperation, small).readOnly)
+      .contains("!sensitive")
+    module.catch(() -> settings.resolvedValue((cpuBudget) { readOnlyValue = (_) -> "100m" }, small).value)
+      .contains("Read-only value of cpu must be a whole number")
+  }
 }

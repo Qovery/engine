@@ -161,7 +161,7 @@ cannot select it.
 ## Resource profiles
 
 One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIUM | LARGE | CUSTOM`
-(q-core `docs-v2/slice-4-7-source3-resource-profiles.md` owns the product contract):
+(the pattern is described in q-core `doc-features/engine-v2/guides/pkl-models.md`):
 
 - `CHART_DEFAULT` (the default) emits no `resources` fragment, so a configuration stored before the
   selector existed keeps its exact compiled values — the golden tests prove it;
@@ -173,15 +173,19 @@ One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIU
   active topology; `500` compiles to `500m` and `512` to `512Mi`. Requests are required, limits
   stay optional, and `limit >= request` is enforced independently for CPU and memory.
 
-Transparency: the contract has no read-only rendering, so the custom fields are returned only
-while `CUSTOM` is selected — an exposed field would otherwise be editable yet ignored. Each
-preset's numeric budgets for the active topology are published in the `resources.profile` field
-description instead (the fallback defined by the slice, and explicitly temporary: it moves to
-dedicated read-only fields once the contract and Console support them). The `CUSTOM` fields carry
-the `MEDIUM` recommendation in `defaultValue`. Custom values hidden by the current topology/profile
-stay in the context-free DESCRIBE allow-list: q-core preserves them, validation ignores them, and
-the compiler never reads them. Fields are returned in Console rendering order, with `storage` last
-so it sits directly above the cluster-inputs section its choice activates.
+Transparency: under a preset, `RESOLVE_REQUIREMENTS`, `VALIDATE` and `COMPILE` return the custom
+fields of the active topology with `readOnly: true`, without default and never required, and
+`resolvedValues` holds the budget the preset applies: four entries per workload, `null` for the CPU
+limit no preset sets. The values are computed for this draft, not read from the cluster. Instead
+of the `CUSTOM` editing help, their description names the preset: "Set by the SMALL preset. Select
+CUSTOM to edit."
+`CHART_DEFAULT` returns no resource field, and `DESCRIBE` marks nothing read-only. A value sent back
+for a read-only key is stored and ignored: like any inactive custom value, it is neither validated nor
+compiled. The `CUSTOM` fields carry the `MEDIUM` recommendation in `defaultValue`, a pre-fill the
+evaluator never applies. Custom values hidden by the current topology/profile stay in the
+context-free DESCRIBE allow-list: q-core preserves them, validation ignores them, and the compiler
+never reads them. Fields are returned in Console rendering order, with `storage` last so it sits
+directly above the cluster-inputs section its choice activates.
 
 Inactive chart targets receive no resource block: single-binary mode configures `singleBinary`;
 high availability configures `read`, `write`, `backend` and `gateway`. The compiled values are

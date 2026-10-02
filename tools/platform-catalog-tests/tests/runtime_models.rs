@@ -73,5 +73,19 @@ fn every_executable_model_renders_the_shared_describe_envelope() {
             "{} must omit helmValues from DESCRIBE instead of rendering null",
             model.display()
         );
+        assert!(
+            !envelope.contains_key("resolvedValues"),
+            "{} must omit resolvedValues from DESCRIBE",
+            model.display()
+        );
+        assert!(
+            envelope["fields"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .all(|field| field.get("readOnly").is_none()),
+            "{} must not mark a DESCRIBE field read-only",
+            model.display()
+        );
     }
 }

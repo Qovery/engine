@@ -2,11 +2,11 @@
 
 use platform_catalog_tests::{assert_success, repository_path, run};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 use tempfile::tempdir;
 
 const FIXTURE: &str = "platform-catalog/pkl/tests/fixtures/karpenter-v1";
@@ -106,9 +106,9 @@ fn scalar_exchanges_match_the_unmodified_base_in_all_four_operations() {
     }
 }
 
-fn reject_descriptor(body: &str, diagnostic: &str) {
+fn render_sample(body: &str) -> Output {
     let directory = tempdir().expect("temporary module directory must be created");
-    let module = directory.path().join("invalid.pkl");
+    let module = directory.path().join("sample.pkl");
     let contract = repository_path("platform-catalog/pkl/contract.pkl");
     fs::write(
         &module,
@@ -117,8 +117,12 @@ fn reject_descriptor(body: &str, diagnostic: &str) {
             contract.display()
         ),
     )
-    .expect("invalid module must be writable");
-    let output = run(pkl().arg("eval").arg(module));
+    .expect("sample module must be writable");
+    run(pkl().arg("eval").arg(module))
+}
+
+fn reject_descriptor(body: &str, diagnostic: &str) {
+    let output = render_sample(body);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "invalid descriptor was accepted: {body}");
     assert!(stderr.contains(diagnostic), "unexpected failure for {body}:\n{stderr}");
@@ -197,5 +201,75 @@ fn contract_rejects_ambiguous_nested_keys_and_nested_sensitive_descriptors() {
             ),
             "Type constraint",
         );
+    }
+}
+
+#[test]
+fn contract_keeps_read_only_fields_top_level_with_exactly_one_resolved_value() {
+    let read_only =
+        r#"new contract.Field { key = "x"; type = "number"; required = false; label = "x"; readOnly = true }"#;
+    let editable = r#"new contract.Field { key = "y"; type = "number"; required = false; label = "y" }"#;
+    let entry = r#"new contract.ResolvedValue { key = "x" }"#;
+    let output = render_sample(&format!(
+        "sample = new contract.EvaluationResult {{ fields = List({editable}, {read_only}); resolvedValues = List({entry}) }}"
+    ));
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rendered: Value = serde_json::from_slice(&output.stdout).expect("sample must render JSON");
+    assert_eq!(rendered["fields"][0].get("readOnly"), None, "false is never rendered");
+    assert_eq!(rendered["fields"][1]["readOnly"], json!(true));
+    assert_eq!(rendered["resolvedValues"], json!([{"key": "x"}]), "a null value is omitted");
+
+    let correspondence = "Type constraint `(this ?? List()).map((entry) -> entry.key)";
+    for (body, diagnostic) in [
+        (format!("sample = ({read_only}) {{ required = true }}"), "`!required` violated"),
+        (format!("sample = ({read_only}) {{ sensitive = true }}"), "`!sensitive` violated"),
+        (format!("sample = ({read_only}) {{ defaultValue = \"1\" }}"), "`defaultValue == null` violated"),
+        (format!("sample = ({read_only}) {{ readOnly = false }}"), "Type constraint `this` violated"),
+        (
+            format!(
+                r#"sample = new contract.ObjectField {{ key = "root"; label = "root"; required = false; fields = List({read_only}) }}"#
+            ),
+            "`!(this is Field) || readOnly == null` violated",
+        ),
+        (
+            format!(
+                r#"sample = new contract.ArrayField {{ key = "rows"; label = "rows"; required = false; items = new contract.ObjectItem {{ fields = List({read_only}) }}; itemFields = List() }}"#
+            ),
+            "`!(this is Field) || readOnly == null` violated",
+        ),
+        (
+            format!(
+                r#"sample = new contract.ArrayField {{ key = "rows"; label = "rows"; required = false; items = new contract.ObjectItem {{ fields = List() }}; itemFields = List(List({read_only})) }}"#
+            ),
+            "`!(this is Field) || readOnly == null` violated",
+        ),
+        (
+            r#"sample = new contract.ObjectField { key = "root"; label = "root"; required = false; fields = List(); readOnly = true }"#
+                .to_owned(),
+            "Cannot find property `readOnly`",
+        ),
+        (format!("sample = new contract.EvaluationResult {{ fields = List({read_only}) }}"), correspondence),
+        (
+            format!("sample = new contract.EvaluationResult {{ fields = List({read_only}); resolvedValues = List({entry}, {entry}) }}"),
+            correspondence,
+        ),
+        (
+            format!(
+                "sample = new contract.EvaluationResult {{ fields = List({editable}); resolvedValues = List(({entry}) {{ key = \"y\" }}) }}"
+            ),
+            correspondence,
+        ),
+        (
+            format!(
+                "sample = new contract.EvaluationResult {{ fields = List({read_only}); resolvedValues = List(({entry}) {{ key = \"z\" }}) }}"
+            ),
+            correspondence,
+        ),
+        (
+            "sample = new contract.EvaluationResult { resolvedValues = List() }".to_owned(),
+            "`this == null || !isEmpty` violated",
+        ),
+    ] {
+        reject_descriptor(&body, diagnostic);
     }
 }
