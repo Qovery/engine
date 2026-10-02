@@ -35,7 +35,7 @@ facts {
     fixtures.field(contextFreeDescribe, "retentionWeeks").constraints.min == 1
     fixtures.field(contextFreeDescribe, "retentionWeeks").constraints.max == 52
     fixtures.field(contextFreeDescribe, "highAvailability").defaultValue == "false"
-    fixtures.field(contextFreeDescribe, "resources.profile").defaultValue == "CHART_DEFAULT"
+    fixtures.field(contextFreeDescribe, "resources.profile").defaultValue == "MEDIUM"
     fixtures.field(contextFreeDescribe, "resources.profile").constraints.allowedValues
       == List("CHART_DEFAULT", "SMALL", "MEDIUM", "LARGE", "CUSTOM")
     fixtures.allowedStorage(contextFreeDescribe) == List("pvc", "s3", "gcs", "azureBlob", "s3Compatible")

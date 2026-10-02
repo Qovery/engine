@@ -30,9 +30,12 @@ local publishedBudgets: Mapping<String, Mapping<String, Pair<Int, Int>>> = new {
 local function entry(entryKey: String, entryValue: String?): contract.ResolvedValue =
   new { key = entryKey; value = entryValue }
 
+local function publishedBudget(profileName: String, targetKey: String): Pair<Int, Int> =
+  publishedBudgets[profileName][if (targetKey == "gateway") "gateway" else "workload"]
+
 local function expectedEntries(profileName: String, targetKeys: List<String>): List<contract.ResolvedValue> =
   targetKeys.flatMap((targetKey) ->
-    let (budget = publishedBudgets[profileName][if (targetKey == "gateway") "gateway" else "workload"])
+    let (budget = publishedBudget(profileName, targetKey))
       List(
         entry("resources.\(targetKey).requests.cpuMilli", "\(budget.first)"),
         entry("resources.\(targetKey).limits.cpuMilli", null),
@@ -40,6 +43,13 @@ local function expectedEntries(profileName: String, targetKeys: List<String>): L
         entry("resources.\(targetKey).limits.memoryMi", "\(budget.second * 2)"),
       )
   )
+
+local function expectedResources(profileName: String, targetKey: String): Mapping =
+  let (budget = publishedBudget(profileName, targetKey))
+    new Mapping {
+      ["requests"] = new Mapping { ["cpu"] = "\(budget.first)m"; ["memory"] = "\(budget.second)Mi" }
+      ["limits"] = new Mapping { ["memory"] = "\(budget.second * 2)Mi" }
+    }
 
 local function resourceKeys(result: contract.EvaluationResult): List<String> =
   fixtures.fieldKeys(result).filter((key) -> key.startsWith("resources."))
@@ -108,13 +118,35 @@ facts {
       == List("read", "write", "backend", "gateway")
   }
 
-  ["a configuration stored before slice 4.7 compiles without any resource block"] {
-    List("singleBinary", "read", "write", "backend")
-      .every((targetKey) -> resourcesOf(fixtures.pvcProfile, targetKey) == null)
+  ["a configuration without a stored profile resolves and compiles MEDIUM"] {
+    for (topology in topologies) {
+      for (operation in contextualOperations) {
+        let (result = fixtures.evaluate(operation, topology.first, fixtures.awsCustomer, fixtures.s3Inputs))
+        let (expected = expectedEntries("MEDIUM", topology.second))
+          readOnlyKeys(result) == expected.map((entry) -> entry.key)
+            && result.resolvedValues == expected
+            && result.violations.isEmpty
+      }
+      let (compiled = fixtures.compile(topology.first, fixtures.awsCustomer, fixtures.s3Inputs).helmValues!!)
+        topology.second.every((targetKey) ->
+          fixtures.target(compiled, targetKey)["resources"] == expectedResources("MEDIUM", targetKey)
+        )
+    }
   }
 
-  ["an explicit CHART_DEFAULT also compiles without any resource block"] {
-    resourcesOf(withProfile(fixtures.pvcProfile, "CHART_DEFAULT"), "singleBinary") == null
+  ["an explicit CHART_DEFAULT shows no resource field and compiles no resources block"] {
+    for (topology in topologies) {
+      for (operation in contextualOperations) {
+        let (result = fixtures.evaluate(operation, withProfile(topology.first, "CHART_DEFAULT"), fixtures.awsCustomer, fixtures.s3Inputs))
+          resourceKeys(result) == List("resources.profile")
+            && result.resolvedValues == null
+            && result.violations.isEmpty
+      }
+      let (compiled = fixtures.compile(withProfile(topology.first, "CHART_DEFAULT"), fixtures.awsCustomer, fixtures.s3Inputs).helmValues!!)
+        profiles.targets.every((target) ->
+          !((compiled.getOrNull(target.key) as Mapping?)?.containsKey("resources") ?? false)
+        )
+    }
   }
 
   ["a preset compiles its versioned budgets for the active topology only"] {
@@ -228,16 +260,11 @@ facts {
     fixtures.field(smallDraft, "resources.profile").description == profiles.description
   }
 
-  ["CHART_DEFAULT keeps the resource fields hidden and DESCRIBE marks nothing read-only"] {
-    for (draft in List(fixtures.pvcProfile, withProfile(highAvailabilityProfile, "CHART_DEFAULT"))) {
-      let (result = fixtures.resolveRequirements(draft, fixtures.awsCustomer))
-        resourceKeys(result) == List("resources.profile") && result.resolvedValues == null
+  ["DESCRIBE marks nothing read-only, with or without a stored profile"] {
+    for (draft in List(fixtures.pvcProfile, withProfile(fixtures.pvcProfile, "SMALL"))) {
+      let (described = fixtures.evaluate(contract.describeOperation, draft, fixtures.awsCustomer, new Mapping {}))
+        readOnlyKeys(described).isEmpty && described.resolvedValues == null
     }
-    let (
-      described =
-        fixtures.evaluate(contract.describeOperation, withProfile(fixtures.pvcProfile, "SMALL"), fixtures.awsCustomer, new Mapping {})
-    )
-      readOnlyKeys(described).isEmpty && described.resolvedValues == null
   }
 
   ["CUSTOM exposes the active topology fields seeded with the MEDIUM recommendation"] {

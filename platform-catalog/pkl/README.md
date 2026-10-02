@@ -38,7 +38,7 @@ request)` implements the four operations once:
 | `Component.inputs` | Declarations in `<setting>/inputs.pkl`, assembled in `settings.pkl` | Unconditional logical inputs, exposed during RESOLVE_REQUIREMENTS and checked during VALIDATE/COMPILE using the same presence/format checks as option inputs |
 | `Rule` | `<blamed setting>/dependencies.pkl` | One violation per violated rule, on the operations it declares |
 | `Fragment` | `<setting>/helm.pkl` | `helmValues`, deep-merged in declaration order; a leaf written by two fragments throws |
-| `ResourceProfiles` (targets, preset budgets, recommended preset) | `resources/setting.pkl` | The profile selector, four CUSTOM fields per active target pre-filled with the recommendation and read-only with the selected preset's budget, `REQUIRED_RESOURCE_REQUEST_MISSING`, `LIMIT_BELOW_REQUEST`, and the `<target>.resources` blocks |
+| `ResourceProfiles` (targets, preset budgets, recommended preset) | `resources/setting.pkl` | The profile selector, the recommended preset by default (`CHART_DEFAULT` leaves the chart's own resources), four CUSTOM fields per active target pre-filled with the recommendation and read-only with the selected preset's budget, `REQUIRED_RESOURCE_REQUEST_MISSING`, `LIMIT_BELOW_REQUEST`, and the `<target>.resources` blocks |
 | `ObjectSetting`, `ArraySetting` (nested settings) | `<setting>/setting.pkl` | `ObjectField` / `ArrayField` descriptors with the new-row prototype and one descriptor list per current row, defaults at every level, `INVALID_TYPE` / `UNKNOWN_FIELD` / `LENGTH_OUT_OF_RANGE` / `DUPLICATE_ITEM` on indexed paths, and the active-value projection |
 
 Every predicate, contextual description and Helm fragment receives one `Scope`: `config` (the

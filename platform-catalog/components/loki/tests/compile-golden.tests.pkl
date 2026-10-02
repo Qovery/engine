@@ -50,6 +50,18 @@ examples {
     )
   }
 
+  ["pvc single binary with CHART_DEFAULT resource profile"] {
+    compiledJsonForProfile(
+      new Mapping {
+        ["storage"] = "pvc"
+        ["retentionWeeks"] = 12
+        ["highAvailability"] = false
+        ["resources.profile"] = "CHART_DEFAULT"
+      },
+      new Mapping {},
+    )
+  }
+
   ["s3 high availability with CUSTOM resources"] {
     compiledJsonForProfile(
       new Mapping {

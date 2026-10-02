@@ -77,8 +77,9 @@ Resource profiles are a **composite declaration** provided by the SDK (`sdk/reso
 chart has `resources` blocks, so the selector, the per-workload CUSTOM fields, the "limit at least
 request" rules and the `<target>.resources` values are derived once for every component. Loki only
 declares its five workloads, which of them run in each topology, and the SMALL/MEDIUM/LARGE budget
-of each, in `resources/setting.pkl`. The MEDIUM budgets pre-fill the CUSTOM fields without ever
-being applied: a request left empty under CUSTOM is reported, never silently filled.
+of each, in `resources/setting.pkl`. MEDIUM is the default profile, and its budgets pre-fill the
+CUSTOM fields without being applied to them: a request left empty under CUSTOM is reported, never
+silently filled.
 
 ## Where a rule lives
 
@@ -160,15 +161,18 @@ cannot select it.
 
 ## Resource profiles
 
-One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIUM | LARGE | CUSTOM`
-(the pattern is described in q-core `doc-features/engine-v2/guides/pkl-models.md`):
+One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIUM | LARGE | CUSTOM`,
+`MEDIUM` by default (the pattern is described in q-core `doc-features/engine-v2/guides/pkl-models.md`):
 
-- `CHART_DEFAULT` (the default) emits no `resources` fragment, so a configuration stored before the
-  selector existed keeps its exact compiled values — the golden tests prove it;
+- `CHART_DEFAULT` emits no `resources` fragment: Loki keeps the chart's own `resources: {}`, with no
+  CPU or memory requests or limits. It remains an explicit choice, pinned by a golden test;
 - `SMALL`/`MEDIUM`/`LARGE` apply the budget table in `resources/setting.pkl`. One preset is
   role-aware internally (each workload target gets its own budget) while the customer selects a
   single value. Presets are resource budgets, not capacity guarantees. The first table is
-  PROVISIONAL until the Slice 4.7 calibration review approves observed numbers;
+  PROVISIONAL until the Slice 4.7 calibration review approves observed numbers. `MEDIUM` is the
+  default: a configuration without a stored profile compiles `MEDIUM`, so an existing installation
+  without one moves to `MEDIUM` at its next deployment, and its workloads roll once with `MEDIUM`
+  requests and limits;
 - `CUSTOM` exposes `resources.<target>.requests|limits.cpuMilli|memoryMi` integer fields for the
   active topology; `500` compiles to `500m` and `512` to `512Mi`. Requests are required, limits
   stay optional, and `limit >= request` is enforced independently for CPU and memory.

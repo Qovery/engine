@@ -9,11 +9,11 @@ import "../sdk/resources.pkl" as sdkResources
 //
 // Preset provenance (Slice 4.7 calibration):
 //
-// - MEDIUM is adopted verbatim from the engine v1 fleet defaults applied to every Qovery-managed
-//   Loki today (lib-engine/src/io_models/loki.rs and q-core ClusterAdvancedSettings: 300m CPU
-//   request, 1024Mi memory request, 2048Mi memory limit, uniform across the four Loki targets).
-//   A future managed-cluster migration to the platform catalog can therefore select MEDIUM and
-//   keep its pod resources unchanged. The fleet's 8000m CPU limit is dropped per the SDK preset
+// - MEDIUM, the default, is adopted verbatim from the engine v1 fleet defaults applied to every
+//   Qovery-managed Loki today (lib-engine/src/io_models/loki.rs and q-core ClusterAdvancedSettings:
+//   300m CPU request, 1024Mi memory request, 2048Mi memory limit, uniform across the four Loki
+//   targets). A future managed-cluster migration to the platform catalog therefore keeps its pod
+//   resources unchanged. The fleet's 8000m CPU limit is dropped per the SDK preset
 //   policy: a ceiling that high never throttles, "no limit" states the same intent honestly.
 // - SMALL is anchored on the dev/staging minimum: a Loki single binary starts and serves low
 //   volume comfortably within 512Mi, and CPU requests size scheduling, not performance, for this
@@ -32,7 +32,7 @@ import "../sdk/resources.pkl" as sdkResources
 
 profiles: sdkResources.ResourceProfiles = new {
   description =
-    "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads."
+    "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads."
 
   targets = List(
     new sdkResources.Target { key = "singleBinary"; label = "Single binary"; activeWhen = (scope) -> !highAvailabilitySetting.enabled(scope) },

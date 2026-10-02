@@ -621,9 +621,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -956,9 +956,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -968,6 +968,58 @@
               "LARGE",
               "CUSTOM"
             ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU request (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory request (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory limit (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
           }
         },
         {
@@ -987,7 +1039,24 @@
         }
       ],
       "requiredInputs": [],
-      "violations": []
+      "violations": [],
+      "resolvedValues": [
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "value": "300"
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli"
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "value": "1024"
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "value": "2048"
+        }
+      ]
     }
   },
   {
@@ -1036,9 +1105,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1048,6 +1117,58 @@
               "LARGE",
               "CUSTOM"
             ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU request (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory request (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory limit (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
           }
         },
         {
@@ -1067,7 +1188,24 @@
         }
       ],
       "requiredInputs": [],
-      "violations": []
+      "violations": [],
+      "resolvedValues": [
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "value": "300"
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli"
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "value": "1024"
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "value": "2048"
+        }
+      ]
     }
   },
   {
@@ -1116,9 +1254,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1128,6 +1266,58 @@
               "LARGE",
               "CUSTOM"
             ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU request (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory request (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory limit (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
           }
         },
         {
@@ -1159,7 +1349,16 @@
           }
         },
         "singleBinary": {
-          "replicas": 1
+          "replicas": 1,
+          "resources": {
+            "requests": {
+              "cpu": "300m",
+              "memory": "1024Mi"
+            },
+            "limits": {
+              "memory": "2048Mi"
+            }
+          }
         },
         "write": {
           "replicas": 0
@@ -1170,7 +1369,24 @@
         "backend": {
           "replicas": 0
         }
-      }
+      },
+      "resolvedValues": [
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "value": "300"
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli"
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "value": "1024"
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "value": "2048"
+        }
+      ]
     }
   },
   {
@@ -1227,9 +1443,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1570,9 +1786,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1582,6 +1798,58 @@
               "LARGE",
               "CUSTOM"
             ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU request (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory request (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory limit (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
           }
         },
         {
@@ -1624,7 +1892,24 @@
           }
         }
       ],
-      "violations": []
+      "violations": [],
+      "resolvedValues": [
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "value": "300"
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli"
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "value": "1024"
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "value": "2048"
+        }
+      ]
     }
   },
   {
@@ -1681,9 +1966,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1693,6 +1978,58 @@
               "LARGE",
               "CUSTOM"
             ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU request (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory request (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory limit (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
           }
         },
         {
@@ -1735,7 +2072,24 @@
           }
         }
       ],
-      "violations": []
+      "violations": [],
+      "resolvedValues": [
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "value": "300"
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli"
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "value": "1024"
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "value": "2048"
+        }
+      ]
     }
   },
   {
@@ -1792,9 +2146,9 @@
           "key": "resources.profile",
           "type": "string",
           "required": false,
-          "defaultValue": "CHART_DEFAULT",
+          "defaultValue": "MEDIUM",
           "label": "Resource profile",
-          "description": "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable. Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
+          "description": "CPU/memory budget applied to the active Loki workloads. MEDIUM is the default. SMALL/MEDIUM/LARGE apply Qovery's versioned budgets and show them as read-only per-workload fields, CUSTOM makes those fields editable, and CHART_DEFAULT applies no CPU or memory requests or limits (the chart's own resources: {}). Budgets are not capacity guarantees. The profile and the CUSTOM values may be changed at any time; an update recompiles the Helm values and rolls the workloads.",
           "sensitive": false,
           "constraints": {
             "allowedValues": [
@@ -1804,6 +2158,58 @@
               "LARGE",
               "CUSTOM"
             ]
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU request (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli",
+          "type": "number",
+          "required": false,
+          "label": "Single binary CPU limit (millicores)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 64000
+          }
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory request (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
+          }
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "type": "number",
+          "required": false,
+          "label": "Single binary memory limit (MiB)",
+          "description": "Set by the MEDIUM preset. Select CUSTOM to edit.",
+          "sensitive": false,
+          "readOnly": true,
+          "constraints": {
+            "min": 1,
+            "max": 262144
           }
         },
         {
@@ -1887,6 +2293,15 @@
         },
         "singleBinary": {
           "replicas": 1,
+          "resources": {
+            "requests": {
+              "cpu": "300m",
+              "memory": "1024Mi"
+            },
+            "limits": {
+              "memory": "2048Mi"
+            }
+          },
           "persistence": {
             "enabled": false
           },
@@ -1923,7 +2338,24 @@
             "eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/loki"
           }
         }
-      }
+      },
+      "resolvedValues": [
+        {
+          "key": "resources.singleBinary.requests.cpuMilli",
+          "value": "300"
+        },
+        {
+          "key": "resources.singleBinary.limits.cpuMilli"
+        },
+        {
+          "key": "resources.singleBinary.requests.memoryMi",
+          "value": "1024"
+        },
+        {
+          "key": "resources.singleBinary.limits.memoryMi",
+          "value": "2048"
+        }
+      ]
     }
   }
 ]

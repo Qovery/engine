@@ -13,9 +13,9 @@ import "settings.pkl"
 // `<target>.resources` chart blocks. Every Helm chart has resources blocks, so this concept lives
 // here rather than in each component.
 //
-// Wire format: `<key>.profile` selects CHART_DEFAULT, a preset, or CUSTOM;
-// `<key>.<target>.{requests,limits}.{cpuMilli,memoryMi}` are the CUSTOM fields, read-only under a
-// preset.
+// Wire format: `<key>.profile` selects CHART_DEFAULT, a preset or CUSTOM, the recommended preset by
+// default; `<key>.<target>.{requests,limits}.{cpuMilli,memoryMi}` are the CUSTOM fields, read-only
+// under a preset.
 
 // Product units are integers: cpuMilli compiles to "<n>m" and memoryMi to "<n>Mi". Upper bounds
 // catch unit mistakes (a value entered in cores, bytes or KiB) before pod scheduling.
@@ -24,8 +24,8 @@ const cpuMilliMax: Int = 64000
 const memoryMiMin: Int = 1
 const memoryMiMax: Int = 262144
 
-// CHART_DEFAULT emits nothing so existing installations keep the chart behavior; CUSTOM enables
-// the per-target fields.
+// CHART_DEFAULT emits no resources block and leaves the chart's own values, which may set no
+// requests or limits at all. CUSTOM makes the per-target fields editable.
 const chartDefaultProfile: String = "CHART_DEFAULT"
 const customProfile: String = "CUSTOM"
 
@@ -71,8 +71,8 @@ class ResourceProfiles {
     toMap().values.every((table) -> table.keys.toSet() == targets.map((target) -> target.key).toSet()),
   )
 
-  // The preset whose budgets pre-fill the CUSTOM fields. The customer must still confirm them: a
-  // request left empty under CUSTOM is reported, never silently filled.
+  // The default profile, whose budgets also pre-fill the CUSTOM fields. The customer must still
+  // confirm them: a request left empty under CUSTOM is reported, never silently filled.
   recommended: String(presets.containsKey(this))
 
   profileKey: String = "\(key).profile"
@@ -106,7 +106,7 @@ const local function selector(profiles: ResourceProfiles): settings.EnumSetting 
   key = profiles.profileKey
   label = profiles.label
   description = profiles.description
-  default = chartDefaultProfile
+  default = profiles.recommended
   options = profiles.profileNames.map((name) -> new settings.Option { value = name })
 }
 

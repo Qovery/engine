@@ -52,6 +52,7 @@ local function values(result: contract.EvaluationResult): List<String?> =
 local describe = run(contract.describeOperation, new Mapping {})
 local lowDraft = run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "LOW" })
 local highDraft = run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "HIGH"; ["workers"] = true })
+local chartDefaultDraft = run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "CHART_DEFAULT" })
 local customDraft = run(contract.resolveRequirementsOperation, new Mapping { ["resources.profile"] = "CUSTOM"; ["workers"] = true })
 
 facts {
@@ -77,7 +78,7 @@ facts {
         "resources.worker.limits.memoryMi",
       )
     describe.fields[1].constraints.allowedValues == List("CHART_DEFAULT", "LOW", "HIGH", "CUSTOM")
-    describe.fields[1].defaultValue == "CHART_DEFAULT"
+    describe.fields[1].defaultValue == "LOW"
     describe.fields[2].defaultValue == "100"
     describe.fields[3].defaultValue == null
     describe.fields[5].defaultValue == "256"
@@ -90,8 +91,13 @@ facts {
     values(lowDraft) == List("100", null, "128", "256")
     values(highDraft) == List("1000", "2000", "1024", null, "500", null, "512", "1024")
     lowDraft.fields[1].description == "Budget of the demo workloads."
-    run(contract.resolveRequirementsOperation, new Mapping {}).resolvedValues == null
-    keys(run(contract.resolveRequirementsOperation, new Mapping {})) == List("workers", "resources.profile")
+  }
+
+  ["an absent profile is the recommended preset, and an explicit CHART_DEFAULT shows nothing"] {
+    keys(run(contract.resolveRequirementsOperation, new Mapping {})) == keys(lowDraft)
+    run(contract.resolveRequirementsOperation, new Mapping {}).resolvedValues == lowDraft.resolvedValues
+    keys(chartDefaultDraft) == List("workers", "resources.profile")
+    chartDefaultDraft.resolvedValues == null
   }
 
   ["CUSTOM exposes the fields of the active targets only"] {
@@ -122,7 +128,8 @@ facts {
   }
 
   ["the fragment writes one resources block per active target and nothing for CHART_DEFAULT"] {
-    helm(new Mapping {}) == new Mapping { ["web"] = new Mapping { ["replicas"] = 1 } }
+    helm(new Mapping { ["resources.profile"] = "CHART_DEFAULT" }) == new Mapping { ["web"] = new Mapping { ["replicas"] = 1 } }
+    helm(new Mapping {}) == helm(new Mapping { ["resources.profile"] = "LOW" })
     helm(new Mapping { ["resources.profile"] = "HIGH" })
       == new Mapping {
         ["web"] = new Mapping {
