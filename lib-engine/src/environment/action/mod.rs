@@ -17,6 +17,7 @@ mod deploy_router;
 mod deploy_terraform;
 mod deploy_terraform_service;
 mod helm_release_custom_resources;
+mod managed_db_start;
 mod pause_service;
 mod restart_service;
 #[cfg(test)]
