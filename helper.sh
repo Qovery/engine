@@ -227,6 +227,91 @@ EOF
 }
 
 
+# ---- github_app_signed_commit_and_pr ---------------------------------------
+# Uses gh API through cli to create signed commits, push to a new branch, 
+# open a PR, and set it to auto-merge.
+# Local changes must be staged before calling.
+# Requires git, gh, jq, and base64 binaries
+#
+# Requires the following variables to be set:
+#   GIT_ASKPASS: as set by github_app_auth
+#   REPO: target repository name, in the form {owner}/{repo} e.g. "Qovery/engine"
+#   BRANCH: name of the target branch e.g. main
+#
+# Does not update local local repo to pushed commit/branch.
+github_app_signed_commit_and_pr() {
+  #Save whether "set -x" is set or not
+  local xtrace_state
+  case "$-" in *x*) xtrace_state=1 ;; *) xtrace_state=0 ;; esac
+
+  # --- 1. Collect local changes (run inside a checkout of the repo) ---------
+  additions='[]'
+  deletions='[]'
+  while IFS=$'\t' read -r status path1 path2; do
+    case "$status" in
+      A|M)
+        additions=$(jq --arg p "$path1" --arg c "$(base64 < "$path1" | tr -d '\n')" \
+          '. + [{path:$p, contents:$c}]' <<<"$additions") ;;
+      D)
+        deletions=$(jq --arg p "$path1" '. + [{path:$p}]' <<<"$deletions") ;;
+      R*)
+        deletions=$(jq --arg p "$path1" '. + [{path:$p}]' <<<"$deletions")
+        additions=$(jq --arg p "$path2" --arg c "$(base64 < "$path2" | tr -d '\n')" \
+          '. + [{path:$p, contents:$c}]' <<<"$additions") ;;
+    esac
+  done < <(git diff --cached --name-status)
+
+  if [[ "$additions" == "[]" && "$deletions" == "[]" ]]; then
+    echo "Nothing to commit"; return 0
+  fi
+
+# --- 2. Create the signed commit on new branch via GraphQL ------------------
+
+  NEW_BRANCH="automation/update-$(date +%Y%m%d-%H%M%S)"
+  MESSAGE="Automated update $(date "+%x %X")"
+
+  set +x  # --- sensitive: gh needs token from env  ---
+   
+  HEAD_SHA=$(GH_TOKEN="$("$GIT_ASKPASS")" gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq .object.sha)
+
+
+  # Touch new branch
+  GH_TOKEN="$("$GIT_ASKPASS")" gh api "repos/$REPO/git/refs" \
+  -f ref="refs/heads/$NEW_BRANCH" -f sha="$HEAD_SHA"
+
+  jq -n \
+    --arg repo "$REPO" --arg branch "$NEW_BRANCH" --arg head "$HEAD_SHA" \
+    --arg msg  "$MESSAGE" \
+    --argjson add "$additions" --argjson del "$deletions" \
+  '{
+    query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid url } } }",
+    variables: { input: {
+      branch: { repositoryNameWithOwner: $repo, branchName: $branch },
+      expectedHeadOid: $head,
+      message: { headline: $msg },
+      fileChanges: { additions: $add, deletions: $del }
+    }}
+  }' \
+  | GH_TOKEN="$("$GIT_ASKPASS")" gh api graphql --input - --jq '.data.createCommitOnBranch.commit.url'
+
+# --- 3. Open the PR ---------------------------------------------------------
+
+  PR_URL=$(GH_TOKEN="$("$GIT_ASKPASS")" gh pr create \
+  --repo "$REPO" \
+  --base "$BRANCH" \
+  --head "$NEW_BRANCH" \
+  --title "$MESSAGE" \
+  --body "Changes generated from engine repository.")
+  echo "Opened $PR_URL"
+
+  # Set to auto-merge upon approval
+  GH_TOKEN="$("$GIT_ASKPASS")" gh pr merge "$PR_URL" --squash --delete-branch --auto
+
+  [ "$xtrace_state" -eq 1 ] && set -x  # --- end sensitive block ---
+
+}
+
+
 
 #############################
 # Build and image functions #
@@ -871,12 +956,17 @@ function update_qovery_chart() {
   
   github_app_auth
 
+  REPO="Qovery/qovery-chart" 
+  
   git -c credential.helper= clone \
     --config "credential.https://github.com.username=${GIT_USERNAME}" \
-    "https://github.com/Qovery/qovery-chart.git" "qovery-chart"
+    "https://github.com/${REPO}.git" "qovery-chart"
 
   # generate chart
-  WORKSPACE_ROOT_DIR=/builds/qovery/backend/engine/lib-engine LIB_ROOT_DIR=$WORKSPACE_ROOT_DIR/lib cargo test --package qovery-engine --lib --all-features -- byok_chart_gen::tests::generate_helm_chart --exact --nocapture --ignored
+  WORKSPACE_ROOT_DIR=/builds/qovery/backend/engine/lib-engine 
+  LIB_ROOT_DIR=$WORKSPACE_ROOT_DIR/lib 
+  cargo test --package qovery-engine --lib --all-features -- byok_chart_gen::tests::generate_helm_chart --exact --nocapture --ignored
+  
   # copy chart to github chart repo
   set -x
   rm -Rf qovery-chart/charts
@@ -889,10 +979,7 @@ function update_qovery_chart() {
 
   # Check if a commit & push is necessary
   if ! git diff-index --quiet HEAD; then
-    current_date=$(date "+%x %X") && git commit -a -m "update $current_date"
-    git status
-    # push to github
-    git push
+    BRANCH="$(git branch --show-current)" github_app_signed_commit_and_pr
   else
     echo "Nothing to push"
   fi
