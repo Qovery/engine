@@ -16,7 +16,7 @@ use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::runtime::block_on;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
@@ -24,13 +24,9 @@ use crate::infrastructure::models::cloud_provider::service::{Service, increase_s
 use crate::io_models::models::InvalidStatefulsetStorage;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use kube::Api;
-use kube::api::{DeleteParams, ListParams};
-use kube::api::{Patch, PatchParams};
-use kube::runtime::wait::await_condition;
+use kube::api::ListParams;
 use retry::OperationResult;
 use retry::delay::{Fibonacci, Fixed};
-use serde_json::json;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
@@ -40,91 +36,8 @@ use uuid::Uuid;
 
 const SOURCE_IMAGE_CHECK_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 
-/// Delete PVCs left outside Helm by the old StatefulSet volume claim templates.
-/// Helm-managed claims are left to `helm uninstall`.
-/// TODO: Remove this migration cleanup and its on_delete call sites once no
-/// application or container service can still have an unadopted StatefulSet PVC.
-pub fn delete_dangling_service_pvcs(
-    kube: &kube::Client,
-    namespace: &str,
-    selectors: [&str; 2],
-    service_name: &str,
-    storage_ids: &[String],
-    event_details: &EventDetails,
-) -> Result<(), Box<EngineError>> {
-    if storage_ids.is_empty() {
-        return Ok(());
-    }
-
-    block_on(async {
-        let pvcs: Api<PersistentVolumeClaim> = Api::namespaced(kube.clone(), namespace);
-        let mut seen = HashSet::new();
-        for selector in selectors {
-            let claims = pvcs
-                .list(&ListParams::default().labels(selector))
-                .await
-                .map_err(|err| {
-                    EngineError::new_k8s_cannot_get_pvcs(
-                        event_details.clone(),
-                        namespace,
-                        CommandError::new_from_safe_message(err.to_string()),
-                    )
-                })?;
-            for claim in claims.items {
-                let Some(name) = claim.metadata.name.as_deref() else {
-                    continue;
-                };
-                if !is_dangling_service_pvc(&claim, service_name, storage_ids) || !seen.insert(name.to_string()) {
-                    continue;
-                }
-                match pvcs.delete(name, &DeleteParams::default()).await {
-                    Ok(_) => {
-                        info!("Deleted legacy PVC {name} in namespace {namespace}");
-                    }
-                    Err(kube::Error::Api(status)) if status.code == 404 => {}
-                    Err(err) => {
-                        return Err(EngineError::new_k8s_cannot_delete_pvcs(
-                            event_details.clone(),
-                            name.to_string(),
-                            CommandError::new_from_safe_message(err.to_string()),
-                        ));
-                    }
-                }
-            }
-        }
-        Ok(())
-    })
-    .map_err(Box::new)
-}
-
-fn is_dangling_service_pvc(claim: &PersistentVolumeClaim, service_name: &str, storage_ids: &[String]) -> bool {
-    let Some(name) = claim.metadata.name.as_deref() else {
-        return false;
-    };
-    let helm_owned = claim
-        .metadata
-        .annotations
-        .as_ref()
-        .is_some_and(|annotations| annotations.contains_key("meta.helm.sh/release-name"))
-        || claim.metadata.labels.as_ref().is_some_and(|labels| {
-            labels
-                .get("app.kubernetes.io/managed-by")
-                .is_some_and(|owner| owner == "Helm")
-        });
-    !helm_owned
-        && storage_ids.iter().any(|storage_id| {
-            name.strip_prefix(&format!("{storage_id}-{service_name}-"))
-                .is_some_and(|ordinal| ordinal.parse::<u32>().is_ok())
-        })
-}
-
-/// Stop the old workload before Helm adopts its claim and starts the Deployment.
-/// TODO: Remove this migration step and its on_create call sites once no
-/// application or container service still runs as a StatefulSet.
-pub fn prepare_statefulset_for_deployment(
-    kube: &kube::Client,
-    namespace: &str,
-    service_name: &str,
+/// A Deployment using a persistent volume must run at most one replica.
+pub(super) fn validate_deployment_storage_replicas(
     min_instances: u32,
     max_instances: u32,
     event_details: &EventDetails,
@@ -136,62 +49,7 @@ pub fn prepare_statefulset_for_deployment(
             None,
         )));
     }
-    block_on(async {
-        let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), namespace);
-        if statefulsets
-            .get_opt(service_name)
-            .await
-            .map_err(|e| {
-                EngineError::new_k8s_cannot_get_statefulset(
-                    event_details.clone(),
-                    namespace,
-                    service_name,
-                    CommandError::new_from_safe_message(e.to_string()),
-                )
-            })?
-            .is_some()
-        {
-            statefulsets
-                .patch_scale(
-                    service_name,
-                    &PatchParams::default(),
-                    &Patch::Merge(&json!({"spec": {"replicas": 0}})),
-                )
-                .await
-                .map_err(|e| {
-                    EngineError::new_k8s_cannot_get_statefulset(
-                        event_details.clone(),
-                        namespace,
-                        service_name,
-                        CommandError::new_from_safe_message(e.to_string()),
-                    )
-                })?;
-            tokio::time::timeout(
-                Duration::from_secs(300),
-                await_condition(statefulsets, service_name, |sts: Option<&StatefulSet>| {
-                    sts.and_then(|s| s.status.as_ref()).map(|s| s.replicas).unwrap_or(0) == 0
-                }),
-            )
-            .await
-            .map_err(|e| {
-                EngineError::new_k8s_cannot_get_statefulset(
-                    event_details.clone(),
-                    namespace,
-                    service_name,
-                    CommandError::new_from_safe_message(e.to_string()),
-                )
-            })?
-            .map_err(|e| {
-                EngineError::new_k8s_cannot_get_statefulset(
-                    event_details.clone(),
-                    namespace,
-                    service_name,
-                    CommandError::new_from_safe_message(e.to_string()),
-                )
-            })?;
-        }
-        Ok(())
-    })
+    Ok(())
 }
 
 // specific to AWS
@@ -635,7 +493,6 @@ fn mirror_image(
 
 pub enum KubeObjectKind {
     Deployment,
-    Statefulset,
     Job,
     CronJob,
 }
@@ -651,26 +508,6 @@ pub async fn get_last_deployed_image(
     match service_type {
         KubeObjectKind::Deployment => {
             let api: Api<Deployment> = Api::namespaced(client, namespace);
-            Some(
-                api.list(&list_params)
-                    .await
-                    .ok()?
-                    .items
-                    .first()?
-                    .spec
-                    .as_ref()?
-                    .template
-                    .spec
-                    .as_ref()?
-                    .containers
-                    .first()?
-                    .image
-                    .as_ref()?
-                    .to_string(),
-            )
-        }
-        KubeObjectKind::Statefulset => {
-            let api: Api<StatefulSet> = Api::namespaced(client, namespace);
             Some(
                 api.list(&list_params)
                     .await
@@ -796,41 +633,24 @@ pub fn log_job_output_error(logger: &EnvProgressLogger, event_details: &EventDet
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::events::{InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::QoveryIdentifier;
 
     #[test]
-    fn dangling_pvc_cleanup_matches_only_unmanaged_service_claims() {
-        let storage_ids = vec![
-            "disk-id".to_string(),
-            "00000000-0000-0000-0000-0000000000b1".to_string(),
-        ];
-        let mut claim = PersistentVolumeClaim::default();
-        claim.metadata.name = Some("disk-id-service-0".to_string());
-        assert!(is_dangling_service_pvc(&claim, "service", &storage_ids));
-
-        claim.metadata.name = Some("00000000-0000-0000-0000-0000000000b1-service-2".to_string());
-        assert!(is_dangling_service_pvc(&claim, "service", &storage_ids));
-
-        claim.metadata.name = Some("disk-id-other-service-0".to_string());
-        assert!(!is_dangling_service_pvc(&claim, "service", &storage_ids));
-
-        claim.metadata.name = Some("disk-id-service-latest".to_string());
-        assert!(!is_dangling_service_pvc(&claim, "service", &storage_ids));
-
-        claim.metadata.name = Some("disk-id-service-0".to_string());
-        claim.metadata.annotations = Some(
-            [("meta.helm.sh/release-name".to_string(), "service".to_string())]
-                .into_iter()
-                .collect(),
+    fn deployment_with_storage_allows_only_one_replica() {
+        let event_details = EventDetails::new(
+            None,
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random(),
+            Uuid::new_v4().to_string(),
+            Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig),
+            Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
         );
-        assert!(!is_dangling_service_pvc(&claim, "service", &storage_ids));
 
-        claim.metadata.annotations = None;
-        claim.metadata.labels = Some(
-            [("app.kubernetes.io/managed-by".to_string(), "Helm".to_string())]
-                .into_iter()
-                .collect(),
-        );
-        assert!(!is_dangling_service_pvc(&claim, "service", &storage_ids));
+        assert!(validate_deployment_storage_replicas(0, 1, &event_details).is_ok());
+        assert!(validate_deployment_storage_replicas(1, 1, &event_details).is_ok());
+        assert!(validate_deployment_storage_replicas(2, 2, &event_details).is_err());
+        assert!(validate_deployment_storage_replicas(1, 2, &event_details).is_err());
     }
 
     #[test]

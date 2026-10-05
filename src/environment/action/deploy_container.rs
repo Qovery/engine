@@ -17,8 +17,8 @@ use crate::environment::action::deploy_external_secrets::{
 };
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::action::utils::{
-    KubeObjectKind, delete_cached_image, delete_dangling_service_pvcs, delete_nlb_or_alb_service,
-    get_last_deployed_image, mirror_image_if_necessary, prepare_statefulset_for_deployment,
+    KubeObjectKind, delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary,
+    validate_deployment_storage_replicas,
 };
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::infrastructure::models::kubernetes;
@@ -52,17 +52,7 @@ where
                 &self.kube_label_selector(),
                 KubeObjectKind::Deployment,
                 target.environment.namespace(),
-            ))
-            .or_else(|| {
-                (!self.storages.is_empty()).then(|| {
-                    block_on(get_last_deployed_image(
-                        target.kube.client(),
-                        &self.kube_label_selector(),
-                        KubeObjectKind::Statefulset,
-                        target.environment.namespace(),
-                    ))
-                })?
-            });
+            ));
 
             Ok(TaskContext {
                 last_deployed_image: last_image,
@@ -81,14 +71,7 @@ where
             .unpause_if_needed(target);
 
             if !self.storages.is_empty() {
-                prepare_statefulset_for_deployment(
-                    &target.kube,
-                    target.environment.namespace(),
-                    self.kube_name(),
-                    self.min_instances,
-                    self.max_instances,
-                    &event_details,
-                )?;
+                validate_deployment_storage_replicas(self.min_instances, self.max_instances, &event_details)?;
             }
 
             let chart = ChartInfo {
@@ -97,7 +80,6 @@ where
                 namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
                 k8s_selector: Some(self.kube_label_selector()),
-                take_ownership: !self.storages.is_empty(),
                 ..Default::default()
             };
 
@@ -217,20 +199,6 @@ where
             );
 
             helm.on_delete(target)?;
-
-            let storage_ids = self
-                .storages
-                .iter()
-                .flat_map(|storage| [storage.id.clone(), storage.long_id.to_string()])
-                .collect::<Vec<_>>();
-            delete_dangling_service_pvcs(
-                &target.kube,
-                target.environment.namespace(),
-                [&self.kube_label_selector(), &self.kube_legacy_label_selector()],
-                self.kube_name(),
-                &storage_ids,
-                &event_details,
-            )?;
 
             Ok(state)
         };
