@@ -1,4 +1,4 @@
-use crate::cmd::kubectl::kubectl_check_gateway_api_crds_available;
+use crate::cmd::kubectl::kubectl_should_deploy_listenerset;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -303,20 +303,28 @@ impl Default for CertManagerConfigsChartChecker {
     }
 }
 
+fn certificate_owner_migration_target(
+    gateway_api_rollout_status: GatewayApiRolloutStatus,
+    listener_set_available: bool,
+) -> Option<CertificateOwnerTarget> {
+    match gateway_api_rollout_status {
+        GatewayApiRolloutStatus::Default if listener_set_available => Some(CertificateOwnerTarget::ListenerSet),
+        GatewayApiRolloutStatus::Default => None,
+        GatewayApiRolloutStatus::DualStack | GatewayApiRolloutStatus::NotDeployed => {
+            Some(CertificateOwnerTarget::Ingress)
+        }
+    }
+}
+
 impl ChartInstallationChecker for CertManagerConfigsChartChecker {
     fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
-        let target = match self.gateway_api_rollout_status {
-            GatewayApiRolloutStatus::Default => CertificateOwnerTarget::ListenerSet,
-            GatewayApiRolloutStatus::DualStack => CertificateOwnerTarget::Ingress,
-            GatewayApiRolloutStatus::NotDeployed => CertificateOwnerTarget::Ingress,
-        };
-
-        if target == CertificateOwnerTarget::ListenerSet && !kubectl_check_gateway_api_crds_available(kube_client) {
-            warn!(
-                "Skipping cert-manager certificate owner migration to ListenerSet: Gateway API CRDs are not available"
-            );
+        let listener_set_available =
+            self.gateway_api_rollout_status.is_default() && kubectl_should_deploy_listenerset(kube_client);
+        let Some(target) = certificate_owner_migration_target(self.gateway_api_rollout_status, listener_set_available)
+        else {
+            warn!("Skipping cert-manager certificate owner migration to ListenerSet: ListenerSet CRD is not available");
             return Ok(());
-        }
+        };
 
         migrate_certificate_owners(kube_client, target)
     }
@@ -644,6 +652,7 @@ mod tests {
     use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
     use crate::infrastructure::helm_charts::cert_manager_config_chart::{
         CertManagerConfigsChart, CertManagerConfigsChartChecker, CertificateOwnerTarget, LetsEncryptConfig,
+        certificate_owner_migration_target,
     };
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -789,6 +798,18 @@ mod tests {
     fn checker_target_is_listenerset_when_gateway_api_is_default() {
         let checker = CertManagerConfigsChartChecker::new(GatewayApiRolloutStatus::Default);
         assert_eq!(checker.gateway_api_rollout_status, GatewayApiRolloutStatus::Default);
+    }
+
+    #[test]
+    fn listener_set_owner_migration_is_skipped_when_the_crd_is_unavailable() {
+        assert_eq!(
+            certificate_owner_migration_target(GatewayApiRolloutStatus::Default, false),
+            None
+        );
+        assert_eq!(
+            certificate_owner_migration_target(GatewayApiRolloutStatus::Default, true),
+            Some(CertificateOwnerTarget::ListenerSet)
+        );
     }
 
     #[test]

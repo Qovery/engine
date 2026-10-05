@@ -1,0 +1,40 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- if (eq $.Values.k8s_deploy_listenerset true) }}
+{{- if (eq $.Values.k8s_deploy_client_traffic_policy_listenerset true) }}
+{{- if (gt (int (len $.Values.certificate_alternative_names)) 1) }}
+{{- range $namespace_key, $http_hosts := $.Values.http_hosts_per_namespace_gateway }}
+{{- if (ge (int (len $http_hosts)) 1) }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: {{ $.Values.sanitized_name }}-h2-alpn
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  # Envoy Gateway otherwise downgrades an overlapping TLS ListenerSet certificate to HTTP/1.1.
+  # The ListenerSet contains only this router's hostnames, so the override cannot affect other routers.
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ $.Values.sanitized_name }}-listeners
+  tls:
+    alpnProtocols:
+      - h2
+      - http/1.1
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

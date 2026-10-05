@@ -476,4 +476,36 @@ mod tests {
             missing_fields.unwrap_or_default().join(",")
         );
     }
+
+    #[test]
+    fn cert_manager_enables_listener_sets_when_gateway_api_is_default() {
+        let chart = CertManagerChart::new(
+            None,
+            false,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
+            get_cert_manager_chart_override(),
+            false,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::KubeSystem,
+            GatewayApiRolloutStatus::Default,
+        )
+        .to_common_helm_chart()
+        .unwrap();
+
+        for key in ["config.enableGatewayAPIListenerSet", "config.featureGates.ListenerSets"] {
+            assert_eq!(
+                chart
+                    .chart_info
+                    .values
+                    .iter()
+                    .find(|value| value.key == key)
+                    .map(|value| value.value.as_str()),
+                Some("true"),
+                "{key} must be enabled when Gateway API is the default path"
+            );
+        }
+    }
 }

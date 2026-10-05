@@ -1007,6 +1007,50 @@ pub fn kubectl_should_deploy_listenerset(kube_client: &Client) -> bool {
     kubectl_does_crd_exist(kube_client, "listenersets.gateway.networking.k8s.io")
 }
 
+/// Returns whether the installed ClientTrafficPolicy CRD accepts ListenerSet targets.
+///
+/// Envoy Gateway 1.8 only permits Gateway targets. Envoy Gateway 1.9 adds ListenerSet
+/// targets, which are required to apply an ALPN policy to one router without affecting the
+/// shared Gateway or other routers.
+pub fn kubectl_client_traffic_policy_supports_listenerset(kube_client: &Client) -> bool {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("clienttrafficpolicies.gateway.envoyproxy.io")) {
+        Ok(crd) => crd,
+        Err(error) => {
+            debug!("Could not fetch ClientTrafficPolicy CRD to check ListenerSet support: {error}");
+            return false;
+        }
+    };
+
+    let Ok(crd_value) = serde_json::to_value(&crd) else {
+        debug!("Could not serialize ClientTrafficPolicy CRD to inspect target support");
+        return false;
+    };
+
+    client_traffic_policy_crd_supports_listenerset(&crd_value)
+}
+
+fn client_traffic_policy_crd_supports_listenerset(crd: &Value) -> bool {
+    crd.get("spec")
+        .and_then(|spec| spec.get("versions"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|version| version.get("served").and_then(Value::as_bool).unwrap_or(false))
+        .filter_map(|version| {
+            version
+                .get("schema")
+                .and_then(|schema| schema.get("openAPIV3Schema"))
+                .and_then(|schema| schema.get("properties"))
+                .and_then(|properties| properties.get("spec"))
+                .and_then(|spec| spec.get("x-kubernetes-validations"))
+                .and_then(Value::as_array)
+        })
+        .flatten()
+        .filter_map(|validation| validation.get("rule").and_then(Value::as_str))
+        .any(|rule| (rule.contains("targetRef.kind") || rule.contains("targetRefs")) && rule.contains("ListenerSet"))
+}
+
 /// Returns true if the Gateway CRD schema exposes the `allowedListeners` field.
 ///
 /// Why this matters:
@@ -2309,16 +2353,60 @@ pub fn kubectl_exec_delete_job(
 mod tests {
     use super::{
         GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE,
-        KubernetesServicePortForwardTarget, gateway_certificate_refs_reconciliation_patch,
-        gateway_fallback_certificate_ref_ownership, gateway_to_secret_reference_grant_manifest,
-        is_engine_gateway_fallback_reference_grant, is_kubernetes_optimistic_concurrency_conflict,
-        reconcile_router_tls_certificate_refs,
+        KubernetesServicePortForwardTarget, client_traffic_policy_crd_supports_listenerset,
+        gateway_certificate_refs_reconciliation_patch, gateway_fallback_certificate_ref_ownership,
+        gateway_to_secret_reference_grant_manifest, is_engine_gateway_fallback_reference_grant,
+        is_kubernetes_optimistic_concurrency_conflict, reconcile_router_tls_certificate_refs,
     };
     use kube::api::ApiResource;
     use kube::core::{DynamicObject, GroupVersionKind, Status};
     use serde_json::json;
     use std::collections::{BTreeMap, BTreeSet};
     use url::Url;
+
+    #[test]
+    fn detects_listener_set_client_traffic_policy_support_from_the_served_crd_schema() {
+        let gateway_only = json!({
+            "spec": {
+                "versions": [{
+                    "served": true,
+                    "schema": { "openAPIV3Schema": { "properties": { "spec": {
+                        "x-kubernetes-validations": [{
+                            "rule": "has(self.targetRef) ? self.targetRef.kind == 'Gateway' : true"
+                        }]
+                    }}}}
+                }]
+            }
+        });
+        let gateway_and_listener_set = json!({
+            "spec": {
+                "versions": [{
+                    "served": true,
+                    "schema": { "openAPIV3Schema": { "properties": { "spec": {
+                        "x-kubernetes-validations": [{
+                            "rule": "has(self.targetRef) ? self.targetRef.kind in ['Gateway', 'ListenerSet'] : true"
+                        }]
+                    }}}}
+                }]
+            }
+        });
+        let target_refs_with_listener_set = json!({
+            "spec": {
+                "versions": [{
+                    "served": true,
+                    "schema": { "openAPIV3Schema": { "properties": { "spec": {
+                        "x-kubernetes-validations": [{
+                            "rule": "has(self.targetRefs) ? self.targetRefs.all(ref, ref.kind in ['Gateway', 'ListenerSet']) : true"
+                        }]
+                    }}}}
+                }]
+            }
+        });
+
+        assert!(!client_traffic_policy_crd_supports_listenerset(&gateway_only));
+        assert!(client_traffic_policy_crd_supports_listenerset(&gateway_and_listener_set));
+        assert!(client_traffic_policy_crd_supports_listenerset(&target_refs_with_listener_set));
+    }
 
     #[test]
     fn parses_kubernetes_service_url() {

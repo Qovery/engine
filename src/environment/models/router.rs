@@ -1,4 +1,7 @@
-use crate::cmd::kubectl::{kubectl_check_gateway_api_crds_available, kubectl_should_deploy_listenerset};
+use crate::cmd::kubectl::{
+    kubectl_check_gateway_api_crds_available, kubectl_client_traffic_policy_supports_listenerset,
+    kubectl_should_deploy_listenerset,
+};
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
@@ -519,6 +522,8 @@ impl<T: CloudProvider> Router<T> {
         let deploy_listenerset = kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false)
             && gateway_api_crds_available
             && kubectl_should_deploy_listenerset(&target.kube.client());
+        let deploy_listenerset_client_traffic_policy =
+            deploy_listenerset && kubectl_client_traffic_policy_supports_listenerset(&target.kube.client());
 
         let resolved_gateway_api_policy_settings = resolve_gateway_api_backend_traffic_policy_settings(
             &service_gateway_api_policy_settings,
@@ -593,6 +598,11 @@ impl<T: CloudProvider> Router<T> {
         context.insert("k8s_gateway_api_crds_available", &gateway_api_crds_available);
         // Runtime check for ListenerSet CRD availability - once rolled out to all clusters, this check can be simplified or removed
         context.insert("k8s_deploy_listenerset", &deploy_listenerset);
+        // HACK(QOV-2291): remove this capability gate after every managed cluster serves the Envoy Gateway 1.9 CRD.
+        context.insert(
+            "k8s_deploy_client_traffic_policy_listenerset",
+            &deploy_listenerset_client_traffic_policy,
+        );
 
         Ok(context)
     }

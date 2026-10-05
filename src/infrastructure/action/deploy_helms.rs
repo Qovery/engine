@@ -17,6 +17,54 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tera::Context as TeraContext;
 
+/// Bound one chart's forwarded diff in CI so a large generated resource, such as a CRD schema,
+/// cannot exhaust the CI log collector and turn a successful test into a failed job.
+const HELM_DIFF_LOG_MAX_BYTES: usize = 128 * 1024;
+
+/// Forwards a bounded amount of one chart's Helm diff to the CI event stream.
+/// The complete diff remains available in the chart-specific file written by the caller.
+struct BoundedHelmDiffOutput {
+    max_bytes: Option<usize>,
+    emitted_bytes: usize,
+    truncated: bool,
+}
+
+impl BoundedHelmDiffOutput {
+    fn for_current_environment() -> Self {
+        Self::for_ci(std::env::var_os("CI").is_some())
+    }
+
+    fn for_ci(is_ci: bool) -> Self {
+        Self::new(is_ci.then_some(HELM_DIFF_LOG_MAX_BYTES))
+    }
+
+    fn new(max_bytes: Option<usize>) -> Self {
+        Self {
+            max_bytes,
+            emitted_bytes: 0,
+            truncated: false,
+        }
+    }
+
+    fn next(&mut self, line: String) -> Option<String> {
+        if self.truncated {
+            return None;
+        }
+
+        let Some(max_bytes) = self.max_bytes else {
+            return Some(line);
+        };
+
+        if self.emitted_bytes.saturating_add(line.len()) <= max_bytes {
+            self.emitted_bytes += line.len();
+            return Some(line);
+        }
+
+        self.truncated = true;
+        Some(format!("… Helm diff output truncated after {max_bytes} bytes"))
+    }
+}
+
 /// Strategy for calculating delays between retry attempts.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum DelayStrategy {
@@ -262,10 +310,13 @@ pub(super) trait HelmInfraResources {
                         }
                     };
                     logger.info(format!("🔍 Showing diff for chart: {}", chart.get_chart_info().name));
+                    let mut diff_output = BoundedHelmDiffOutput::for_current_environment();
                     let _ = helm.upgrade_diff(chart.get_chart_info(), &envs, &mut |line| {
                         let _ = buf_writer.write_all(line.as_bytes());
                         let _ = buf_writer.write_all(b"\n");
-                        logger.diff(InfrastructureDiffType::Helm, line);
+                        if let Some(line) = diff_output.next(line) {
+                            logger.diff(InfrastructureDiffType::Helm, line);
+                        }
                     });
                 });
 
@@ -681,4 +732,29 @@ fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<Bu
         .open(filepath)?;
 
     Ok(BufWriter::new(file))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BoundedHelmDiffOutput, HELM_DIFF_LOG_MAX_BYTES};
+
+    #[test]
+    fn helm_diff_log_output_is_bounded_in_ci() {
+        let mut output = BoundedHelmDiffOutput::for_ci(true);
+        assert_eq!(output.next("- replicas: 1".to_string()), Some("- replicas: 1".to_string()));
+
+        assert_eq!(
+            output.next("a".repeat(HELM_DIFF_LOG_MAX_BYTES)),
+            Some(format!("… Helm diff output truncated after {HELM_DIFF_LOG_MAX_BYTES} bytes"))
+        );
+        assert_eq!(output.next("- image: example".to_string()), None);
+    }
+
+    #[test]
+    fn helm_diff_log_output_is_unbounded_outside_ci() {
+        let mut output = BoundedHelmDiffOutput::for_ci(false);
+        let large_diff_line = "a".repeat(HELM_DIFF_LOG_MAX_BYTES + 1);
+
+        assert_eq!(output.next(large_diff_line.clone()), Some(large_diff_line));
+    }
 }

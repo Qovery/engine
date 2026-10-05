@@ -11,4 +11,3 @@ retries = { backoff = "exponential", count = 5, delay = "10s", max-delay = "45s"
 
 [profile.default.junit]
 path = "junit.xml" # output junit report
-

@@ -4,6 +4,7 @@ pub mod common;
 pub mod database;
 pub mod dns;
 pub mod environment;
+pub mod gateway_api;
 pub mod gcp;
 pub mod git_server;
 pub mod kubernetes;
