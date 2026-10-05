@@ -59,7 +59,6 @@ impl CoreDNSConfigChart {
                 action: HelmAction::Deploy,
                 atomic: false,
                 force_upgrade: false,
-                take_ownership: false,
                 recreate_pods: false,
                 reinstall_chart_if_installed_version_is_below_than: None,
                 timeout_in_seconds: 600,

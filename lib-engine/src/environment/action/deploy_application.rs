@@ -11,7 +11,7 @@ use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 
-use super::utils::{delete_dangling_service_pvcs, delete_nlb_or_alb_service, prepare_statefulset_for_deployment};
+use super::utils::{delete_nlb_or_alb_service, validate_deployment_storage_replicas};
 use crate::environment::action::deploy_external_secrets::{
     clean_unused_secrets_generated_by_eso, uninstall_service_external_secret,
 };
@@ -40,14 +40,7 @@ where
             .unpause_if_needed(target);
 
             if !self.storages.is_empty() {
-                prepare_statefulset_for_deployment(
-                    &target.kube,
-                    target.environment.namespace(),
-                    self.kube_name(),
-                    self.min_instances,
-                    self.max_instances,
-                    &event_details,
-                )?;
+                validate_deployment_storage_replicas(self.min_instances, self.max_instances, &event_details)?;
             }
 
             let chart = ChartInfo {
@@ -56,7 +49,6 @@ where
                 namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
                 k8s_selector: Some(self.kube_label_selector()),
-                take_ownership: !self.storages.is_empty(),
                 ..Default::default()
             };
 
@@ -138,20 +130,6 @@ where
                 );
 
                 helm.on_delete(target)?;
-
-                let storage_ids = self
-                    .storages
-                    .iter()
-                    .flat_map(|storage| [storage.id.clone(), storage.long_id.to_string()])
-                    .collect::<Vec<_>>();
-                delete_dangling_service_pvcs(
-                    &target.kube,
-                    target.environment.namespace(),
-                    [&self.kube_label_selector(), &self.kube_legacy_label_selector()],
-                    self.kube_name(),
-                    &storage_ids,
-                    &event_details,
-                )?;
 
                 // Delete shared container repository if needed (depending on flag computed on core)
                 if self.should_delete_shared_registry() {

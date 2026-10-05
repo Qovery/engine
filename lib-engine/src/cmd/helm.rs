@@ -1229,9 +1229,6 @@ impl Helm {
         if chart.force_upgrade {
             args_string.push("--force".to_string())
         }
-        if chart.take_ownership {
-            args_string.push("--take-ownership".to_string())
-        }
         if chart.recreate_pods {
             args_string.push("--recreate-pods".to_string())
         }

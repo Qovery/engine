@@ -453,8 +453,6 @@ pub struct ChartInfo {
     pub action: HelmAction,
     pub atomic: bool,
     pub force_upgrade: bool,
-    /// Allow Helm to adopt existing resources with matching names during upgrade.
-    pub take_ownership: bool,
     pub force_conflicts: bool,
     pub recreate_pods: bool,
     pub reinstall_chart_if_installed_version_is_below_than: Option<Version>,
@@ -552,7 +550,6 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
-            take_ownership: false,
             force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
