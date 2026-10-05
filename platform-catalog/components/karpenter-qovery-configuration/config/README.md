@@ -81,8 +81,9 @@ Do not use the customer pool release to recreate or adopt `default`/`stable`.
 
 `model.pkl` delegates to the canonical SDK. `settings.pkl` assembles the `pools` feature,
 whose setting descriptors, rules, logical inputs and Helm fragment remain together.
-The vendored contract and SDK are byte-identical to the canonical copies. There is no
-new q-core/OpenAPI/Blueprint contract, API exception or cluster access in this change.
+The contract and SDK link to `platform-catalog/pkl/`; the publisher injects them into the
+bundle. There is no new q-core/OpenAPI/Blueprint contract, API exception or cluster access in
+this change.
 
 `../tests/legacy-effective.values.yaml` and
 `../../../examples/karpenter-v0/qovery-configuration.request.json` are synthetic fixtures.

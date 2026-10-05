@@ -41,10 +41,10 @@ fn relative_files(directory: &Path, prefix: &Path, files: &mut Vec<PathBuf>) {
 }
 
 /// The staged directory must be a byte-identical copy of the canonical one: a missing, stale, or
-/// extraneous vendored SDK file in a published bundle is a publication failure.
+/// extraneous file in a published bundle is a publication failure.
 fn assert_directory_matches(expected_directory: &Path, staged_directory: &Path, subject: &str) {
     if !staged_directory.is_dir() {
-        fail(&format!("staged component does not contain the vendored {subject}"));
+        fail(&format!("staged component does not contain the {subject}"));
     }
     let mut expected_files = Vec::new();
     relative_files(expected_directory, Path::new(""), &mut expected_files);
@@ -60,11 +60,30 @@ fn assert_directory_matches(expected_directory: &Path, staged_directory: &Path, 
     }
 }
 
+fn assert_no_symbolic_link(directory: &Path) {
+    let entries = fs::read_dir(directory)
+        .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", directory.display())));
+    for entry in entries {
+        let entry =
+            entry.unwrap_or_else(|error| fail(&format!("unreadable entry under {}: {error}", directory.display())));
+        let file_type = entry
+            .file_type()
+            .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", entry.path().display())));
+        if file_type.is_symlink() {
+            fail(&format!("pushed tree contains the symbolic link {}", entry.path().display()));
+        }
+        if file_type.is_dir() {
+            assert_no_symbolic_link(&entry.path());
+        }
+    }
+}
+
 fn inspect_push() {
     let current_directory = env::current_dir().unwrap_or_else(|error| fail(&error.to_string()));
     let component = current_directory
         .file_name()
         .unwrap_or_else(|| fail("component directory has no name"));
+    assert_no_symbolic_link(&current_directory.join("config"));
     let expected_component_directory = required_path("EXPECTED_COMPONENTS_DIR").join(component);
     if !expected_component_directory
         .join("config/runtime-values/model.pkl")
@@ -83,15 +102,10 @@ fn inspect_push() {
         fail("staged component does not contain its Pkl model");
     }
 
-    assert_file_matches(
-        &required_path("EXPECTED_CONTRACT"),
-        &current_directory.join("config/runtime-values/contract.pkl"),
-        "Pkl contract",
-    );
     assert_directory_matches(
-        &required_path("EXPECTED_SDK_DIR"),
-        &current_directory.join("config/runtime-values/sdk"),
-        "Pkl SDK",
+        &expected_component_directory.join("config"),
+        &current_directory.join("config"),
+        "config directory",
     );
 
     let marker = required_path("MOCK_MARKER");

@@ -82,8 +82,8 @@ runtime-values/
     setting.pkl                # the choices and the availability rules (provider, mode)
     <choice>.pkl               # one file per choice: its inputs and its Helm hooks
     helm.pkl                   # assembles the fragment from the selected choice
-  contract.pkl                 # vendored copy of the canonical q-core/Pkl contract
-  sdk/                         # vendored copy of the shared authoring SDK
+  contract.pkl                 # link to the canonical q-core/Pkl contract
+  sdk/                         # link to the shared authoring SDK
 ```
 
 Conventions that keep this readable:
@@ -159,6 +159,9 @@ For Pkl components, run from the Engine repository root:
 ```shell
 PKL_BIN=pkl ./scripts/test-platform-config.sh
 pkl format --diff-name-only platform-catalog/components/<component>/config/runtime-values
+pkl format --diff-name-only platform-catalog/pkl
 ```
+
+`pkl format` does not follow the bundle's `sdk` link, so the last command covers the shared SDK.
 
 The component-specific [Loki guide](loki/config/README.md) is the reference implementation.

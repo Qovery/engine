@@ -16,5 +16,5 @@ calls `sdk/evaluate.pkl`; `settings.pkl` assembles the component; `configuration
 declares typed settings and `configuration/helm.pkl` maps them to chart values. Cross-setting
 rules, when needed, live in `configuration/dependencies.pkl`. The SDK derives descriptors and
 recursive validation from those declarations, including unknown fields and explicit nulls.
-Run `./scripts/sync-platform-pkl-sdk.sh` after changing the shared contract or SDK, then
-`./scripts/test-platform-config.sh` and the `platform-catalog-tests` architecture tests.
+After changing the shared contract or SDK, run `./scripts/test-platform-config.sh` and the
+`platform-catalog-tests` architecture tests.

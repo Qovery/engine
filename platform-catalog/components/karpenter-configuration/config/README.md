@@ -11,7 +11,8 @@ declares the component-wide logical inputs; `helm.pkl` projects validated active
 The component factory receives cluster inputs for the real EKS discovery-tag default
 and the draft to declare AWS inputs only when at least one pool exists. No request decoding, validation orchestration or compilation gate is duplicated.
 
-Contract and SDK copies are synchronized from `platform-catalog/pkl`. The SDK derives both
+The contract and SDK come from `platform-catalog/pkl/`; the publisher injects them into the
+bundle. The SDK derives both
 prototypes and row descriptors, validates raw drafts, and passes defaulted active values
 to the Helm fragment only after validation. RESOLVE_REQUIREMENTS accepts missing required
 profile values; VALIDATE and COMPILE enforce them, as for the other catalogue components.

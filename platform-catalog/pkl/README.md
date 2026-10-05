@@ -20,7 +20,7 @@ pkl/
 
 This directory deliberately mirrors a bundle's `runtime-values/` root: `sdk/request.pkl` imports
 `../contract.pkl` and resolves it here during authoring and inside `runtime-values/` at runtime,
-so the vendored copies stay byte-identical to the source.
+so every bundle links to, and publishes, these exact files.
 
 ## The setting-centric evaluator
 
@@ -87,24 +87,30 @@ compilation, provider abstractions, and component vocabularies (`context.pkl`) m
 component bundle — the layering check (`tools/platform-catalog-tests/tests/module_layering.rs`)
 rejects an SDK module that imports anything but `contract.pkl` or another `sdk/` module.
 
-## Vendoring workflow
+## Bundle SDK links
 
-q-core resolves Pkl imports only inside one digest-pinned OCI bundle, so each executable component
-carries a byte-identical copy of `contract.pkl` and `sdk/` under `config/runtime-values/`. Those
-copies are machine-managed, never hand-edited:
+q-core resolves Pkl imports only inside one digest-pinned OCI bundle, so each published executable
+component carries `contract.pkl` and `sdk/` under `config/runtime-values/`. In the repository both
+are relative symbolic links to the canonical files here, so an SDK change is a single diff:
 
-1. edit the canonical files here, then run `./scripts/sync-platform-pkl-sdk.sh` and commit the
-   synchronized copies together with the change;
+1. edit the canonical files here: every bundle sees the change through its links. Run
+   `./scripts/sync-platform-pkl-sdk.sh` to create or repair the links of a new or moved bundle,
+   then commit them;
 2. `./scripts/test-platform-config.sh` (and CI) runs the sync in `--check` mode and fails on a
-   missing, stale, or extraneous vendored file;
-3. `./scripts/publish-platform-config.sh` refuses to publish while copies are out of sync, and
-   injects the canonical files into its staging directory so the published layer is always exact.
+   missing link, a link to another target, a file or directory left in place of a link, or any
+   other symbolic link in a bundle;
+3. `./scripts/publish-platform-config.sh` refuses to publish while the links are out of sync,
+   replaces them with copies of the canonical files in its staging directory, and refuses to push
+   a tree that still contains a symbolic link, so the published layer is self-contained.
+
+A bundle copied anywhere else must follow its links (`cp -RL`): `pkl eval --root-dir` refuses an
+import whose link target lies outside the root.
 
 ## Tests
 
 `tests/` covers the SDK primitives natively; `./scripts/test-platform-config.sh` runs them with the
-component suites. Component tests import their own vendored copy
-(`../config/runtime-values/sdk/...`), which keeps them honest about the bytes actually published.
+component suites. Component tests import the SDK through their bundle's links
+(`../config/runtime-values/sdk/...`), the same paths as in the published bundle.
 
 ## Structured configuration fields (A1, unpublished)
 
@@ -169,7 +175,7 @@ It is an autonomous bundle with relative imports. Its four valid exchanges are u
 setting-centric rewrite; the two invalid exchanges were regenerated because violation messages now
 follow the SDK's uniform wording (`Karpenter id does not match the expected format`; a message
 names the setting, never the indexed path), codes and paths being identical. `sync-platform-pkl-sdk.sh` also manages its contract and
-SDK copies; `module_layering` checks it alongside production bundles. The publisher is unchanged,
+SDK links; `module_layering` checks it alongside production bundles. The publisher is unchanged,
 and test fixtures cannot satisfy its existing check that executable components exist. SDK modules
 still import only the canonical contract, siblings or the already-allowed Pkl standard library.
 

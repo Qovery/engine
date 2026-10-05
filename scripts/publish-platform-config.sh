@@ -38,10 +38,10 @@ command -v jq >/dev/null 2>&1 || fatal "jq is required"
 [ -n "${PLATFORM_CONFIG_REGISTRY:-}" ] || fatal "PLATFORM_CONFIG_REGISTRY is not set (e.g. public.ecr.aws/r3m4q3r9 — see platform-catalog/README.md)"
 [ -f "$CANONICAL_PKL_CONTRACT" ] || fatal "canonical Pkl contract is missing: $CANONICAL_PKL_CONTRACT"
 [ -d "$CANONICAL_PKL_SDK_DIR" ] || fatal "canonical Pkl SDK directory is missing: $CANONICAL_PKL_SDK_DIR"
-# Fail closed on a missing, stale, or extraneous vendored SDK copy: the staged bundle is rebuilt
-# from the canonical files below, but a desynchronized repository means the reviewed component
-# content is not what would be published.
-"$ROOT_DIR/scripts/sync-platform-pkl-sdk.sh" --check >/dev/null || fatal "vendored Pkl SDK is out of sync — run ./scripts/sync-platform-pkl-sdk.sh and commit the result"
+# Fail closed on a missing or wrong Pkl SDK link: the staged bundle is rebuilt from the canonical
+# files below, but a desynchronized repository means the reviewed component content is not what
+# would be published.
+"$ROOT_DIR/scripts/sync-platform-pkl-sdk.sh" --check >/dev/null || fatal "Pkl SDK links are out of sync — run ./scripts/sync-platform-pkl-sdk.sh and commit the result"
 
 # ECR does not auto-create repositories on push. They are deliberately NOT
 # created here either: registry repositories are declared in the infra
@@ -102,11 +102,14 @@ for component in $components; do
     staged_component_dir="$staging_dir/$component"
     mkdir -p "$staged_component_dir"
     cp -R "$config_dir" "$staged_component_dir/config"
+    rm -f "$staged_component_dir/config/runtime-values/contract.pkl"
     cp "$CANONICAL_PKL_CONTRACT" "$staged_component_dir/config/runtime-values/contract.pkl"
     rm -rf "$staged_component_dir/config/runtime-values/sdk"
     cp -R "$CANONICAL_PKL_SDK_DIR" "$staged_component_dir/config/runtime-values/sdk"
     publish_dir="$staged_component_dir"
   fi
+  links="$(find "$publish_dir/config" -type l)"
+  [ -z "$links" ] || fatal "$component: refusing to publish symbolic links: $links"
 
   version="$(catalog_version "$component")"
   [ -n "$version" ] || fatal "component '$component' has no version in $CATALOG_FILE"

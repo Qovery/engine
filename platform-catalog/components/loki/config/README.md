@@ -29,8 +29,8 @@ loki/
         helm.pkl                # loki.storage, schema, identity wiring, persistence of every workload
       resources/
         setting.pkl             # the workloads and the preset budget table; the SDK derives the rest
-      contract.pkl              # vendored contract (machine-synced, see ../../../pkl/README.md)
-      sdk/                      # vendored SDK, including the generic evaluator
+      contract.pkl              # link to the canonical contract (see ../../../pkl/README.md)
+      sdk/                      # link to the canonical SDK, including the generic evaluator
   tests/
     fixtures.pkl                # contexts, drafts and readers shared by the suites
     evaluation.tests.pkl        # the four operations end to end
@@ -252,8 +252,8 @@ parses every import in the published bundles and fails on: a setting folder impo
 `contract.pkl` from the bundle root; a setting folder importing anything but a sibling's
 `setting.pkl`; two folders importing each other's `setting.pkl`; a cross-folder import whose alias
 is not `<folder><Module>`; a same-folder import that is aliased; an entrypoint that
-imports anything but `settings.pkl` and `sdk/`; any import added to the vendored contract; and a
-vendored `sdk/` module importing anything but `contract.pkl` or another `sdk/` module. Importing
+imports anything but `settings.pkl` and `sdk/`; any import added to the shared contract; and a
+shared `sdk/` module importing anything but `contract.pkl` or another `sdk/` module. Importing
 `sdk/` is allowed from every module. The same file proves each rule fires, so the check cannot
 silently stop matching. Run it with:
 

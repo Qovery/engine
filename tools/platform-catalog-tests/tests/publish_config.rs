@@ -35,8 +35,6 @@ fn all_component_publication_includes_karpenter_and_injects_the_pkl_sdk() {
         .arg("all")
         .env("PATH", path)
         .env("EXPECTED_COMPONENTS_DIR", repository_path("platform-catalog/components"))
-        .env("EXPECTED_CONTRACT", repository_path("platform-catalog/pkl/contract.pkl"))
-        .env("EXPECTED_SDK_DIR", repository_path("platform-catalog/pkl/sdk"))
         .env("MOCK_MARKER", &marker)
         .env("PLATFORM_CONFIG_REGISTRY", TEST_REGISTRY)
         .env("PLATFORM_CONFIG_OUTPUT_FILE", &output_file);

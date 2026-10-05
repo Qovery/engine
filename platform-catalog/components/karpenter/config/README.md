@@ -4,7 +4,8 @@ Source 2 values for the existing vendored `karpenter` chart, version `1.10.0`.
 No upstream chart changes, AWS provisioning or root-template activation are included.
 
 The bundle uses the existing model → evaluation → describe/requirements/validate/compile
-separation and lazy SDK compilation gate. The SDK and contract are machine-vendored unchanged.
+separation and lazy SDK compilation gate. The contract and SDK come from `platform-catalog/pkl/`;
+the publisher injects them into the bundle.
 Malformed draft fields become violations; no bundle imports another component or a fixture.
 
 ## Existing EC2 placement
@@ -51,5 +52,5 @@ See [examples and verification](../../../examples/karpenter-v0/README.md).
 The entrypoint calls `sdk/evaluate.pkl` with the component declared in `settings.pkl`.
 The `placement/` feature owns its setting declarations, dependency rules, unconditional
 logical inputs and Helm fragment. Generic type/bound/unknown-field checks, defaults and
-the lazy compile gate are supplied by the canonical SDK. Contract and SDK copies are
-maintained by `scripts/sync-platform-pkl-sdk.sh`; no local evaluator is maintained.
+the lazy compile gate are supplied by the canonical SDK, which the bundle links to; no local
+evaluator is maintained.

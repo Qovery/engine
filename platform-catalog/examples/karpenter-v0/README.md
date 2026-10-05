@@ -10,7 +10,7 @@ They are intentionally excluded from the registered catalogue and templates.
 | `karpenter` | Controller Pkl bundle | `karpenter` 1.10.0 | `karpenter-crd` |
 | `karpenter-configuration` | Pool Pkl bundle | `karpenter-custom-resources` 0.1.0 | CRDs and controller |
 
-Each runtime-values bundle is self-contained and uses a byte-identical copy of the canonical SDK.
+Each runtime-values bundle links to the canonical SDK; its published layer carries a copy, so it stays self-contained.
 The SDK now exposes component-wide logical inputs and an optional Kubernetes version in
 its typed context; Karpenter-specific admission rules stay in its feature folders.
 The eventual layer is optional, disabled by default, and uses existing `kind: requires`

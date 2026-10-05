@@ -1,11 +1,10 @@
 //! Wire compatibility and invalid-descriptor checks for the unpublished A1 exchange fixture.
 
-use platform_catalog_tests::{assert_success, repository_path, run};
+use platform_catalog_tests::{assert_success, copy_bundle, repository_path, run};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::env;
 use std::fs;
-use std::path::Path;
 use std::process::{Command, Output};
 use tempfile::tempdir;
 
@@ -13,19 +12,6 @@ const FIXTURE: &str = "platform-catalog/pkl/tests/fixtures/karpenter-v1";
 
 fn pkl() -> Command {
     Command::new(env::var_os("PKL_BIN").unwrap_or_else(|| "pkl".into()))
-}
-
-fn copy_bundle(source: &Path, target: &Path) {
-    fs::create_dir_all(target).expect("bundle directory must be writable");
-    for entry in fs::read_dir(source).expect("bundle must be readable") {
-        let entry = entry.expect("bundle entry must be readable");
-        let destination = target.join(entry.file_name());
-        if entry.path().is_dir() {
-            copy_bundle(&entry.path(), &destination);
-        } else {
-            fs::copy(entry.path(), destination).expect("bundle module must be copied");
-        }
-    }
 }
 
 #[test]

@@ -3,8 +3,9 @@
 Unpublished A1 fixture, generated/evaluated with Pkl **0.32.0**. This directory is test data, not a
 catalog component: it has no component manifest, chart or configRef, and cannot be selected by the
 publisher's component inventory. The fixture version is `karpenter-v1`; `SHA256SUMS` identifies
-all bundle modules and exchange JSON bytes for A2 handoff. Changing these bytes requires updating
-the checksums and reviewing the golden exchanges.
+the fixture's own bundle modules and exchange JSON bytes for A2 handoff, not the contract and SDK
+it reaches through its links. Changing these bytes requires updating the checksums and reviewing
+the golden exchanges.
 
 `two-pools.profile.json` reproduces D11's `karpenter-configuration` fragment from
 q-core `doc-features/engine-v2/roadmap/karpenter-catalog-contract-v0.md`, read at checkout HEAD
@@ -23,7 +24,7 @@ Engine base: `bc6142c261eacfb605c08c4d26fb311018dd0541`.
 | `config/runtime-values/model.pkl` | Existing-style JSON entrypoint, using only `prop:request` |
 | `config/runtime-values/settings.pkl` | The component: one feature, the node pools |
 | `config/runtime-values/nodePools/{setting,dependencies,helm}.pkl` | The pool shape as nested settings (row-dependent AMI and subnet members), the unique-name rule, the inspection projection |
-| `config/runtime-values/{contract.pkl,sdk/}` | Copies managed exclusively by `sync-platform-pkl-sdk.sh` |
+| `config/runtime-values/{contract.pkl,sdk/}` | Links to the canonical SDK, managed exclusively by `sync-platform-pkl-sdk.sh` |
 
 Required values (`nodePools`, a custom AMI's `id`) are reported at VALIDATE and COMPILE; like every
 component, RESOLVE_REQUIREMENTS accepts an incomplete draft. An absent `taints` array is an empty
@@ -32,8 +33,8 @@ byte-identical to the first capture. `invalid-VALIDATE` and
 `invalid-COMPILE` were regenerated when the fixture moved to the SDK evaluator: same codes and paths,
 messages in the SDK's uniform wording (they name the setting, never the indexed path: the path is in `fieldPath`).
 
-For A2, copy **the complete `config/runtime-values/` directory** into the test bundle file store;
-its entrypoint is `model.pkl`. Each `*.request.json` is the unchanged evaluation request envelope,
+For A2, copy **the complete `config/runtime-values/` directory**, following its links (`cp -RL`),
+into the test bundle file store; its entrypoint is `model.pkl`. Each `*.request.json` is the unchanged evaluation request envelope,
 including the structured value under `profileConfig`. Each paired response is literal JSON output
 from that entrypoint. Do not publish this fixture or treat its compiler projection as chart values.
 The integration test copies this directory to a temporary root and evaluates with imports confined

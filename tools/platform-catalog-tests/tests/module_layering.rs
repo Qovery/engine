@@ -4,7 +4,7 @@
 //! the next contributor:
 //!
 //! ```text
-//! contract.pkl, sdk/     vocabulary and the shared evaluator (vendored, machine-synced)
+//! contract.pkl, sdk/     vocabulary and the shared evaluator (links to the canonical SDK)
 //! <setting>/             one folder per setting: setting.pkl (what it is),
 //!                        dependencies.pkl (what it needs), helm.pkl (the Helm it owns)
 //! settings.pkl           table of contents: one Feature per folder
@@ -17,10 +17,10 @@
 //! Folders also stay independent of each other: a folder reads other settings through the resolved
 //! configuration (`scope.config`), never through their modules.
 //!
-//! `sdk/` is not a feature package: it is the vendored copy of the component-agnostic authoring
-//! SDK (`platform-catalog/pkl/sdk`), synced by `sync-platform-pkl-sdk.sh`. Every module may import
-//! it, and it may import nothing of the component except the vendored contract — a component
-//! module reached from `sdk/` would make the shared copy impossible to vendor byte-identically.
+//! `sdk/` is not a feature package: it links to the component-agnostic authoring SDK
+//! (`platform-catalog/pkl/sdk`), which the publisher copies into every bundle. Every module may
+//! import it, and it may import nothing of the component except the contract — a component module
+//! reached from `sdk/` would be missing from the other bundles that publish the same SDK.
 //!
 //! The rules are applied by [`check`], a pure function over parsed modules, so the tests at the
 //! bottom of this file prove each rule actually fires instead of asserting the checker merely runs.
@@ -32,11 +32,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Root modules a setting folder may import. Shrinking this list is the ratchet: each entry removed
-/// is one less way for a folder to depend on the root. Only the vendored contract is left — a folder
+/// is one less way for a folder to depend on the root. Only the contract is left — a folder
 /// receives every draft value through the evaluation scope.
 const ROOT_IMPORTS_ALLOWED_FROM_FEATURES: &[&str] = &["contract.pkl"];
 
-/// The vendored SDK package. Any module may import it; it may import only the vendored contract,
+/// The shared SDK package. Any module may import it; it may import only the contract,
 /// so the same bytes stay valid in every component bundle.
 const SDK_PACKAGE: &str = "sdk";
 const SDK_ROOT_IMPORTS_ALLOWED: &[&str] = &["contract.pkl"];
@@ -156,8 +156,7 @@ fn check(modules: &[Module]) -> Vec<String> {
             // import there means logic creeping into the shared vocabulary.
             if module.relative == "contract.pkl" {
                 violations.push(format!(
-                    "{at}: the vendored contract imports '{}'; it is synced by \
-                     sync-platform-pkl-sdk.sh and must import nothing",
+                    "{at}: the shared contract imports '{}'; it must import nothing",
                     import.written
                 ));
             }
@@ -178,7 +177,7 @@ fn check(modules: &[Module]) -> Vec<String> {
                 match target_package {
                     None if !allowed_root_imports.contains(&import.resolved.as_str()) => {
                         let importer_kind = if importer_is_sdk {
-                            "the vendored SDK"
+                            "the shared SDK"
                         } else {
                             "feature package"
                         };
@@ -188,12 +187,12 @@ fn check(modules: &[Module]) -> Vec<String> {
                             allowed_root_imports.join(", ")
                         ));
                     }
-                    // Every module may use the vendored SDK; the SDK itself must stay
+                    // Every module may use the shared SDK; the SDK itself must stay
                     // component-agnostic, and feature packages must stay independent.
                     Some(target) if target != importer_package && target != SDK_PACKAGE => {
                         if importer_is_sdk {
                             violations.push(format!(
-                                "{at}: the vendored SDK imports '{}'; sdk modules may only import \
+                                "{at}: the shared SDK imports '{}'; sdk modules may only import \
                                  contract.pkl and other sdk modules",
                                 import.resolved
                             ));
@@ -377,6 +376,32 @@ fn every_evaluator_bundle_declares_an_entrypoint() {
     );
 }
 
+#[test]
+fn the_layering_walker_reads_each_bundle_contract_and_sdk_through_the_links() {
+    let modules = load_modules();
+    let sdk = repository_path("platform-catalog/pkl/sdk");
+    let mut shared: Vec<String> = pkl_files(&sdk)
+        .iter()
+        .map(|path| format!("sdk/{}", path.strip_prefix(&sdk).unwrap().to_str().unwrap().replace('\\', "/")))
+        .collect();
+    shared.push("contract.pkl".to_string());
+
+    for entrypoint in modules.iter().filter(|module| module.relative == "model.pkl") {
+        let loaded: BTreeSet<&str> = modules
+            .iter()
+            .filter(|module| module.component == entrypoint.component)
+            .map(|module| module.relative.as_str())
+            .collect();
+        for module in &shared {
+            assert!(
+                loaded.contains(module.as_str()),
+                "{}: {module} was not read through the bundle's links",
+                entrypoint.component
+            );
+        }
+    }
+}
+
 fn report(violations: &[String]) -> String {
     let mut message = format!("\n{} module layering violation(s):\n", violations.len());
     for violation in violations {
@@ -510,7 +535,7 @@ fn the_entrypoint_may_not_bypass_the_evaluation_envelope() {
     assert_eq!(violations.len(), 1, "{violations:?}");
     assert!(violations[0].contains("entrypoint imports 'compile.pkl'"));
 
-    // Request decoding lives in the vendored SDK, so the entrypoint no longer parses JSON itself.
+    // Request decoding lives in the shared SDK, so the entrypoint no longer parses JSON itself.
     let json = check(&[module("model.pkl", &[("pkl:json", None), ("settings.pkl", None)])]);
     assert_eq!(json.len(), 1, "{json:?}");
     assert!(json[0].contains("entrypoint imports 'pkl:json'"));
@@ -534,12 +559,12 @@ fn the_entrypoint_may_not_bypass_the_evaluation_envelope() {
 fn the_vendored_contract_must_stay_a_leaf() {
     let violations = check(&[module("contract.pkl", &[("context.pkl", None)])]);
     assert_eq!(violations.len(), 1, "{violations:?}");
-    assert!(violations[0].contains("vendored contract imports 'context.pkl'"));
+    assert!(violations[0].contains("shared contract imports 'context.pkl'"));
 
     // The stdlib is not exempt: "must import nothing" includes pkl: modules.
     let stdlib = check(&[module("contract.pkl", &[("pkl:json", None)])]);
     assert_eq!(stdlib.len(), 1, "{stdlib:?}");
-    assert!(stdlib[0].contains("vendored contract imports 'pkl:json'"));
+    assert!(stdlib[0].contains("shared contract imports 'pkl:json'"));
 }
 
 #[test]
@@ -559,11 +584,11 @@ fn the_vendored_sdk_may_import_the_contract_but_not_component_vocabulary() {
     )]);
     assert!(correct.is_empty(), "{correct:?}");
 
-    // context.pkl is component-specific: an SDK module reaching it could no longer be vendored
-    // byte-identically into a bundle that does not define it.
+    // context.pkl is component-specific: an SDK module reaching it would break every bundle that
+    // does not define it.
     let violations = check(&[module("sdk/request.pkl", &[("../context.pkl", None)])]);
     assert_eq!(violations.len(), 1, "{violations:?}");
-    assert!(violations[0].contains("the vendored SDK imports root module 'context.pkl'"));
+    assert!(violations[0].contains("the shared SDK imports root module 'context.pkl'"));
 }
 
 #[test]
@@ -573,7 +598,7 @@ fn the_vendored_sdk_may_not_import_feature_packages() {
         &[("../storage/types.pkl", Some("storageTypes"))],
     )]);
     assert_eq!(violations.len(), 1, "{violations:?}");
-    assert!(violations[0].contains("the vendored SDK imports 'storage/types.pkl'"));
+    assert!(violations[0].contains("the shared SDK imports 'storage/types.pkl'"));
 }
 
 #[test]

@@ -18,13 +18,13 @@ fallbacks remain Engine route-policy inputs: they do not map to this Helm chart.
 
 The certificate collection uses the shared `ArrayField` / `ObjectItem` descriptors, with
 `fields` for object members and `itemFields` for current draft rows, as consumed by q-core
-and the Console. Scalar descriptors retain their existing wire shape. The canonical contract
-and SDK are synchronized into each bundle with `scripts/sync-platform-pkl-sdk.sh`.
+and the Console. Scalar descriptors retain their existing wire shape. The contract and SDK
+come from `platform-catalog/pkl/`; the publisher injects them into the bundle.
 
 The runtime bundle follows the canonical SDK layout: `model.pkl` only decodes the request and
 calls `sdk/evaluate.pkl`; `settings.pkl` assembles the component; `configuration/setting.pkl`
 declares typed settings and `configuration/helm.pkl` maps them to chart values. Cross-setting
 rules, when needed, live in `configuration/dependencies.pkl`. The SDK derives descriptors and
 recursive validation from those declarations, including unknown fields and explicit nulls.
-Run `./scripts/sync-platform-pkl-sdk.sh` after changing the shared contract or SDK, then
-`./scripts/test-platform-config.sh` and the `platform-catalog-tests` architecture tests.
+After changing the shared contract or SDK, run `./scripts/test-platform-config.sh` and the
+`platform-catalog-tests` architecture tests.

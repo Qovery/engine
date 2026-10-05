@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -14,6 +15,33 @@ pub fn repository_root() -> PathBuf {
 
 pub fn repository_path(path: impl AsRef<Path>) -> PathBuf {
     repository_root().join(path)
+}
+
+pub fn copy_bundle(source: &Path, target: &Path) {
+    copy_directory(source, target, &mut Vec::new());
+}
+
+fn copy_directory(source: &Path, target: &Path, ancestors: &mut Vec<PathBuf>) {
+    let directory =
+        fs::canonicalize(source).unwrap_or_else(|error| panic!("failed to resolve {}: {error}", source.display()));
+    if ancestors.contains(&directory) {
+        panic!("{}: symbolic link cycle back to {}", source.display(), directory.display());
+    }
+    ancestors.push(directory);
+    fs::create_dir_all(target).unwrap_or_else(|error| panic!("failed to create {}: {error}", target.display()));
+    let entries = fs::read_dir(source).unwrap_or_else(|error| panic!("failed to read {}: {error}", source.display()));
+    for entry in entries {
+        let entry = entry.unwrap_or_else(|error| panic!("unreadable entry under {}: {error}", source.display()));
+        let path = entry.path();
+        let destination = target.join(entry.file_name());
+        let metadata = fs::metadata(&path).unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        if metadata.is_dir() {
+            copy_directory(&path, &destination, ancestors);
+        } else {
+            fs::copy(&path, &destination).unwrap_or_else(|error| panic!("failed to copy {}: {error}", path.display()));
+        }
+    }
+    ancestors.pop();
 }
 
 pub fn run(command: &mut Command) -> Output {
@@ -155,5 +183,24 @@ pub fn mappings_for_key<'a>(value: &'a Value, expected: &str, result: &mut Vec<&
         }
         Value::Tagged(tagged) => mappings_for_key(&tagged.value, expected, result),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::copy_bundle;
+    use std::fs;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    #[test]
+    #[should_panic(expected = "runtime-values/sdk: symbolic link cycle")]
+    fn copy_bundle_refuses_a_symbolic_link_cycle() {
+        let root = TempDir::new().unwrap();
+        let bundle = root.path().join("runtime-values");
+        fs::create_dir(&bundle).unwrap();
+        fs::write(bundle.join("model.pkl"), "").unwrap();
+        symlink(".", bundle.join("sdk")).unwrap();
+        copy_bundle(&bundle, &root.path().join("copy"));
     }
 }

@@ -2,11 +2,12 @@
 //! then rendered with the actual vendored Helm charts. No AWS or Kubernetes access.
 
 use platform_catalog_tests::{
-    assert_success, document_by_kind_and_name, helm_template, parse_yaml_documents, repository_path, yaml_path,
+    assert_success, copy_bundle, document_by_kind_and_name, helm_template, parse_yaml_documents, repository_path,
+    yaml_path,
 };
 use serde_json::{Value, json};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use tempfile::tempdir;
 
@@ -21,19 +22,6 @@ fn request(example: &str) -> Value {
         .unwrap(),
     )
     .unwrap()
-}
-
-fn copy_bundle(source: &Path, target: &Path) {
-    fs::create_dir_all(target).unwrap();
-    for entry in fs::read_dir(source).unwrap() {
-        let entry = entry.unwrap();
-        let destination = target.join(entry.file_name());
-        if entry.path().is_dir() {
-            copy_bundle(&entry.path(), &destination);
-        } else {
-            fs::copy(entry.path(), destination).unwrap();
-        }
-    }
 }
 
 fn evaluate(request: &Value) -> Value {

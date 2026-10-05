@@ -26,8 +26,8 @@ platform-catalog/
         runtime-values/        # source 3 — values requiring resolved runtime inputs
           managed-values.yaml  # direct whole-value mapping, or
           model.pkl            # optional Pkl evaluator entrypoint
-          contract.pkl         # vendored canonical contract (machine-synced)
-          sdk/                 # vendored authoring SDK (machine-synced)
+          contract.pkl         # link to the canonical contract, copied in at publication
+          sdk/                 # link to the authoring SDK, copied in at publication
           ...                  # focused evaluator/domain modules
         README.md              # component-specific reviewer and operations guide
   pkl/
@@ -108,11 +108,12 @@ and the rich legacy picker are outside this first version.
 
 Each component artifact remains independently pullable and digest-pinned, so it cannot import a
 contract from another artifact. `platform-catalog/pkl/` is therefore the single source of truth
-for the shared Pkl authoring SDK: `pkl/contract.pkl` is vendored as `runtime-values/contract.pkl`
-and `pkl/sdk/` as `runtime-values/sdk/` in every executable component bundle (see
-[pkl/README.md](pkl/README.md)). `./scripts/sync-platform-pkl-sdk.sh` refreshes the repository
-copies, `test-platform-config.sh` checks parity, and the publisher fails on out-of-sync copies and
-injects the canonical files into its staging directory before creating the OCI layer.
+for the shared Pkl authoring SDK: every executable component bundle links
+`runtime-values/contract.pkl` to `pkl/contract.pkl` and `runtime-values/sdk/` to `pkl/sdk/` (see
+[pkl/README.md](pkl/README.md)). `./scripts/sync-platform-pkl-sdk.sh` creates the links,
+`test-platform-config.sh` checks them, and the publisher fails on out-of-sync links, replaces them
+with copies of the canonical files in its staging directory, and never pushes a symbolic link into
+the OCI layer.
 
 The Kotlin Loki deriver remains a test oracle during Slice 4; it is not a
 production fallback. Once the bundle is pinned, an unavailable or invalid Pkl
