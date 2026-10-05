@@ -93,6 +93,7 @@ run = '''
 [tasks.test]
 description = "Run integration tests for a given feature"
 usage = 'arg "<feature>" help="Feature flag to test (e.g. test-aws-minimal)"'
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = '''
   set -e
@@ -113,6 +114,7 @@ run = '''
 [tasks.single-test]
 description = "Run a single test by exact name"
 usage = 'arg "<name>" help="Exact test name"'
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = '''
   set -e
@@ -139,6 +141,7 @@ run = '''
 
 [tasks.test-local-stack]
 description = "Run tests on a local k3d cluster"
+depends = ["test:prepare-post-renderer"]
 run = '''
   set -e
   if [ -z "$DOCKER_HOST" ]; then unset DOCKER_HOST; fi
@@ -187,123 +190,156 @@ run = '''
 description = "Print cargo version"
 run = "cargo --version"
 
+[tasks."test:prepare-post-renderer"]
+description = "Build the Helm post-renderer required by integration tests"
+run = '''
+  set -e
+  cargo build --manifest-path app/Cargo.toml --bin engine_post_renderer
+  mkdir -p target/debug/deps
+  ln -sfn ../engine_post_renderer target/debug/deps/engine_post_renderer
+'''
+
 # Cloud provider test aliases
 [tasks."test:aws-minimal"]
 description = "Run AWS minimal tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:aws-self-hosted"]
 description = "Run AWS self-hosted tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:aws-managed-services"]
 description = "Run AWS managed services tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:aws-whole-enchilada"]
 description = "Run AWS whole enchilada tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:aws-infra"]
 description = "Run AWS infra tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:azure-minimal"]
 description = "Run Azure minimal tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:azure-self-hosted"]
 description = "Run Azure self-hosted tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:azure-managed-services"]
 description = "Run Azure managed services tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:azure-whole-enchilada"]
 description = "Run Azure whole enchilada tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:azure-infra"]
 description = "Run Azure infra tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:scw-minimal"]
 description = "Run Scaleway minimal tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:scw-self-hosted"]
 description = "Run Scaleway self-hosted tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:scw-managed-services"]
 description = "Run Scaleway managed services tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:scw-whole-enchilada"]
 description = "Run Scaleway whole enchilada tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:scw-infra"]
 description = "Run Scaleway infra tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:gcp-minimal"]
 description = "Run GCP minimal tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:gcp-self-hosted"]
 description = "Run GCP self-hosted tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:gcp-managed-services"]
 description = "Run GCP managed services tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:gcp-whole-enchilada"]
 description = "Run GCP whole enchilada tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:gcp-infra"]
 description = "Run GCP infra tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:all"]
 description = "Run all tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-all --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:all-self-hosted"]
 description = "Run all self-hosted tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-all-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:all-managed-services"]
 description = "Run all managed services tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-all-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
 
 [tasks."test:quarantine"]
 description = "Run quarantine tests"
+depends = ["test:prepare-post-renderer"]
 dir = "lib-engine"
 run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-quarantine --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'

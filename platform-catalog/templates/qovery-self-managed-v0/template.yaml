@@ -295,7 +295,7 @@ platformTemplateRelease:
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: gateway-crds-helm
-            version: v1.8.3
+            version: v1.9.1
           configRef:
             chart: envoy-gateway-crd
             version: v1
@@ -308,7 +308,7 @@ platformTemplateRelease:
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: gateway-helm
-            version: v1.8.3
+            version: v1.9.1
           dependsOn:
             - component: envoy-gateway-crd
               kind: requires

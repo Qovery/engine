@@ -213,6 +213,7 @@ fn base() -> Json {
         "k8s_deploy_api_gateway": true,
         "k8s_use_api_gateway": false,
         "k8s_deploy_listenerset": true,
+        "k8s_deploy_client_traffic_policy_listenerset": true,
         "k8s_remove_nginx": false,
         "nginx_ingress_controller_configuration_snippet": "",
         "nginx_ingress_controller_server_snippet": "",
@@ -592,6 +593,11 @@ fn escaping_preserves_q_ingress_tls_manifests() {
     let both: Vec<(&str, Json)> = nginx.iter().chain(gateway.iter()).cloned().collect();
     let compression_enabled = [("cluster_envoy_enable_compression", json!(true))];
     let both_with_compression: Vec<(&str, Json)> = both.iter().chain(compression_enabled.iter()).cloned().collect();
+    let mut shared_certificate_policy = both.clone();
+    shared_certificate_policy.push((
+        "certificate_alternative_names",
+        json!([{ "domain": "app.example.com" }, { "domain": "alias.example.com" }]),
+    ));
 
     assert_family_equivalent(
         "q-ingress-tls",
@@ -615,6 +621,7 @@ fn escaping_preserves_q_ingress_tls_manifests() {
             ("gateway-http-route-envoy-security-policy", ctx(&both)),
             ("gateway-grpc-route-envoy-security-policy", ctx(&both)),
             ("gateway-http-route-envoy-error-pages-configmap", ctx(&both)),
+            ("gateway-client-traffic-policy", ctx(&shared_certificate_policy)),
             ("listenerset", ctx(&both)),
         ],
     );

@@ -503,7 +503,7 @@ pub fn kapsule_helm_charts(
         .unwrap_or(false)
     {
         envoy_gateway_crd = Some(
-            EnvoyGatewayCrdChart::new(chart_prefix_path, HelmChartDirectoryLocation::CommonFolder, true, true)
+            EnvoyGatewayCrdChart::new(chart_prefix_path, HelmChartDirectoryLocation::CommonFolder)
                 .to_common_helm_chart()?,
         );
         qovery_gateway_class_chart = Some(

@@ -1,0 +1,42 @@
+{%- if k8s_deploy_api_gateway == true %}
+{%- if k8s_deploy_listenerset == true %}
+{%- if k8s_deploy_client_traffic_policy_listenerset == true %}
+{%- if http_hosts_per_namespace_gateway|length > 0 %}
+{%- if certificate_alternative_names|length > 1 %}
+{%- for namespace_key, http_hosts in http_hosts_per_namespace_gateway %}
+{%- if http_hosts|length >= 1 %}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: {{ sanitized_name }}-h2-alpn
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: {{ value }}
+    {%- endfor %}
+spec:
+  # Envoy Gateway otherwise downgrades an overlapping TLS ListenerSet certificate to HTTP/1.1.
+  # The ListenerSet contains only this router's hostnames, so the override cannot affect other routers.
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ sanitized_name }}-listeners
+  tls:
+    alpnProtocols:
+      - h2
+      - http/1.1
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{%- endif %}

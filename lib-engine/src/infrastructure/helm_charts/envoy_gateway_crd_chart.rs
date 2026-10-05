@@ -13,6 +13,13 @@ use crate::{
     },
 };
 
+const CORE_GATEWAY_API_CRDS: [&str; 3] = [
+    "gatewayclasses.gateway.networking.k8s.io",
+    "gateways.gateway.networking.k8s.io",
+    "httproutes.gateway.networking.k8s.io",
+];
+const LISTENER_SET_CRD: &str = "listenersets.gateway.networking.k8s.io";
+
 #[derive(Clone)]
 pub struct EnvoyGatewayCrdChart {
     chart_path: HelmChartPath,
@@ -22,12 +29,7 @@ pub struct EnvoyGatewayCrdChart {
 }
 
 impl EnvoyGatewayCrdChart {
-    pub fn new(
-        chart_prefix_path: Option<&str>,
-        chart_values_location: HelmChartDirectoryLocation,
-        include_gateway_api_crds: bool,
-        include_envoy_proxy_crds: bool,
-    ) -> Self {
+    pub fn new(chart_prefix_path: Option<&str>, chart_values_location: HelmChartDirectoryLocation) -> Self {
         Self {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -39,8 +41,10 @@ impl EnvoyGatewayCrdChart {
                 chart_values_location,
                 EnvoyGatewayCrdChart::chart_name(),
             ),
-            include_envoy_proxy_crds,
-            include_gateway_api_crds,
+            include_envoy_proxy_crds: true,
+            // GKE's bundle omits ListenerSet, so Engine reconciles its bundled Gateway API CRDs
+            // on every provider to keep the resource version consistent.
+            include_gateway_api_crds: true,
         }
     }
 
@@ -76,7 +80,9 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
 
         Ok(CommonChart {
             chart_info,
-            chart_installation_checker: Some(Box::new(EnvoyGatewayCrdChartChecker::new())),
+            chart_installation_checker: Some(Box::new(EnvoyGatewayCrdChartChecker::with_listener_set_requirement(
+                self.include_gateway_api_crds,
+            ))),
             vertical_pod_autoscaler: None,
             pre_execute_action: Some(Box::new(RemoveGatewayApiValidatingAdmissionPolicyAction)),
         })
@@ -84,11 +90,25 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
 }
 
 #[derive(Clone)]
-pub struct EnvoyGatewayCrdChartChecker {}
+pub struct EnvoyGatewayCrdChartChecker {
+    requires_listener_set_crd: bool,
+}
 
 impl EnvoyGatewayCrdChartChecker {
     pub fn new() -> Self {
-        Self {}
+        Self::with_listener_set_requirement(true)
+    }
+
+    fn with_listener_set_requirement(requires_listener_set_crd: bool) -> Self {
+        Self {
+            requires_listener_set_crd,
+        }
+    }
+
+    fn required_gateway_api_crds(&self) -> impl Iterator<Item = &'static str> {
+        CORE_GATEWAY_API_CRDS
+            .into_iter()
+            .chain(self.requires_listener_set_crd.then_some(LISTENER_SET_CRD))
     }
 }
 
@@ -102,21 +122,15 @@ impl ChartInstallationChecker for EnvoyGatewayCrdChartChecker {
     fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
         let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
 
-        let required_crds = [
-            "gatewayclasses.gateway.networking.k8s.io",
-            "gateways.gateway.networking.k8s.io",
-            "httproutes.gateway.networking.k8s.io",
-            "listenersets.gateway.networking.k8s.io",
-        ];
-
         let envoy_crds = [
             "envoyproxies.gateway.envoyproxy.io",
             "backendtrafficpolicies.gateway.envoyproxy.io",
+            "clienttrafficpolicies.gateway.envoyproxy.io",
             "securitypolicies.gateway.envoyproxy.io",
         ];
 
         let result = retry::retry(Fixed::from_millis(10_000).take(6), || {
-            for crd_name in &required_crds {
+            for crd_name in self.required_gateway_api_crds() {
                 match block_on(crds.get(crd_name)) {
                     Ok(crd) => {
                         let is_established = crd
@@ -201,7 +215,9 @@ impl ChartPreExecuteAction for RemoveGatewayApiValidatingAdmissionPolicyAction {
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::helm_charts::envoy_gateway_crd_chart::EnvoyGatewayCrdChart;
+    use crate::infrastructure::helm_charts::envoy_gateway_crd_chart::{
+        EnvoyGatewayCrdChart, EnvoyGatewayCrdChartChecker,
+    };
     use crate::infrastructure::helm_charts::{
         HelmChartDirectoryLocation, HelmChartType, ToCommonHelmChart,
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -212,7 +228,7 @@ mod tests {
     #[test]
     fn envoy_gateway_crd_chart_directory_exists_test() {
         // setup:
-        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder, true, true);
+        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -235,7 +251,7 @@ mod tests {
     #[test]
     fn envoy_gateway_crd_chart_values_file_exists_test() {
         // setup:
-        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder, true, true);
+        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -262,7 +278,7 @@ mod tests {
     #[test]
     fn envoy_gateway_crd_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder, true, true);
+        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder);
         let mut common_chart = chart.to_common_helm_chart().unwrap();
 
         // Filter out extraArgs.* values since extraArgs is an empty object {} in the YAML
@@ -290,6 +306,49 @@ mod tests {
             missing_fields.is_none(),
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
+        );
+    }
+
+    #[test]
+    fn reconciles_the_standard_gateway_api_crd_bundle_to_install_listenerset() {
+        let gke_chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder)
+            .to_common_helm_chart()
+            .expect("GKE Envoy Gateway CRD chart should render");
+        assert!(
+            gke_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|value| value.key == "crds.gatewayAPI.enabled" && value.value == "true")
+        );
+        assert!(
+            gke_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|value| value.key == "crds.envoyGateway.enabled" && value.value == "true")
+        );
+
+        assert_eq!(
+            EnvoyGatewayCrdChartChecker::new()
+                .required_gateway_api_crds()
+                .collect::<Vec<_>>(),
+            [
+                "gatewayclasses.gateway.networking.k8s.io",
+                "gateways.gateway.networking.k8s.io",
+                "httproutes.gateway.networking.k8s.io",
+                "listenersets.gateway.networking.k8s.io",
+            ]
+        );
+        assert_eq!(
+            EnvoyGatewayCrdChartChecker::with_listener_set_requirement(false)
+                .required_gateway_api_crds()
+                .collect::<Vec<_>>(),
+            [
+                "gatewayclasses.gateway.networking.k8s.io",
+                "gateways.gateway.networking.k8s.io",
+                "httproutes.gateway.networking.k8s.io",
+            ]
         );
     }
 }

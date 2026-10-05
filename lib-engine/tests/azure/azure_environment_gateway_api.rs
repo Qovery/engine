@@ -1,6 +1,7 @@
 use crate::helpers;
 use crate::helpers::azure::azure_infra_config;
 use crate::helpers::common::{Infrastructure, PUB_MIRROR_DEBIAN_TAG};
+use crate::helpers::gateway_api::assert_multi_san_client_traffic_policies;
 use ::function_name::named;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::api::ListParams;
@@ -7046,7 +7047,7 @@ fn deploy_application_with_force_ssl_redirect_on_azure_aks_http() {
                             let status_code = redirect_config.get("statusCode").and_then(|s| s.as_i64()).unwrap_or(0);
 
                             assert_eq!(scheme, "https", "Should redirect to HTTPS");
-                            assert_eq!(status_code, 301, "Should use 301 status code");
+                            assert_eq!(status_code, 308, "Should use 308 status code");
                         } else {
                             panic!("RequestRedirect filter should have requestRedirect config");
                         }
@@ -7381,7 +7382,7 @@ fn deploy_container_with_force_ssl_redirect_on_azure_aks_http() {
                             let status_code = redirect_config.get("statusCode").and_then(|s| s.as_i64()).unwrap_or(0);
 
                             assert_eq!(scheme, "https", "Should redirect to HTTPS");
-                            assert_eq!(status_code, 301, "Should use 301 status code");
+                            assert_eq!(status_code, 308, "Should use 308 status code");
                         } else {
                             panic!("RequestRedirect filter should have requestRedirect config");
                         }
@@ -12149,6 +12150,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_azure_aks(
                 custom_domain.domain
             );
         }
+
+        assert_multi_san_client_traffic_policies(kube_client.clone(), namespace, router_id, &router_name);
 
         // clean up:
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
