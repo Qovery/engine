@@ -540,7 +540,7 @@ azure-infra:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  rules: !reference [.rules-azure, rules]
+  rules: !reference [.rules-manual-fallback, rules]
 
 azure-infra-upgrade:
   stage: tests-azure
