@@ -1,3 +1,4 @@
+use crate::cmd::buildkit_progress::{BuildkitExportProgress, BuildkitExportTimings};
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::io_models::models::CpuArchitecture;
 use crate::utilities::{is_valid_k8s_label_value, is_valid_k8s_qualified_name};
@@ -1108,6 +1109,7 @@ impl Docker {
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
         target_build_stage: Option<&String>,
+        export_timings: &mut BuildkitExportTimings,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -1141,6 +1143,7 @@ impl Docker {
             stderr_output,
             should_abort,
             target_build_stage,
+            export_timings,
         )
     }
 
@@ -1160,6 +1163,7 @@ impl Docker {
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
         target_build_stage: Option<&String>,
+        export_timings: &mut BuildkitExportTimings,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -1229,62 +1233,15 @@ impl Docker {
         }
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        // Hack
-        // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
-        // https://github.com/docker/buildx/issues/2668
-        // The root cause seems to be a race condition: Kubernetes marks the node "Ready" before its CSR is signed,
-        // so buildx's connection attempt fails with a TLS error instead of retrying gracefully
-        let mut nb_retry = 3;
-        let started_at = std::time::Instant::now();
-
-        loop {
-            let mut transient_error = false;
-            let mut oom_killed = false;
-            let ret = {
-                let mut stderr_output = |line: String| {
-                    if line.contains("OOMKilled") {
-                        oom_killed = true;
-                    }
-                    if line.contains("listing workers for Build")
-                        || line.contains("use of closed network connection")
-                        || line.contains("i/o timeout")
-                    {
-                        transient_error = true;
-                    }
-                    stderr_output(line);
-                };
-                docker_exec(
-                    &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-                    &self.get_all_envs(&[]),
-                    stdout_output,
-                    &mut stderr_output,
-                    should_abort,
-                )
-            };
-
-            if ret.is_err() && oom_killed {
-                return Err(DockerError::BuilderPodTerminated {
-                    raw_error_message: "Builder pod was OOMKilled during the build. The pod exceeded its memory limit."
-                        .to_string(),
-                });
-            }
-
-            if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
-                if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
-                    info!(
-                        "Docker buildkit build failed with a transient error, but we already retried for too long, aborting ..."
-                    );
-                    break ret;
-                }
-
-                nb_retry = max(nb_retry - 1, 0);
-                info!("Docker buildkit build failed with a transient error, retrying ...");
-                thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-
-            break ret;
-        }
+        run_buildkit_attempts(stderr_output, should_abort, export_timings, |mut stderr_output| {
+            docker_exec(
+                &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+                &self.get_all_envs(&[]),
+                stdout_output,
+                &mut stderr_output,
+                should_abort,
+            )
+        })
     }
 
     pub fn push<Stdout, Stderr>(
@@ -1455,6 +1412,71 @@ fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
         .as_bytes()
         .windows(needle.len())
         .any(|candidate| candidate.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
+/// Runs the buildkit build, retrying transient failures. `export_timings` holds the timings of the
+/// last attempt only.
+fn run_buildkit_attempts<Stderr, Attempt>(
+    stderr_output: &mut Stderr,
+    should_abort: &CommandKiller,
+    export_timings: &mut BuildkitExportTimings,
+    mut run_attempt: Attempt,
+) -> Result<(), DockerError>
+where
+    Stderr: FnMut(String),
+    Attempt: FnMut(&mut dyn FnMut(String)) -> Result<(), DockerError>,
+{
+    // buildx retries the TLS dial itself since v0.31 (docker/buildx#2668, #3493). 2026-09-07..2026-10-05: the error
+    // showed in 346 builds (~290 deployments); ~94% succeeded in one buildx run and none ran twice, so this retry
+    // was not seen firing. Check engine logs for "transient error" before removing it.
+    let mut nb_retry = 3;
+    let started_at = std::time::Instant::now();
+
+    loop {
+        let mut transient_error = false;
+        let mut oom_killed = false;
+        let mut export_progress = BuildkitExportProgress::default();
+        let ret = {
+            let mut stderr_output = |line: String| {
+                if line.contains("OOMKilled") {
+                    oom_killed = true;
+                }
+                if line.contains("listing workers for Build")
+                    || line.contains("use of closed network connection")
+                    || line.contains("i/o timeout")
+                {
+                    transient_error = true;
+                }
+                export_progress.observe(&line, std::time::Instant::now());
+                stderr_output(line);
+            };
+            run_attempt(&mut stderr_output)
+        };
+        *export_timings = export_progress.timings();
+
+        if ret.is_err() && oom_killed {
+            return Err(DockerError::BuilderPodTerminated {
+                raw_error_message: "Builder pod was OOMKilled during the build. The pod exceeded its memory limit."
+                    .to_string(),
+            });
+        }
+
+        if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
+            if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
+                info!(
+                    "Docker buildkit build failed with a transient error, but we already retried for too long, aborting ..."
+                );
+                break ret;
+            }
+
+            nb_retry = max(nb_retry - 1, 0);
+            info!("Docker buildkit build failed with a transient error, retrying ...");
+            thread::sleep(Duration::from_secs(1));
+            continue;
+        }
+
+        break ret;
+    }
 }
 
 fn docker_exec<F, X>(
@@ -1797,6 +1819,7 @@ mod builder_placement_tests {
 #[cfg(feature = "test-local-docker")]
 #[cfg(test)]
 mod tests {
+    use crate::cmd::buildkit_progress::BuildkitExportTimings;
     use crate::cmd::command::CommandKiller;
     use crate::cmd::docker::{Architecture, CacheCompression, ContainerImage, Docker, DockerError};
     use std::fs;
@@ -1889,6 +1912,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
@@ -1908,6 +1932,7 @@ mod tests {
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
@@ -1968,6 +1993,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
@@ -1989,6 +2015,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_err());
@@ -2026,6 +2053,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
+            &mut BuildkitExportTimings::default(),
         );
         assert!(ret.is_ok());
 
@@ -2168,6 +2196,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
@@ -2205,6 +2234,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             Some(&"build".to_string()),
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
@@ -2224,6 +2254,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             Some(&"build".to_string()),
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
@@ -2256,9 +2287,69 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
             Some(&"build".to_string()),
+            &mut BuildkitExportTimings::default(),
         );
 
         assert!(ret.is_ok());
+    }
+}
+
+#[cfg(test)]
+mod buildkit_attempts_tests {
+    use super::*;
+
+    fn exit_failure() -> DockerError {
+        DockerError::InvalidConfig {
+            raw_error_message: "exit status 1".to_string(),
+        }
+    }
+
+    #[test]
+    fn export_timings_come_from_the_last_attempt_after_a_transient_retry() {
+        let attempt_outputs = [
+            vec![
+                "#9 exporting to image",
+                "#9 DONE 2.0s",
+                "ERROR: failed to solve: read tcp 10.0.0.1:443: i/o timeout",
+            ],
+            vec!["#10 exporting cache to registry", "#10 DONE 1.0s"],
+        ];
+        let mut attempts = 0;
+        let mut forwarded_lines = vec![];
+        let mut export_timings = BuildkitExportTimings::default();
+
+        let ret = run_buildkit_attempts(
+            &mut |line| forwarded_lines.push(line),
+            &CommandKiller::never(),
+            &mut export_timings,
+            |stderr_output| {
+                attempt_outputs[attempts]
+                    .iter()
+                    .for_each(|line| stderr_output(line.to_string()));
+                attempts += 1;
+                if attempts == 1 { Err(exit_failure()) } else { Ok(()) }
+            },
+        );
+
+        assert!(ret.is_ok());
+        assert_eq!(attempts, 2);
+        assert_eq!(forwarded_lines, attempt_outputs.concat());
+        assert_eq!(export_timings.image_push, None);
+        assert!(export_timings.cache_export.is_some_and(|timing| !timing.failed));
+    }
+
+    #[test]
+    fn export_timings_are_kept_when_the_build_fails_without_retry() {
+        let mut export_timings = BuildkitExportTimings::default();
+
+        let ret = run_buildkit_attempts(&mut |_| {}, &CommandKiller::never(), &mut export_timings, |stderr_output| {
+            stderr_output("#9 exporting to image".to_string());
+            stderr_output("#9 ERROR: failed to push: unexpected status: 500".to_string());
+            Err(exit_failure())
+        });
+
+        assert!(ret.is_err());
+        assert!(export_timings.image_push.is_some_and(|timing| timing.failed));
     }
 }
 

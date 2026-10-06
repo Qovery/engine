@@ -14,6 +14,8 @@ pub enum StepName {
     GitClone,
     BuildQueueing,
     Build,
+    ImagePush,
+    CacheExport,
     MirrorImage,
     DeploymentQueueing,
     Deployment,
@@ -29,6 +31,8 @@ impl Display for StepName {
             StepName::BuildQueueing => "BuildQueueing".to_string(),
             StepName::GitClone => "GitClone".to_string(),
             StepName::Build => "Build".to_string(),
+            StepName::ImagePush => "ImagePush".to_string(),
+            StepName::CacheExport => "CacheExport".to_string(),
             StepName::MirrorImage => "MirrorImage".to_string(),
             StepName::DeploymentQueueing => "DeploymentQueueing".to_string(),
             StepName::Deployment => "Deployment".to_string(),
@@ -87,6 +91,16 @@ pub trait MetricsRegistry: Send + Sync {
     fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle<'_>;
     fn stop_record(&self, id: Uuid, deployment_step: StepName, status: StepStatus);
     fn set_built_image(&self, id: Uuid, deployment_step: StepName, built_image: BuiltImage);
+    /// Records a step whose timing was measured elsewhere, e.g. parsed from a command output.
+    fn record_completed(
+        &self,
+        id: Uuid,
+        label: StepLabel,
+        step_name: StepName,
+        started_at: SystemTime,
+        duration: Duration,
+        status: StepStatus,
+    );
     fn record_is_stopped(&self, id: Uuid, deployment_step: StepName) -> bool;
     fn get_records(&self, service_id: Uuid) -> Vec<StepRecord>;
     fn clear(&self);
@@ -231,6 +245,34 @@ impl MetricsRegistry for StdMetricsRegistry {
         }
     }
 
+    fn record_completed(
+        &self,
+        id: Uuid,
+        label: StepLabel,
+        step_name: StepName,
+        started_at: SystemTime,
+        duration: Duration,
+        status: StepStatus,
+    ) {
+        debug!("record completed deployment step {:#?} for item {}", step_name, id);
+
+        let mut registry = self.registry.map.lock().expect("Failed to acquire lock");
+        let metrics_per_id = registry.entry(id).or_default();
+
+        if metrics_per_id.contains_key(&step_name) {
+            error!("key {:#?} already exist", step_name);
+        }
+
+        let mut step_record = StepRecord::new(step_name.clone(), label, id);
+        step_record.started_at = started_at;
+        step_record.duration = Some(duration);
+        step_record.status = Some(status);
+        metrics_per_id.insert(step_name, step_record.clone());
+
+        self.message_publisher
+            .send(EngineMsg::new(EngineMsgPayload::Metrics(step_record)));
+    }
+
     fn record_is_stopped(&self, id: Uuid, step_name: StepName) -> bool {
         let mut locked_registry = self.registry.map.lock().unwrap();
         let metrics_per_id = locked_registry.entry(id).or_default();
@@ -286,7 +328,7 @@ mod tests {
     use crate::events::EngineMsgPayload;
     use crate::metrics_registry::{BuiltImage, MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
     use crate::msg_publisher::StdMsgPublisher;
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
     use tokio::sync::mpsc::unbounded_channel;
     use uuid::Uuid;
 
@@ -400,5 +442,30 @@ mod tests {
         record.set_built_image(built_image());
 
         assert_eq!(metrics_registry.get_records(service_id)[0].built_image, None);
+    }
+
+    #[test]
+    fn test_record_completed_publishes_the_measured_step_once() {
+        let service_id = Uuid::new_v4();
+        let (publisher, mut messages) = unbounded_channel();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(publisher));
+        let started_at = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000);
+
+        metrics_registry.record_completed(
+            service_id,
+            StepLabel::Service,
+            StepName::ImagePush,
+            started_at,
+            Duration::from_secs(42),
+            StepStatus::Error,
+        );
+
+        let EngineMsgPayload::Metrics(published_record) = messages.try_recv().unwrap().payload;
+        assert!(messages.try_recv().is_err());
+        assert_eq!(published_record.step_name.to_string(), "ImagePush");
+        assert_eq!(published_record.started_at, started_at);
+        assert_eq!(published_record.duration, Some(Duration::from_secs(42)));
+        assert_eq!(published_record.status, Some(StepStatus::Error));
+        assert_eq!(metrics_registry.get_records(service_id), vec![published_record]);
     }
 }

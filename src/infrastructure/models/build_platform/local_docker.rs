@@ -7,7 +7,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use std::{fs, thread};
 
 use git2::{Cred, CredentialType, ErrorClass};
@@ -17,6 +17,7 @@ use tempfile::TempDir;
 use time::Instant;
 use uuid::Uuid;
 
+use crate::cmd::buildkit_progress::BuildkitExportTimings;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
 use crate::cmd::docker::{Architecture, BuilderHandle, CacheCompression, ContainerImage};
@@ -150,6 +151,7 @@ impl LocalDocker {
             into_dir_docker_style,
             logger,
             abort,
+            metrics_registry.as_ref(),
             &build_record,
         );
         close_build_record(&build_record, &build_result);
@@ -164,6 +166,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         logger: &EnvLogger,
         abort: &dyn Abort,
+        metrics_registry: &dyn MetricsRegistry,
         build_record: &StepRecordHandle,
     ) -> Result<(), BuildError> {
         // Going to inject only env var that are used by the dockerfile
@@ -330,6 +333,7 @@ impl LocalDocker {
         };
         let secrets = secret_files.as_build_flags();
 
+        let mut export_timings = BuildkitExportTimings::default();
         let exit_status = self.context.docker.build(
             &builder_handle.builder_name.as_deref(),
             Path::new(dockerfile_complete_path),
@@ -347,7 +351,9 @@ impl LocalDocker {
             build
                 .git_repository()
                 .and_then(|repository| repository.docker_target_build_stage.as_ref()),
+            &mut export_timings,
         );
+        record_export_timings(metrics_registry, build.image.service_long_id, &export_timings);
 
         if let Err(err) = exit_status {
             return Err(to_build_error(build.image.service_id.clone(), err));
@@ -508,6 +514,35 @@ fn close_build_record(build_record: &StepRecordHandle, build_result: &Result<(),
         Err(BuildError::Aborted { .. }) => StepStatus::Cancel,
         Err(_) => StepStatus::Error,
     });
+}
+
+/// The push and the cache export run inside the build command, so their timings are parsed from its
+/// output and recorded once it returns.
+fn record_export_timings(
+    metrics_registry: &dyn MetricsRegistry,
+    service_long_id: Uuid,
+    export_timings: &BuildkitExportTimings,
+) {
+    for (step_name, timing) in [
+        (StepName::ImagePush, export_timings.image_push),
+        (StepName::CacheExport, export_timings.cache_export),
+    ] {
+        let Some(timing) = timing else {
+            continue;
+        };
+        metrics_registry.record_completed(
+            service_long_id,
+            StepLabel::Service,
+            step_name,
+            SystemTime::now() - timing.started_at.elapsed(),
+            timing.duration,
+            if timing.failed {
+                StepStatus::Error
+            } else {
+                StepStatus::Success
+            },
+        );
+    }
 }
 
 /// Name and value of one variable handed to a build, borrowed from `Build::environment_variables`.
@@ -1008,6 +1043,7 @@ impl BuildPlatform for LocalDocker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cmd::buildkit_progress::ExportPhaseTiming;
     use crate::infrastructure::models::build_platform::Image;
     use crate::metrics_registry::StdMetricsRegistry;
     use std::cell::{Cell, RefCell};
@@ -1524,5 +1560,65 @@ RUN chmod +x entrypoint.sh"#;
         close_build_record(&build_record, &Ok(()));
 
         assert_eq!(build_record_status(&metrics_registry, service_long_id), Some(StepStatus::Skip));
+    }
+
+    #[test]
+    fn export_timings_are_recorded_once_per_measured_phase() {
+        let metrics_registry = StdMetricsRegistry::default();
+        let service_long_id = Uuid::new_v4();
+        let push = ExportPhaseTiming {
+            started_at: std::time::Instant::now(),
+            duration: Duration::from_secs(12),
+            failed: true,
+        };
+
+        record_export_timings(
+            &metrics_registry,
+            service_long_id,
+            &BuildkitExportTimings {
+                image_push: Some(push),
+                cache_export: None,
+            },
+        );
+
+        let records = metrics_registry.get_records(service_long_id);
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].step_name, StepName::ImagePush);
+        assert_eq!(records[0].duration, Some(Duration::from_secs(12)));
+        assert_eq!(records[0].status, Some(StepStatus::Error));
+    }
+
+    #[test]
+    fn export_timings_record_both_phases_as_success() {
+        let metrics_registry = StdMetricsRegistry::default();
+        let service_long_id = Uuid::new_v4();
+        let timing = |secs| ExportPhaseTiming {
+            started_at: std::time::Instant::now(),
+            duration: Duration::from_secs(secs),
+            failed: false,
+        };
+
+        record_export_timings(
+            &metrics_registry,
+            service_long_id,
+            &BuildkitExportTimings {
+                image_push: Some(timing(7)),
+                cache_export: Some(timing(3)),
+            },
+        );
+
+        let mut records: Vec<_> = metrics_registry
+            .get_records(service_long_id)
+            .into_iter()
+            .map(|record| (record.step_name, record.duration, record.status))
+            .collect();
+        records.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            records,
+            vec![
+                (StepName::ImagePush, Some(Duration::from_secs(7)), Some(StepStatus::Success)),
+                (StepName::CacheExport, Some(Duration::from_secs(3)), Some(StepStatus::Success)),
+            ]
+        );
     }
 }

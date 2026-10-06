@@ -1,3 +1,4 @@
+pub mod buildkit_progress;
 pub mod command;
 pub mod docker;
 pub mod git;
