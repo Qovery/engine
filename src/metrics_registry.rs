@@ -54,6 +54,15 @@ pub enum StepStatus {
     NotSet,
 }
 
+/// Image a Build step produced or reused, reported with the step so builds can be counted per tag.
+/// Variable names only: values never leave the engine.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BuiltImage {
+    pub name: String,
+    pub tag: String,
+    pub tag_variable_names: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepRecord {
     pub step_id: Uuid,
@@ -64,6 +73,7 @@ pub struct StepRecord {
     start_time: Instant,
     pub duration: Option<Duration>,
     pub status: Option<StepStatus>,
+    pub built_image: Option<BuiltImage>,
 }
 
 #[derive(Clone)]
@@ -76,6 +86,7 @@ pub struct StepRecordHandle<'a> {
 pub trait MetricsRegistry: Send + Sync {
     fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle<'_>;
     fn stop_record(&self, id: Uuid, deployment_step: StepName, status: StepStatus);
+    fn set_built_image(&self, id: Uuid, deployment_step: StepName, built_image: BuiltImage);
     fn record_is_stopped(&self, id: Uuid, deployment_step: StepName) -> bool;
     fn get_records(&self, service_id: Uuid) -> Vec<StepRecord>;
     fn clear(&self);
@@ -99,6 +110,7 @@ impl StepRecord {
             start_time: Instant::now(),
             duration: None,
             status: None,
+            built_image: None,
         }
     }
 }
@@ -118,6 +130,12 @@ impl<'a> StepRecordHandle<'a> {
 
     pub fn stop(&self, status: StepStatus) {
         self.metrics_registry.stop_record(self.id, self.name.clone(), status);
+    }
+
+    /// Attach before `stop`: the stop message is the one that carries it.
+    pub fn set_built_image(&self, built_image: BuiltImage) {
+        self.metrics_registry
+            .set_built_image(self.id, self.name.clone(), built_image);
     }
 }
 
@@ -204,6 +222,15 @@ impl MetricsRegistry for StdMetricsRegistry {
         }
     }
 
+    fn set_built_image(&self, id: Uuid, step_name: StepName, built_image: BuiltImage) {
+        let mut registry = self.registry.map.lock().expect("Failed to acquire lock");
+        if let Some(deployment_step_record) = registry.entry(id).or_default().get_mut(&step_name)
+            && deployment_step_record.duration.is_none()
+        {
+            deployment_step_record.built_image = Some(built_image);
+        }
+    }
+
     fn record_is_stopped(&self, id: Uuid, step_name: StepName) -> bool {
         let mut locked_registry = self.registry.map.lock().unwrap();
         let metrics_per_id = locked_registry.entry(id).or_default();
@@ -257,7 +284,7 @@ impl Drop for MetricsRegistryMap {
 #[cfg(test)]
 mod tests {
     use crate::events::EngineMsgPayload;
-    use crate::metrics_registry::{MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
+    use crate::metrics_registry::{BuiltImage, MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
     use crate::msg_publisher::StdMsgPublisher;
     use std::time::Duration;
     use tokio::sync::mpsc::unbounded_channel;
@@ -338,5 +365,40 @@ mod tests {
         assert_eq!(completed_record.started_at, started_record.started_at);
         assert!(completed_record.duration.is_some());
         assert!(messages.try_recv().is_err());
+    }
+
+    fn built_image() -> BuiltImage {
+        BuiltImage {
+            name: "repo-image".to_string(),
+            tag: "abc123".to_string(),
+            tag_variable_names: vec!["NODE_ENV".to_string()],
+        }
+    }
+
+    #[test]
+    fn built_image_is_published_with_the_stop_message_only() {
+        let (publisher, mut messages) = unbounded_channel();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(publisher));
+
+        let record = metrics_registry.start_record(Uuid::new_v4(), StepLabel::Service, StepName::Build);
+        let EngineMsgPayload::Metrics(started_record) = messages.try_recv().unwrap().payload;
+        record.set_built_image(built_image());
+        record.stop(StepStatus::Skip);
+        let EngineMsgPayload::Metrics(stopped_record) = messages.try_recv().unwrap().payload;
+
+        assert_eq!(started_record.built_image, None);
+        assert_eq!(stopped_record.built_image, Some(built_image()));
+    }
+
+    #[test]
+    fn built_image_set_after_the_stop_is_ignored() {
+        let service_id = Uuid::new_v4();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
+
+        let record = metrics_registry.start_record(service_id, StepLabel::Service, StepName::Build);
+        record.stop(StepStatus::Success);
+        record.set_built_image(built_image());
+
+        assert_eq!(metrics_registry.get_records(service_id)[0].built_image, None);
     }
 }

@@ -232,6 +232,7 @@ impl EnvironmentTask {
         if !option.force_build && cr_registry.image_exists(&build.image) {
             let build_record =
                 metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
+            build_record.set_built_image(build.built_image());
             build_record.stop(StepStatus::Skip);
 
             let image_name = build.image.full_image_name_with_tag();

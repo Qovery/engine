@@ -206,6 +206,7 @@ impl LocalDocker {
         }
 
         build.resolve_image_tag_from_dockerfile(&dockerfile_args, &secret_mounts.ids);
+        build_record.set_built_image(build.built_image());
 
         // Prepare image we want to build
         let image_to_build = ContainerImage::new(
