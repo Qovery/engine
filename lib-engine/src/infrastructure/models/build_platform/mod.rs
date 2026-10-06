@@ -11,7 +11,7 @@ use crate::environment::models::abort::Abort;
 use crate::io_models::container::Registry;
 use crate::io_models::models::CpuArchitecture;
 use crate::metrics_registry::{BuiltImage, MetricsRegistry};
-use crate::utilities::{compute_cache_tag, compute_image_tag};
+use crate::utilities::{calculate_hash, compute_cache_tag, compute_image_tag};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -265,12 +265,22 @@ impl Build {
                 &repository.extra_files_to_inject,
                 &repository.docker_target_build_stage,
             ),
-            BuildSource::Dockerfile { .. } => compute_cache_tag(
-                PathBuf::from("."),
-                &Some(PathBuf::from(SYNTHESIZED_DOCKERFILE_NAME)),
-                &[],
-                &None,
-            ),
+            BuildSource::Dockerfile { .. } => {
+                let cache_tag = compute_cache_tag(
+                    PathBuf::from("."),
+                    &Some(PathBuf::from(SYNTHESIZED_DOCKERFILE_NAME)),
+                    &[],
+                    &None,
+                );
+
+                // Agentic workflow Dockerfile-fragment builds use this source variant. Its remote
+                // BuildKit cache must stay separate when the target platform changes.
+                if self.dockerfile_fragment.is_some() {
+                    format!("{cache_tag}-{}", calculate_hash(&self.architectures))
+                } else {
+                    cache_tag
+                }
+            }
         }
     }
 }
@@ -486,6 +496,35 @@ mod tests {
             dockerfile_fragment: None,
             tag_build_args: None,
         }
+    }
+
+    #[test]
+    fn dockerfile_fragment_build_cache_tag_changes_with_architecture() {
+        let mut amd64 = build_with(BTreeMap::new());
+        amd64.dockerfile_fragment = Some(DockerfileFragment::Inline {
+            content: "RUN true".to_string(),
+        });
+
+        let mut arm64 = build_with(BTreeMap::new());
+        arm64.dockerfile_fragment = Some(DockerfileFragment::Inline {
+            content: "RUN true".to_string(),
+        });
+        arm64.architectures = vec![CpuArchitecture::ARM64];
+
+        assert_ne!(
+            amd64.compute_cache_tag(),
+            arm64.compute_cache_tag(),
+            "fragment build cache identity must include the target architecture"
+        );
+    }
+
+    #[test]
+    fn cache_tag_without_dockerfile_fragment_remains_architecture_independent() {
+        let amd64 = build_with(BTreeMap::new());
+        let mut arm64 = build_with(BTreeMap::new());
+        arm64.architectures = vec![CpuArchitecture::ARM64];
+
+        assert_eq!(amd64.compute_cache_tag(), arm64.compute_cache_tag());
     }
 
     fn image_tag_for(environment_variables: &[(&str, &str)]) -> String {
