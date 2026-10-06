@@ -254,6 +254,8 @@ impl AgenticWorkflow {
         let Some(content) = self.dockerfile_content()? else {
             return Ok(None);
         };
+        let architecture = select_agentic_workflow_architecture(&architectures)?;
+        let content = add_architecture_to_dockerfile(content, architecture);
 
         let mut build = Build {
             source: BuildSource::Dockerfile { content },
@@ -268,7 +270,7 @@ impl AgenticWorkflow {
                 .collect(),
             disable_buildkit_cache: false,
             timeout: Duration::from_secs(BUILD_TIMEOUT_MAX_SEC),
-            architectures,
+            architectures: vec![architecture],
             max_cpu_in_milli: BUILD_CPU_MAX_IN_MILLI,
             max_ram_in_gib: BUILD_RAM_MAX_IN_GIB,
             ephemeral_storage_in_gib: None,
@@ -462,6 +464,27 @@ impl AgenticWorkflow {
                 .collect::<BTreeSet<_>>(),
         })
     }
+}
+
+fn select_agentic_workflow_architecture(
+    architectures: &[CpuArchitecture],
+) -> Result<CpuArchitecture, AgenticWorkflowError> {
+    architectures.first().copied().ok_or_else(|| {
+        AgenticWorkflowError::InvalidConfig(
+            "Cannot build an agentic workflow image because the cluster reports no CPU architecture".to_string(),
+        )
+    })
+}
+
+fn add_architecture_to_dockerfile(content: String, architecture: CpuArchitecture) -> String {
+    let architecture = match architecture {
+        CpuArchitecture::AMD64 => "amd64",
+        CpuArchitecture::ARM64 => "arm64",
+    };
+
+    // The generated Dockerfile content feeds the image tag hash; the build architecture itself
+    // does not, so this harmless comment keeps images for different targets from sharing a tag.
+    format!("{content}# qovery target architecture: {architecture}\n")
 }
 
 #[cfg(test)]
@@ -1040,7 +1063,7 @@ mod tests {
         assert!(content.is_some());
     }
 
-    fn image_tag_for(base_tag: &str, fragment: &str) -> String {
+    fn image_tag_for(base_tag: &str, fragment: &str, architecture: CpuArchitecture) -> String {
         let workflow = {
             let mut workflow = workflow_with_fragment(fragment);
             workflow.image.tag = base_tag.to_string();
@@ -1050,6 +1073,7 @@ mod tests {
             .dockerfile_content()
             .expect("fragment is valid")
             .expect("a fragment produces a Dockerfile");
+        let content = add_architecture_to_dockerfile(content, architecture);
 
         let mut build = Build {
             source: BuildSource::Dockerfile { content },
@@ -1057,7 +1081,7 @@ mod tests {
             environment_variables: BTreeMap::new(),
             disable_buildkit_cache: false,
             timeout: Duration::from_secs(BUILD_TIMEOUT_MAX_SEC),
-            architectures: vec![CpuArchitecture::AMD64],
+            architectures: vec![architecture],
             max_cpu_in_milli: BUILD_CPU_MAX_IN_MILLI,
             max_ram_in_gib: BUILD_RAM_MAX_IN_GIB,
             ephemeral_storage_in_gib: None,
@@ -1072,26 +1096,47 @@ mod tests {
         build.image.tag
     }
 
+    #[test]
+    fn docker_fragment_build_uses_one_cluster_architecture() {
+        assert!(matches!(
+            select_agentic_workflow_architecture(&[CpuArchitecture::ARM64, CpuArchitecture::AMD64]),
+            Ok(CpuArchitecture::ARM64)
+        ));
+    }
+
+    #[test]
+    fn docker_fragment_build_requires_a_cluster_architecture() {
+        assert!(matches!(
+            select_agentic_workflow_architecture(&[]),
+            Err(AgenticWorkflowError::InvalidConfig(message)) if message.contains("no CPU architecture")
+        ));
+    }
+
     /// The build is skipped when the target tag already exists in the registry, so both the base tag
     /// and the fragment have to move the tag. Passing the base image as a build ARG instead of
     /// writing it into the `FROM` would break the first half of this.
     #[test]
     fn image_tag_changes_with_the_base_tag_and_with_the_fragment() {
-        let baseline = image_tag_for("0.0.1", "RUN apt-get install -y jq");
+        let baseline = image_tag_for("0.0.1", "RUN apt-get install -y jq", CpuArchitecture::AMD64);
 
         assert_ne!(
             baseline,
-            image_tag_for("0.0.2", "RUN apt-get install -y jq"),
+            image_tag_for("0.0.2", "RUN apt-get install -y jq", CpuArchitecture::AMD64),
             "bumping the base image tag must invalidate the built image"
         );
         assert_ne!(
             baseline,
-            image_tag_for("0.0.1", "RUN apt-get install -y jq curl"),
+            image_tag_for("0.0.1", "RUN apt-get install -y jq curl", CpuArchitecture::AMD64),
             "changing the fragment must invalidate the built image"
+        );
+        assert_ne!(
+            baseline,
+            image_tag_for("0.0.1", "RUN apt-get install -y jq", CpuArchitecture::ARM64),
+            "changing the target architecture must invalidate the built image"
         );
         assert_eq!(
             baseline,
-            image_tag_for("0.0.1", "RUN apt-get install -y jq"),
+            image_tag_for("0.0.1", "RUN apt-get install -y jq", CpuArchitecture::AMD64),
             "an unchanged workflow must reuse its image"
         );
     }

@@ -40,6 +40,19 @@ spec:
       imagePullSecrets:
         - name: {{ $.Values.registry.secret_name }}
       {{- end }}
+      {{- if $.Values.service.deployment_affinity_node_required }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+        {{- range $key, $value := $.Values.service.deployment_affinity_node_required }}
+                - key: {{ $key | toJson }}
+                  operator: In
+                  values:
+                  - {{ $value | toJson }}
+        {{- end }}
+      {{- end }}
       volumes:
         - name: output
           emptyDir: {}

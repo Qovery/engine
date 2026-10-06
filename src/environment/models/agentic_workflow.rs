@@ -1,12 +1,14 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::container::RegistryTeraContext;
 use crate::environment::models::types::ToTeraContext;
+use crate::environment::models::utils;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
+use crate::infrastructure::models::kubernetes::Kind;
 use crate::io_models::agentic_workflow::AgenticWorkflowModelType;
 use crate::io_models::context::Context;
 use crate::io_models::models::{
@@ -388,6 +390,12 @@ fn registry_tera_context(build: &Build, target: &DeploymentTarget, kube_name: &s
         })
 }
 
+fn built_image_architecture_affinity(build: Option<&Build>, kubernetes_kind: Kind) -> BTreeMap<String, String> {
+    build.map_or_else(BTreeMap::new, |build| {
+        utils::add_arch_to_deployment_affinity_node(&BTreeMap::new(), &build.architectures, kubernetes_kind)
+    })
+}
+
 /// Deployment of an AgenticWorkflow: renders and installs a single Kubernetes `Job` running the
 /// agent (`qovery-ai-runner`) image, with a `qovery-job-output-waiter` sidecar for output
 /// capture. It is intentionally a single concrete struct (not generic over `CloudProvider`)
@@ -513,6 +521,10 @@ impl AgenticWorkflow {
                 ram_limit_in_mib: self.config.ram_limit_in_mib.to_string(),
                 max_duration_in_sec: self.config.max_duration_in_sec,
                 bedrock: bedrock.as_ref().map(|(context, _)| context.clone()),
+                deployment_affinity_node_required: built_image_architecture_affinity(
+                    self.build.as_ref(),
+                    target.kubernetes.kind(),
+                ),
             },
             environment_variables: self.get_environment_variables(),
             bedrock_credentials: bedrock.map(|(_, credentials)| credentials).unwrap_or_default(),
@@ -712,6 +724,8 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) max_duration_in_sec: u64,
     /// Bedrock chart context, absent for Claude.
     pub(crate) bedrock: Option<BedrockTeraContext>,
+    /// Architecture affinity for the engine-built image, empty for the public base image.
+    pub(crate) deployment_affinity_node_required: BTreeMap<String, String>,
 }
 
 impl std::fmt::Debug for ServiceTeraContext {
@@ -730,6 +744,7 @@ impl std::fmt::Debug for ServiceTeraContext {
             .field("ram_limit_in_mib", &self.ram_limit_in_mib)
             .field("max_duration_in_sec", &self.max_duration_in_sec)
             .field("bedrock", &self.bedrock)
+            .field("deployment_affinity_node_required", &self.deployment_affinity_node_required)
             .finish()
     }
 }
@@ -787,14 +802,14 @@ impl std::fmt::Debug for AgenticWorkflowTeraContext {
 mod tests {
     use super::{
         AgenticWorkflowConfig, AgenticWorkflowRunPayload, AgenticWorkflowTeraContext,
-        BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES, BedrockAuth, BedrockRuntime, BedrockTeraContext,
-        RESERVED_ENVIRONMENT_VARIABLE_NAMES, ServiceTeraContext, contract_environment_variables, run_inputs_json,
-        to_user_environment_variables,
+        BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES, BedrockAuth, BedrockRuntime, BedrockTeraContext, Build, Kind,
+        RESERVED_ENVIRONMENT_VARIABLE_NAMES, ServiceTeraContext, built_image_architecture_affinity,
+        contract_environment_variables, run_inputs_json, to_user_environment_variables,
     };
     use crate::environment::models::container::RegistryTeraContext;
     use crate::io_models::agentic_workflow::AgenticWorkflowModelType;
-    use crate::io_models::models::{EnvironmentVariable, MountedFile};
-    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+    use crate::io_models::models::{CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit};
+    use crate::io_models::models::{KubernetesMemoryResourceUnit, MountedFile};
     use crate::io_models::variable_utils::VariableInfo;
     use crate::template::{generate_and_copy_all_files_into_dir, write_chart_values};
     use base64::Engine;
@@ -804,6 +819,7 @@ mod tests {
     use std::collections::BTreeSet;
     use std::path::Path;
     use std::process::Command;
+    use std::time::Duration;
     use tera::Context;
     use uuid::Uuid;
 
@@ -855,6 +871,7 @@ mod tests {
                 ram_limit_in_mib: "1024Mi".to_string(),
                 max_duration_in_sec: 3_600,
                 bedrock: None,
+                deployment_affinity_node_required: BTreeMap::new(),
             },
             bedrock_credentials: vec![],
             environment_variables: vec![
@@ -885,6 +902,29 @@ mod tests {
             docker_json_config: Some("eyJhdXRocyI6e319".to_string()),
         });
         context
+    }
+
+    fn build_for_architecture(architecture: CpuArchitecture) -> Build {
+        use crate::infrastructure::models::build_platform::{BuildSource, DockerfileFragment, Image};
+
+        Build {
+            source: BuildSource::Dockerfile {
+                content: "FROM base".to_string(),
+            },
+            image: Image::default(),
+            environment_variables: BTreeMap::new(),
+            disable_buildkit_cache: false,
+            timeout: Duration::from_secs(60),
+            architectures: vec![architecture],
+            max_cpu_in_milli: 1000,
+            max_ram_in_gib: 1,
+            ephemeral_storage_in_gib: None,
+            registries: vec![],
+            dockerfile_fragment: Some(DockerfileFragment::Inline {
+                content: "RUN true".to_string(),
+            }),
+            tag_build_args: None,
+        }
     }
 
     fn job_template() -> &'static str {
@@ -993,6 +1033,37 @@ mod tests {
         assert!(rendered.contains("qovery.com/project-id"));
         assert!(rendered.contains("qovery.com/deployment-id"));
         assert!(rendered.contains("test-deployment-id"));
+    }
+
+    #[test]
+    fn job_without_a_built_image_has_no_architecture_affinity() {
+        let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+
+        assert!(job["spec"]["template"]["spec"]["affinity"].is_null());
+    }
+
+    #[test]
+    fn built_image_job_is_pinned_to_its_build_architecture() {
+        let build = build_for_architecture(CpuArchitecture::ARM64);
+        let mut context = build_agentic_workflow_tera_context_with_built_image();
+        context.service.deployment_affinity_node_required = built_image_architecture_affinity(Some(&build), Kind::Eks);
+
+        let rendered = render_template(job_template(), context);
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+        let expressions = job["spec"]["template"]["spec"]["affinity"]["nodeAffinity"]
+            ["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"][0]["matchExpressions"]
+            .as_sequence()
+            .expect("architecture affinity must render matchExpressions");
+
+        assert!(
+            expressions.iter().any(|expression| {
+                expression["key"].as_str() == Some("kubernetes.io/arch")
+                    && expression["operator"].as_str() == Some("In")
+                    && expression["values"][0].as_str() == Some("arm64")
+            }),
+            "the Job must be scheduled on the architecture used for its build:\n{rendered}"
+        );
     }
 
     #[test]
