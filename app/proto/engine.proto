@@ -57,6 +57,10 @@ message StepRecord {
   StepStatus status = 5;
   string step_id = 6;
   google.protobuf.Timestamp started_at = 7;
+  // Build step only, once its tag is final. Empty otherwise. Variable names, never values.
+  string image_name = 8;
+  string image_tag = 9;
+  repeated string tag_variable_names = 10;
 }
 
 message Metrics {

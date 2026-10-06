@@ -10,7 +10,7 @@ use crate::infrastructure::models::container_registry::Kind as RegistryKind;
 use crate::environment::models::abort::Abort;
 use crate::io_models::container::Registry;
 use crate::io_models::models::CpuArchitecture;
-use crate::metrics_registry::MetricsRegistry;
+use crate::metrics_registry::{BuiltImage, MetricsRegistry};
 use crate::utilities::{compute_cache_tag, compute_image_tag};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
@@ -187,6 +187,15 @@ impl Build {
         match &self.source {
             BuildSource::Git(repository) => repository.commit_id.as_str(),
             BuildSource::Dockerfile { .. } => "",
+        }
+    }
+
+    /// Image this build produces, with the names of the variables its tag was hashed from.
+    pub fn built_image(&self) -> BuiltImage {
+        BuiltImage {
+            name: self.image.name.clone(),
+            tag: self.image.tag.clone(),
+            tag_variable_names: self.variables_to_hash().into_keys().collect(),
         }
     }
 
@@ -505,6 +514,31 @@ mod tests {
     #[test]
     fn test_dropping_a_build_variable_changes_the_image_tag() {
         assert_ne!(image_tag_for(&[("A_SECRET", "value")]), image_tag_for(&[]));
+    }
+
+    #[test]
+    fn built_image_reports_the_tag_and_only_the_variable_names_it_was_hashed_from() {
+        let mut build = build_with(
+            [
+                ("NODE_ENV", "production"),
+                ("DATABASE_URL", "postgres://secret"),
+                ("API_URL", "https://api"),
+            ]
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect(),
+        );
+        build.tag_build_args = Some(["NODE_ENV", "API_URL"].iter().map(|name| name.to_string()).collect());
+        build.compute_image_tag();
+
+        let built_image = build.built_image();
+
+        assert_eq!(built_image.name, build.image.name);
+        assert_eq!(built_image.tag, build.image.tag);
+        assert_eq!(
+            built_image.tag_variable_names,
+            vec!["API_URL".to_string(), "NODE_ENV".to_string()]
+        );
     }
 
     fn image_tag_for_narrowed(environment_variables: &[(&str, &str)], tag_build_args: &[&str]) -> String {

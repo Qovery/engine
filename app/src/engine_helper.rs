@@ -5,6 +5,7 @@ use qovery_engine::metrics_registry::{StepLabel, StepRecord, StepStatus};
 
 impl GrpcStepRecord {
     pub fn from_record(step_record: StepRecord) -> Self {
+        let built_image = step_record.built_image.clone();
         GrpcStepRecord {
             id: step_record.id.to_string(),
             step_id: step_record.step_id.to_string(),
@@ -26,6 +27,9 @@ impl GrpcStepRecord {
                 StepStatus::NotSet => GrpcStepStatus::NotSet as i32,
             },
             started_at: Some(step_record.started_at.into()),
+            image_name: built_image.as_ref().map(|image| image.name.clone()).unwrap_or_default(),
+            image_tag: built_image.as_ref().map(|image| image.tag.clone()).unwrap_or_default(),
+            tag_variable_names: built_image.map(|image| image.tag_variable_names).unwrap_or_default(),
         }
     }
 }
@@ -33,7 +37,7 @@ impl GrpcStepRecord {
 #[cfg(test)]
 mod tests {
     use super::{GrpcStepRecord, GrpcStepStatus, StepLabel, StepRecord, StepStatus};
-    use qovery_engine::metrics_registry::StepName;
+    use qovery_engine::metrics_registry::{BuiltImage, StepName};
     use std::time::Duration;
     use uuid::Uuid;
 
@@ -51,5 +55,35 @@ mod tests {
         assert_eq!(grpc_record.started_at, Some(expected_started_at));
         assert_eq!(grpc_record.status, GrpcStepStatus::Ongoing as i32);
         assert_eq!(grpc_record.duration, Some(prost_types::Duration::default()));
+    }
+
+    #[test]
+    fn built_image_conversion_carries_name_tag_and_variable_names() {
+        let mut step_record = StepRecord::new(StepName::Build, StepLabel::Service, Uuid::new_v4());
+        step_record.status = Some(StepStatus::Success);
+        step_record.built_image = Some(BuiltImage {
+            name: "repo-image".to_string(),
+            tag: "abc123".to_string(),
+            tag_variable_names: vec!["API_URL".to_string(), "NODE_ENV".to_string()],
+        });
+
+        let grpc_record = GrpcStepRecord::from_record(step_record);
+
+        assert_eq!(grpc_record.image_name, "repo-image");
+        assert_eq!(grpc_record.image_tag, "abc123");
+        assert_eq!(
+            grpc_record.tag_variable_names,
+            vec!["API_URL".to_string(), "NODE_ENV".to_string()]
+        );
+    }
+
+    #[test]
+    fn record_without_built_image_converts_to_empty_image_fields() {
+        let grpc_record =
+            GrpcStepRecord::from_record(StepRecord::new(StepName::Deployment, StepLabel::Service, Uuid::new_v4()));
+
+        assert!(grpc_record.image_name.is_empty());
+        assert!(grpc_record.image_tag.is_empty());
+        assert!(grpc_record.tag_variable_names.is_empty());
     }
 }
