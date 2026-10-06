@@ -35,7 +35,7 @@ use crate::environment::models::abort::Abort;
 use crate::fs::workspace_directory;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
+use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
 use crate::utilities::to_short_id;
 
 const DOCKER_IGNORE: &str = r#"
@@ -141,10 +141,33 @@ impl LocalDocker {
         metrics_registry: Arc<dyn MetricsRegistry>,
         abort: &dyn Abort,
     ) -> Result<(), BuildError> {
-        // Going to inject only env var that are used by the dockerfile
-        // so extracting it and modifying the image tag and env variables
         let build_record =
             metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
+        let build_result = self.build_image_with_docker_recorded(
+            build,
+            cache_compression,
+            dockerfile_complete_path,
+            into_dir_docker_style,
+            logger,
+            abort,
+            &build_record,
+        );
+        close_build_record(&build_record, &build_result);
+        build_result
+    }
+
+    fn build_image_with_docker_recorded(
+        &self,
+        build: &mut Build,
+        cache_compression: CacheCompression,
+        dockerfile_complete_path: &str,
+        into_dir_docker_style: &str,
+        logger: &EnvLogger,
+        abort: &dyn Abort,
+        build_record: &StepRecordHandle,
+    ) -> Result<(), BuildError> {
+        // Going to inject only env var that are used by the dockerfile
+        // so extracting it and modifying the image tag and env variables
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| BuildError::IoError {
             application: build.image.service_id.clone(),
             action_description: "reading dockerfile content".to_string(),
@@ -326,7 +349,6 @@ impl LocalDocker {
         );
 
         if let Err(err) = exit_status {
-            build_record.stop(StepStatus::Error);
             return Err(to_build_error(build.image.service_id.clone(), err));
         }
         build_record.stop(StepStatus::Success);
@@ -472,6 +494,19 @@ impl LocalDocker {
             raw_error: err,
         })
     }
+}
+
+/// Stops a build record the build left open: several early returns (registry login, builder
+/// provisioning) skip their own `stop`, and an unstopped record is never reported.
+fn close_build_record(build_record: &StepRecordHandle, build_result: &Result<(), BuildError>) {
+    if build_record.is_stopped() {
+        return;
+    }
+    build_record.stop(match build_result {
+        Ok(()) => StepStatus::Success,
+        Err(BuildError::Aborted { .. }) => StepStatus::Cancel,
+        Err(_) => StepStatus::Error,
+    });
 }
 
 /// Name and value of one variable handed to a build, borrowed from `Build::environment_variables`.
@@ -1411,5 +1446,82 @@ RUN chmod +x entrypoint.sh"#;
         for path in paths {
             assert!(!path.exists(), "{path:?} should have been removed with its directory");
         }
+    }
+
+    fn build_record_status(metrics_registry: &StdMetricsRegistry, service_long_id: Uuid) -> Option<StepStatus> {
+        metrics_registry
+            .get_records(service_long_id)
+            .into_iter()
+            .find(|record| record.step_name == StepName::Build)
+            .and_then(|record| record.status)
+    }
+
+    #[test]
+    fn a_build_failing_before_stopping_its_record_closes_it_as_error() {
+        let metrics_registry = StdMetricsRegistry::default();
+        let service_long_id = Uuid::new_v4();
+        let build_record = metrics_registry.start_record(service_long_id, StepLabel::Service, StepName::Build);
+
+        close_build_record(
+            &build_record,
+            &Err(BuildError::CannotGetCredentials {
+                raw_error_message: "registry login failed".to_string(),
+            }),
+        );
+
+        assert_eq!(build_record_status(&metrics_registry, service_long_id), Some(StepStatus::Error));
+    }
+
+    #[test]
+    fn a_build_aborted_before_stopping_its_record_closes_it_as_cancel() {
+        let metrics_registry = StdMetricsRegistry::default();
+        let service_long_id = Uuid::new_v4();
+        let build_record = metrics_registry.start_record(service_long_id, StepLabel::Service, StepName::Build);
+
+        close_build_record(
+            &build_record,
+            &Err(BuildError::Aborted {
+                application: "service-id".to_string(),
+            }),
+        );
+
+        assert_eq!(
+            build_record_status(&metrics_registry, service_long_id),
+            Some(StepStatus::Cancel)
+        );
+    }
+
+    #[test]
+    fn a_docker_build_killed_by_an_abort_closes_its_record_as_cancel() {
+        let metrics_registry = StdMetricsRegistry::default();
+        let service_long_id = Uuid::new_v4();
+        let build_record = metrics_registry.start_record(service_long_id, StepLabel::Service, StepName::Build);
+
+        close_build_record(
+            &build_record,
+            &Err(to_build_error(
+                "service-id".to_string(),
+                docker::DockerError::Aborted {
+                    raw_error_message: "killed".to_string(),
+                },
+            )),
+        );
+
+        assert_eq!(
+            build_record_status(&metrics_registry, service_long_id),
+            Some(StepStatus::Cancel)
+        );
+    }
+
+    #[test]
+    fn closing_an_already_stopped_build_record_keeps_its_status() {
+        let metrics_registry = StdMetricsRegistry::default();
+        let service_long_id = Uuid::new_v4();
+        let build_record = metrics_registry.start_record(service_long_id, StepLabel::Service, StepName::Build);
+        build_record.stop(StepStatus::Skip);
+
+        close_build_record(&build_record, &Ok(()));
+
+        assert_eq!(build_record_status(&metrics_registry, service_long_id), Some(StepStatus::Skip));
     }
 }
