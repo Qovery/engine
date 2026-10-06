@@ -124,6 +124,12 @@ struct GatewayHttpRouteRuleSignature {
     weight: u32,
 }
 
+#[derive(serde::Serialize)]
+struct ClientValidationCertificateTeraContext {
+    name: String,
+    namespace: String,
+}
+
 #[derive(Clone, Debug, Default)]
 struct GatewayApiBackendTrafficPolicySettings {
     gateway_api_retry_num_retries: Option<u32>,
@@ -529,6 +535,21 @@ impl<T: CloudProvider> Router<T> {
             &service_gateway_api_policy_settings,
             kubernetes.advanced_settings(),
         );
+        let client_validation_ca_certificates = kubernetes
+            .advanced_settings()
+            .to_envoy_client_validation_ca_certificates()
+            .map_err(|error| {
+                Box::new(EngineError::new_invalid_engine_payload_invalid_field_value(
+                    event_details.clone(),
+                    error,
+                ))
+            })?
+            .into_iter()
+            .map(|certificate| ClientValidationCertificateTeraContext {
+                name: certificate.name,
+                namespace: certificate.namespace.to_string(),
+            })
+            .collect::<Vec<_>>();
 
         context.insert(
             "cluster_envoy_gateway_api_http_request_timeout_seconds",
@@ -547,6 +568,44 @@ impl<T: CloudProvider> Router<T> {
             &kubernetes
                 .advanced_settings()
                 .envoy_gateway_api_http_max_stream_duration_seconds,
+        );
+        context.insert(
+            "cluster_envoy_client_ip_detection_x_forwarded_for_number_trusted_hops",
+            &kubernetes
+                .advanced_settings()
+                .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+        );
+        context.insert(
+            "cluster_envoy_client_ip_detection_x_forwarded_for_trusted_cidrs",
+            &kubernetes
+                .advanced_settings()
+                .envoy_client_ip_detection_x_forwarded_for_trusted_cidrs,
+        );
+        context.insert(
+            "cluster_envoy_client_validation_ca_certificates",
+            &client_validation_ca_certificates,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_http_stream_idle_timeout_seconds",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_http_stream_idle_timeout_seconds,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_path_disable_merge_slashes",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_path_disable_merge_slashes,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_path_escaped_slashes_action",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_path_escaped_slashes_action,
+        );
+        context.insert(
+            "cluster_envoy_proxy_protocol_enabled",
+            &matches!(kubernetes.kind(), Kind::Eks | Kind::ScwKapsule),
         );
         context.insert(
             "cluster_envoy_enable_compression",

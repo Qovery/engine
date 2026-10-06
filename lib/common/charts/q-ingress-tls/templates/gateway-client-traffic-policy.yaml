@@ -23,15 +23,70 @@ metadata:
     {{- end }}
 spec:
   # Envoy Gateway otherwise downgrades an overlapping TLS ListenerSet certificate to HTTP/1.1.
-  # The ListenerSet contains only this router's hostnames, so the override cannot affect other routers.
+  # A ListenerSet policy replaces the shared Gateway policy, so mirror its effective settings here.
+  {{- $trustedCIDRs := $.Values.cluster_envoy_client_ip_detection_x_forwarded_for_trusted_cidrs }}
+  {{- $numHops := $.Values.cluster_envoy_client_ip_detection_x_forwarded_for_number_trusted_hops }}
+  {{- if or (gt (len $trustedCIDRs) 0) (ne $numHops nil) }}
+  clientIPDetection:
+    xForwardedFor:
+      {{- if gt (len $trustedCIDRs) 0 }}
+      trustedCIDRs:
+      {{- range $trustedCIDR := $trustedCIDRs }}
+        - {{ toJson $trustedCIDR }}
+      {{- end }}
+      {{- else }}
+      numTrustedHops: {{ $numHops }}
+      {{- end }}
+  {{- end }}
+  {{- if ne $.Values.cluster_envoy_gateway_api_http_stream_idle_timeout_seconds nil }}
+  timeout:
+    http:
+      streamIdleTimeout: {{ $.Values.cluster_envoy_gateway_api_http_stream_idle_timeout_seconds }}s
+  {{- end }}
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: ListenerSet
       name: {{ $.Values.sanitized_name }}-listeners
+  headers:
+    enableEnvoyHeaders: true
+    withUnderscoresAction: DropHeader
   tls:
     alpnProtocols:
       - h2
       - http/1.1
+    {{- if gt (len $.Values.cluster_envoy_client_validation_ca_certificates) 0 }}
+    clientValidation:
+      caCertificateRefs:
+      {{- range $certificate := $.Values.cluster_envoy_client_validation_ca_certificates }}
+        - kind: Secret
+          name: {{ toJson $certificate.name }}
+          namespace: {{ toJson $certificate.namespace }}
+      {{- end }}
+    {{- end }}
+  path:
+    disableMergeSlashes: {{ $.Values.cluster_envoy_gateway_api_path_disable_merge_slashes }}
+    escapedSlashesAction: {{ toJson $.Values.cluster_envoy_gateway_api_path_escaped_slashes_action }}
+  {{- if $.Values.cluster_envoy_proxy_protocol_enabled }}
+  proxyProtocol:
+    optional: true
+  {{- end }}
+  {{- range $index, $certificate := $.Values.cluster_envoy_client_validation_ca_certificates }}
+---
+apiVersion: gateway.networking.k8s.io/{{ if $.Values.k8s_use_v1beta1_reference_grant }}v1beta1{{ else }}v1{{ end }}
+kind: ReferenceGrant
+metadata:
+  name: router-{{ $.Values.id }}-client-validation-{{ $index }}-{{ $namespace_key }}
+  namespace: {{ toJson $certificate.namespace }}
+spec:
+  from:
+    - group: gateway.envoyproxy.io
+      kind: ClientTrafficPolicy
+      namespace: {{ toJson $namespace_key }}
+  to:
+    - group: ""
+      kind: Secret
+      name: {{ toJson $certificate.name }}
+  {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
