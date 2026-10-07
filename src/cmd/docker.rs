@@ -219,20 +219,20 @@ const BUILDX_APP_LABEL_KEY: &str = "app";
 const NOT_READY_TOLERATION: &str =
     "key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800";
 
-/// Compression of the registry build cache blobs, which BuildKit alone reads back: pushed images are
-/// unaffected, and a cache written with the other compression still hits, so switching needs no invalidation.
+/// Compression of the layers pushed to the registry, for both the build cache and the image.
+/// A cache written with the other compression still hits, so switching needs no invalidation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CacheCompression {
+pub enum LayerCompression {
     #[default]
     Gzip,
     Zstd,
 }
 
-impl CacheCompression {
+impl LayerCompression {
     fn as_str(&self) -> &'static str {
         match self {
-            CacheCompression::Gzip => "gzip",
-            CacheCompression::Zstd => "zstd",
+            LayerCompression::Gzip => "gzip",
+            LayerCompression::Zstd => "zstd",
         }
     }
 }
@@ -240,9 +240,23 @@ impl CacheCompression {
 /// Renders the value of `--cache-to` for a registry cache.
 /// `force-compression` recompresses layers reused from a cache written with the other compression. Without it they
 /// keep their old compression until rebuilt, and a zstd base layer could reach a registry kept on gzip.
-fn registry_cache_to(cache_ref: &str, compression: CacheCompression) -> String {
+fn registry_cache_to(cache_ref: &str, compression: LayerCompression) -> String {
     format!(
         "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression={},force-compression=true,ref={cache_ref}",
+        compression.as_str()
+    )
+}
+
+/// Renders the value of `--output` for an image pushed to the registry. zstd needs OCI media types.
+/// `force-compression` recompresses the base layers too: they are most of the image, so most of the pull gain.
+/// Gzip forces as well: without it, layers reused from a zstd cache reach a gzip registry as zstd.
+fn registry_image_output(compression: LayerCompression) -> String {
+    let oci_media_types = match compression {
+        LayerCompression::Gzip => "",
+        LayerCompression::Zstd => "oci-mediatypes=true,",
+    };
+    format!(
+        "type=registry,{oci_media_types}compression={},force-compression=true",
         compression.as_str()
     )
 }
@@ -1126,7 +1140,7 @@ impl Docker {
         build_args: &[(&str, &str)],
         secrets: &[(&str, &Path)],
         cache: Option<&ContainerImage>,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         push_after_build: bool,
         architectures: &[Architecture],
         stdout_output: &mut Stdout,
@@ -1160,7 +1174,7 @@ impl Docker {
             build_args,
             secrets,
             cache,
-            cache_compression,
+            layer_compression,
             push_after_build,
             architectures,
             stdout_output,
@@ -1180,7 +1194,7 @@ impl Docker {
         build_args: &[(&str, &str)],
         secrets: &[(&str, &Path)],
         cache: Option<&ContainerImage>,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         push_after_build: bool,
         architectures: &[Architecture],
         stdout_output: &mut Stdout,
@@ -1208,7 +1222,7 @@ impl Docker {
             "--progress=plain".to_string(),
             "--provenance=false".to_string(),
             if push_after_build {
-                "--output=type=registry".to_string() // tell buildkit to push image to registry
+                format!("--output={}", registry_image_output(layer_compression)) // tell buildkit to push image to registry
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
@@ -1228,7 +1242,7 @@ impl Docker {
 
         if push_after_build && let Some(cache) = cache {
             args_string.push("--cache-to".to_string());
-            args_string.push(registry_cache_to(&cache.image_name(), cache_compression));
+            args_string.push(registry_cache_to(&cache.image_name(), layer_compression));
         }
 
         // Build for all requested architectures, if empty build for the current architecture the engine is running on
@@ -1845,7 +1859,7 @@ mod builder_placement_tests {
 mod tests {
     use crate::cmd::buildkit_progress::BuildkitExportTimings;
     use crate::cmd::command::CommandKiller;
-    use crate::cmd::docker::{Architecture, CacheCompression, ContainerImage, Docker, DockerError};
+    use crate::cmd::docker::{Architecture, ContainerImage, Docker, DockerError, LayerCompression};
     use std::fs;
     use std::path::Path;
     use std::time::Duration;
@@ -1929,7 +1943,7 @@ mod tests {
             &[],
             &[],
             Some(&image_cache),
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1949,7 +1963,7 @@ mod tests {
             &[],
             &[],
             Some(&image_cache),
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2010,7 +2024,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[("MY_BUILD_SECRET", secret_path.as_path())],
             None,
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2032,7 +2046,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             None,
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2070,7 +2084,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2213,7 +2227,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
@@ -2251,7 +2265,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2271,7 +2285,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             Some(&image_cache),
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2304,7 +2318,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             &[],
             &[],
             None,
-            CacheCompression::Gzip,
+            LayerCompression::Gzip,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -2315,6 +2329,103 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
         );
 
         assert!(ret.is_ok());
+    }
+
+    fn push_multi_stage_simple(docker: &Docker, repository: &str, compression: LayerCompression) {
+        let image_to_build =
+            ContainerImage::new(private_registry_url(), repository.to_string(), vec!["latest".to_string()]);
+        let image_cache =
+            ContainerImage::new(private_registry_url(), repository.to_string(), vec!["cache".to_string()]);
+
+        let ret = docker.build_with_buildkit(
+            &None,
+            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            &[],
+            Some(&image_cache),
+            compression,
+            true,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            None,
+            &mut BuildkitExportTimings::default(),
+        );
+
+        assert!(ret.is_ok());
+    }
+
+    /// Media types of the layers of `repository:latest`. Fetched from a container on the host network,
+    /// where the registry and the builder live: the test process may run elsewhere (macOS, remote DOCKER_HOST).
+    fn pushed_layer_media_types(repository: &str) -> Vec<String> {
+        let output = std::process::Command::new("docker")
+            .args([
+                "run",
+                "--rm",
+                "--network=host",
+                "public.ecr.aws/docker/library/alpine:3",
+                "wget",
+                "-qO-",
+                "--header",
+                "Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json",
+                private_registry_url()
+                    .join(&format!("v2/{repository}/manifests/latest"))
+                    .unwrap()
+                    .as_str(),
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+
+        let manifest: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        manifest["layers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|layer| layer["mediaType"].as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn test_buildkit_push_with_zstd() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_local_builder(None).unwrap();
+        let repository = format!("local-repo/zstd-{}", Uuid::new_v4());
+
+        push_multi_stage_simple(&docker, &repository, LayerCompression::Zstd);
+
+        // Base layers included: they come gzip from upstream
+        let media_types = pushed_layer_media_types(&repository);
+        assert!(!media_types.is_empty(), "expected at least one layer in the pushed manifest");
+        assert!(
+            media_types
+                .iter()
+                .all(|media_type| media_type == "application/vnd.oci.image.layer.v1.tar+zstd"),
+            "{media_types:?}"
+        );
+    }
+
+    #[test]
+    fn test_buildkit_push_with_gzip_after_zstd_cache() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_local_builder(None).unwrap();
+        let repository = format!("local-repo/gzip-rollback-{}", Uuid::new_v4());
+
+        // A registry moved back from zstd to gzip still holds a zstd cache
+        push_multi_stage_simple(&docker, &repository, LayerCompression::Zstd);
+        push_multi_stage_simple(&docker, &repository, LayerCompression::Gzip);
+
+        let media_types = pushed_layer_media_types(&repository);
+        assert!(!media_types.is_empty(), "expected at least one layer in the pushed manifest");
+        assert!(
+            media_types.iter().all(|media_type| media_type.ends_with("gzip")),
+            "{media_types:?}"
+        );
     }
 }
 
@@ -2378,18 +2489,30 @@ mod buildkit_attempts_tests {
 }
 
 #[cfg(test)]
-mod build_cache_compression_tests {
+mod build_layer_compression_tests {
     use super::*;
 
     #[test]
     fn registry_cache_is_exported_with_requested_compression() {
         assert_eq!(
-            registry_cache_to("registry.example/app:cache", CacheCompression::Zstd),
+            registry_cache_to("registry.example/app:cache", LayerCompression::Zstd),
             "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd,force-compression=true,ref=registry.example/app:cache"
         );
         assert_eq!(
-            registry_cache_to("registry.example/app:cache", CacheCompression::Gzip),
+            registry_cache_to("registry.example/app:cache", LayerCompression::Gzip),
             "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,compression=gzip,force-compression=true,ref=registry.example/app:cache"
+        );
+    }
+
+    #[test]
+    fn registry_image_is_pushed_with_requested_compression() {
+        assert_eq!(
+            registry_image_output(LayerCompression::Zstd),
+            "type=registry,oci-mediatypes=true,compression=zstd,force-compression=true"
+        );
+        assert_eq!(
+            registry_image_output(LayerCompression::Gzip),
+            "type=registry,compression=gzip,force-compression=true"
         );
     }
 }

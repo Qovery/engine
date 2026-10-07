@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use crate::cmd::docker::{CacheCompression, DockerError};
+use crate::cmd::docker::{DockerError, LayerCompression};
 use crate::environment::report::logger::EnvLogger;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -118,7 +118,7 @@ pub trait BuildPlatform: Send + Sync {
     fn build(
         &self,
         build: &mut Build,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
         cancellation_requested: &dyn Abort,
@@ -160,18 +160,18 @@ pub struct Build {
     pub tag_build_args: Option<BTreeSet<String>>,
 }
 
-/// zstd only for registries known to accept zstd blobs: a rejected cache export fails the whole build,
-/// while gzip costs nothing but speed. Move a registry to zstd once a zstd cache export is verified on it.
-pub fn cache_compression_for_registry(kind: RegistryKind) -> CacheCompression {
+/// zstd only for registries known to accept zstd blobs: a rejected cache export or image push fails the build,
+/// while gzip costs nothing but speed. Move a registry to zstd once a zstd push is verified on it.
+pub fn layer_compression_for_registry(kind: RegistryKind) -> LayerCompression {
     match kind {
         RegistryKind::Ecr
         | RegistryKind::AzureContainerRegistry
         | RegistryKind::GcpArtifactRegistry
         | RegistryKind::DockerHub
         | RegistryKind::GithubCr
-        | RegistryKind::ScalewayCr => CacheCompression::Zstd,
+        | RegistryKind::ScalewayCr => LayerCompression::Zstd,
         // Covers self-hosted registries of any product and version: support cannot be assumed.
-        RegistryKind::GenericCr => CacheCompression::Gzip,
+        RegistryKind::GenericCr => LayerCompression::Gzip,
     }
 }
 
@@ -452,17 +452,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_registries_verified_with_zstd_get_a_zstd_cache() {
+    fn only_registries_verified_with_zstd_get_zstd_layers() {
         for (kind, expected) in [
-            (RegistryKind::Ecr, CacheCompression::Zstd),
-            (RegistryKind::AzureContainerRegistry, CacheCompression::Zstd),
-            (RegistryKind::ScalewayCr, CacheCompression::Zstd),
-            (RegistryKind::GcpArtifactRegistry, CacheCompression::Zstd),
-            (RegistryKind::GithubCr, CacheCompression::Zstd),
-            (RegistryKind::DockerHub, CacheCompression::Zstd),
-            (RegistryKind::GenericCr, CacheCompression::Gzip),
+            (RegistryKind::Ecr, LayerCompression::Zstd),
+            (RegistryKind::AzureContainerRegistry, LayerCompression::Zstd),
+            (RegistryKind::ScalewayCr, LayerCompression::Zstd),
+            (RegistryKind::GcpArtifactRegistry, LayerCompression::Zstd),
+            (RegistryKind::GithubCr, LayerCompression::Zstd),
+            (RegistryKind::DockerHub, LayerCompression::Zstd),
+            (RegistryKind::GenericCr, LayerCompression::Gzip),
         ] {
-            assert_eq!(cache_compression_for_registry(kind), expected, "{kind:?}");
+            assert_eq!(layer_compression_for_registry(kind), expected, "{kind:?}");
         }
     }
 
