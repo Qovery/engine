@@ -16,10 +16,10 @@ mod utils;
 
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::EngineError;
-use crate::events::InfrastructureStep;
+use crate::events::{InfrastructureStep, Stage};
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::eks::cluster_bootstrap::bootstrap_eks_cluster;
-use crate::infrastructure::action::eks::cluster_create::create_eks_cluster;
+use crate::infrastructure::action::eks::cluster_create::{create_eks_cluster, restore_access_to_eks};
 use crate::infrastructure::action::eks::cluster_delete::delete_eks_cluster;
 use crate::infrastructure::action::eks::cluster_pause::pause_eks_cluster;
 use crate::infrastructure::action::eks::cluster_upgrade::upgrade_eks_cluster;
@@ -87,6 +87,16 @@ impl InfrastructureAction for EKS {
         send_progress_on_long_task(self, Action::Create, || {
             upgrade_eks_cluster(self, infra_ctx, kubernetes_upgrade_status, logger)
         })
+    }
+
+    fn restore_cluster_access(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        step: InfrastructureStep,
+    ) -> Result<(), Box<EngineError>> {
+        let logger = mk_logger(infra_ctx.kubernetes(), step.clone());
+        let event_details = self.get_event_details(Stage::Infrastructure(step));
+        restore_access_to_eks(self, infra_ctx, &event_details, &logger)
     }
 
     fn upgrade_node_selector(&self) -> Option<&str> {

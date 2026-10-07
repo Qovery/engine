@@ -5,7 +5,9 @@ use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
 use crate::infrastructure::action::eks::nodegroup::should_update_desired_nodes;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
-use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
+use crate::infrastructure::action::eks::utils::{
+    define_cluster_upgrade_timeout, get_rusoto_eks_client, uses_wide_permissions_credentials,
+};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
@@ -21,6 +23,9 @@ pub fn pause_eks_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     logger.info("Pausing cluster deployment.");
+    if uses_wide_permissions_credentials(infra_ctx.cloud_provider()) {
+        logger.info("Using the wide permissions credentials for this deployment.");
+    }
 
     // For Karpenter
     let kube_client = infra_ctx.mk_kube_client()?;

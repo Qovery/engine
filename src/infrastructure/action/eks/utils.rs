@@ -42,6 +42,14 @@ pub fn get_rusoto_eks_client(
     Ok(EksClient::new_with_client(client, region))
 }
 
+/// Returns true when the wide permissions credentials are used instead of the cloud provider options ones
+pub fn uses_wide_permissions_credentials(cloud_provider: &dyn CloudProvider) -> bool {
+    cloud_provider
+        .downcast_ref()
+        .as_aws()
+        .is_some_and(|aws| aws.wide_credentials().is_some())
+}
+
 pub fn define_cluster_upgrade_timeout(
     pods_list: Vec<K8sPod>,
     kubernetes_action: KubernetesClusterAction,

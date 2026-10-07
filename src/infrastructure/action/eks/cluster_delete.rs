@@ -13,7 +13,9 @@ use crate::infrastructure::action::eks::nodegroup::{
     NodeGroupsDeletionType, delete_eks_nodegroups, should_update_desired_nodes,
 };
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
-use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
+use crate::infrastructure::action::eks::utils::{
+    define_cluster_upgrade_timeout, get_rusoto_eks_client, uses_wide_permissions_credentials,
+};
 use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
@@ -44,6 +46,9 @@ pub fn delete_eks_cluster(
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
 
     logger.info("Preparing cluster deletion.");
+    if uses_wide_permissions_credentials(cloud_provider) {
+        logger.info("Using the wide permissions credentials for this deployment.");
+    }
 
     let aws_conn = cloud_provider
         .downcast_ref()

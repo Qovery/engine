@@ -69,7 +69,11 @@ impl AwsCredentials {
 
 pub struct AWS {
     long_id: Uuid,
+    // Credentials of the cloud provider options
     credentials: AwsCredentials,
+    // Wide permissions credentials, only set for EKS infrastructure deployments. When set, they are used
+    // instead of the options ones for every AWS call.
+    wide_credentials: Option<AwsCredentials>,
     pub region: String,
     pub zones: Vec<String>,
     vsphere_user: Option<String>,
@@ -92,6 +96,7 @@ impl AWS {
         AWS {
             long_id,
             credentials,
+            wide_credentials: None,
             region: region.to_string(),
             zones,
             vsphere_user,
@@ -101,20 +106,39 @@ impl AWS {
         }
     }
 
+    /// Sets the wide permissions credentials: every AWS call (Terraform, SDK, kubectl, helm) is then made
+    /// with them, while the options ones are kept to preserve their access to the cluster.
+    pub fn with_wide_permissions_credentials(mut self, wide_permissions_credentials: AwsCredentials) -> Self {
+        self.wide_credentials = Some(wide_permissions_credentials);
+        self
+    }
+
+    /// Returns the credentials used for AWS calls: the wide permissions ones when set, else the options ones
     pub fn aws_credentials(&self) -> &AwsCredentials {
+        self.wide_credentials.as_ref().unwrap_or(&self.credentials)
+    }
+
+    /// Returns the wide permissions credentials when they are in use
+    pub fn wide_credentials(&self) -> Option<&AwsCredentials> {
+        self.wide_credentials.as_ref()
+    }
+
+    /// Returns the cloud provider options credentials, whether the wide permissions ones are in use or not
+    pub fn options_credentials(&self) -> &AwsCredentials {
         &self.credentials
     }
 
     pub fn client(&self) -> Client {
-        Client::new_with(new_rusoto_creds(&self.credentials), HttpClient::new().unwrap())
+        Client::new_with(new_rusoto_creds(self.aws_credentials()), HttpClient::new().unwrap())
     }
 
     pub fn aws_sdk_client(&self) -> SdkConfig {
+        let credentials = self.aws_credentials();
         SdkConfig::builder()
             .credentials_provider(SharedCredentialsProvider::new(aws_credential_types::Credentials::new(
-                self.credentials.access_key_id(),
-                self.credentials.secret_access_key(),
-                self.credentials.session_token().map(str::to_string),
+                credentials.access_key_id(),
+                credentials.secret_access_key(),
+                credentials.session_token().map(str::to_string),
                 None,
                 "qovery-engine",
             )))
@@ -147,7 +171,7 @@ impl CloudProvider for AWS {
     }
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
-        let mut envs = match &self.credentials {
+        let mut envs = match self.aws_credentials() {
             AwsCredentials::Static {
                 access_key_id,
                 secret_access_key,
@@ -185,7 +209,7 @@ impl CloudProvider for AWS {
     }
 
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)> {
-        match &self.credentials {
+        match self.aws_credentials() {
             AwsCredentials::Static {
                 access_key_id,
                 secret_access_key,

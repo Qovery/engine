@@ -36,3 +36,15 @@ provider "aws" {
   token = "{{ aws_session_token }}"
 {% endif -%}
 }
+
+{% if aws_wide_permissions_enabled -%}
+# The default provider uses the wide permissions credentials, this one uses the cloud provider options credentials
+# so we can resolve their identity and keep their access to the cluster
+provider "aws" {
+  alias      = "wide_permissions_options_credentials"
+  region     = "{{ aws_region }}"
+  access_key = "{{ aws_wide_permissions_options_access_key }}"
+  secret_key = "{{ aws_wide_permissions_options_secret_key }}"
+  token      = "{{ aws_wide_permissions_options_session_token }}"
+}
+{%- endif %}
