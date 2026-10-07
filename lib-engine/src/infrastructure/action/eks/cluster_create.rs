@@ -21,7 +21,9 @@ use crate::infrastructure::action::eks::nodegroup::{
 };
 use crate::infrastructure::action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
-use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
+use crate::infrastructure::action::eks::utils::{
+    define_cluster_upgrade_timeout, get_rusoto_eks_client, uses_wide_permissions_credentials,
+};
 use crate::infrastructure::action::eks::{
     AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AWS_EKS_TERRAFORM_APPLY_HARD_TIMEOUT, AwsEksQoveryTerraformOutput,
 };
@@ -54,6 +56,9 @@ pub fn create_eks_cluster(
     let dns_provider = infra_ctx.dns_provider();
 
     logger.info(format!("Preparing {} cluster deployment.", kubernetes.kind()));
+    if uses_wide_permissions_credentials(cloud_provider) {
+        logger.info("Using the wide permissions credentials for this deployment.");
+    }
 
     // old method with rusoto
     let aws_eks_client = get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider).ok();
@@ -64,8 +69,6 @@ pub fn create_eks_cluster(
         .as_aws()
         .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "cloud provider is not aws")))?
         .aws_sdk_client();
-
-    let _ = restore_access_to_eks(kubernetes, infra_ctx, &event_details, &logger);
 
     let terraform_apply = || {
         // don't create node groups if karpenter is enabled
@@ -800,7 +803,7 @@ fn patch_kube_proxy_for_custom_vpc(
     Ok(())
 }
 
-fn restore_access_to_eks(
+pub(super) fn restore_access_to_eks(
     kubernetes: &EKS,
     infra_ctx: &InfrastructureContext,
     event_details: &EventDetails,
@@ -838,14 +841,21 @@ fn restore_access_to_eks(
         infra_ctx.context().is_dry_run_deploy(),
     );
 
+    let mut resources = vec![
+        "aws_eks_access_entry.qovery_eks_access",
+        "aws_eks_access_policy_association.qovery_eks_access",
+    ];
+    // Those resources are only declared when using the wide permissions credentials, which have no access
+    // to an existing cluster until they are created
+    if uses_wide_permissions_credentials(infra_ctx.cloud_provider()) {
+        resources.extend([
+            "aws_eks_access_entry.qovery_eks_access_wide_permissions",
+            "aws_eks_access_policy_association.qovery_eks_access_wide_permissions",
+        ]);
+    }
+
     let _ = tf_action
-        .apply_specific_resources(
-            &[
-                "aws_eks_access_entry.qovery_eks_access",
-                "aws_eks_access_policy_association.qovery_eks_access",
-            ],
-            logger,
-        )
+        .apply_specific_resources(&resources, logger)
         .map_err(|err| logger.warn(*err));
 
     if infra_ctx.context().is_dry_run_deploy() {

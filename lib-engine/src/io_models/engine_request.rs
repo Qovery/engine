@@ -177,7 +177,7 @@ impl<T> EngineRequest<T> {
             .to_engine_build_platform(context, metrics_registry.clone_dyn());
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(&self.kubernetes.region, self.kubernetes.kind)
+            .build_engine_cloud_provider(&self.kubernetes.region, self.kubernetes.kind, is_infra_deployment)
             .ok_or_else(|| {
                 Box::new(IoEngineError::new_error_on_cloud_provider_information(
                     event_details.clone(),
@@ -451,6 +451,8 @@ pub struct CloudProvider {
     pub zones: Vec<String>,
     pub options: CloudProviderOptions,
     pub terraform_state_credentials: TerraformStateCredentials,
+    // Only used by EKS infrastructure deployments, in place of the `options` credentials
+    pub wide_permissions_credentials: Option<WidePermissionsCredentials>,
 }
 
 #[derive(Deserialize)]
@@ -462,6 +464,18 @@ struct CloudProviderWire {
     zones: Vec<String>,
     options: Value,
     terraform_state_credentials: TerraformStateCredentials,
+    #[serde(default)]
+    wide_permissions_credentials: Option<Value>,
+}
+
+#[derive(Serialize, Clone, Derivative)]
+#[derivative(Debug)]
+pub struct WidePermissionsCredentials {
+    pub access_key_id: String,
+    #[derivative(Debug = "ignore")]
+    pub secret_access_key: String,
+    #[derivative(Debug = "ignore")]
+    pub session_token: String,
 }
 
 impl<'de> Deserialize<'de> for CloudProvider {
@@ -472,6 +486,8 @@ impl<'de> Deserialize<'de> for CloudProvider {
         let wire = CloudProviderWire::deserialize(deserializer)?;
         let options =
             deserialize_cloud_provider_options_by_kind(wire.kind.clone(), wire.options).map_err(de::Error::custom)?;
+        let wide_permissions_credentials =
+            deserialize_wide_permissions_credentials(&wire.kind, wire.wide_permissions_credentials);
 
         Ok(Self {
             kind: wire.kind,
@@ -481,8 +497,32 @@ impl<'de> Deserialize<'de> for CloudProvider {
             zones: wire.zones,
             options,
             terraform_state_credentials: wire.terraform_state_credentials,
+            wide_permissions_credentials,
         })
     }
+}
+
+// Lenient on purpose: the field is sent for every deployment, but only EKS infrastructure deployments use it.
+// Credentials that are not resolved (e.g. empty keys) are ignored, so the `options` ones are used instead.
+fn deserialize_wide_permissions_credentials(
+    kind: &cloud_provider::Kind,
+    credentials: Option<Value>,
+) -> Option<WidePermissionsCredentials> {
+    if !matches!(kind, cloud_provider::Kind::Aws) {
+        return None;
+    }
+
+    let credentials = credentials?;
+    let credentials = credentials.as_object()?;
+    let access_key_id = option_string_alias(credentials, &["access_key_id"])?;
+    let secret_access_key = option_string_alias(credentials, &["secret_access_key"])?;
+    let session_token = option_string_alias(credentials, &["session_token"])?;
+
+    Some(WidePermissionsCredentials {
+        access_key_id,
+        secret_access_key,
+        session_token,
+    })
 }
 
 fn deserialize_cloud_provider_options_by_kind(
@@ -577,6 +617,16 @@ impl CloudProvider {
         region: &str,
         cluster_kind: kubernetes::Kind,
     ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
+        self.build_engine_cloud_provider(region, cluster_kind, false)
+    }
+
+    // EKS infrastructure deployments use the wide permissions credentials when provided
+    fn build_engine_cloud_provider(
+        &self,
+        region: &str,
+        cluster_kind: kubernetes::Kind,
+        is_infra_deployment: bool,
+    ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
         let terraform_state_credentials = cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
             secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
@@ -624,7 +674,7 @@ impl CloudProvider {
                         _ => return None,
                     };
                 let credentials = AwsCredentials::new(access_key_id, secret_access_key, session_token);
-                Some(Box::new(AWS::new(
+                let aws = AWS::new(
                     self.long_id,
                     credentials,
                     region,
@@ -633,7 +683,18 @@ impl CloudProvider {
                     vsphere_password,
                     cluster_kind,
                     terraform_state_credentials,
-                )))
+                );
+
+                let aws = match &self.wide_permissions_credentials {
+                    Some(wide) if is_infra_deployment && cluster_kind == kubernetes::Kind::Eks => aws
+                        .with_wide_permissions_credentials(AwsCredentials::new(
+                            wide.access_key_id.clone(),
+                            wide.secret_access_key.clone(),
+                            Some(wide.session_token.clone()),
+                        )),
+                    _ => aws,
+                };
+                Some(Box::new(aws))
             }
             cloud_provider::Kind::Azure => {
                 let CloudProviderOptions::Azure {
@@ -1304,6 +1365,7 @@ pub enum CloudProviderOptions {
         #[derivative(Debug = "ignore")]
         secret_access_key: String,
         #[serde(default, alias = "aws_session_token")]
+        #[derivative(Debug = "ignore")]
         session_token: Option<String>,
         #[serde(default, alias = "vsphere_user", alias = "vsphere_username")]
         #[derivative(Debug = "ignore")]
@@ -1319,6 +1381,7 @@ pub enum CloudProviderOptions {
         #[derivative(Debug = "ignore")]
         secret_access_key: Option<String>,
         #[serde(default, alias = "aws_session_token")]
+        #[derivative(Debug = "ignore")]
         session_token: Option<String>,
         #[serde(alias = "vsphere_user", alias = "vsphere_username")]
         #[derivative(Debug = "ignore")]
@@ -1404,6 +1467,7 @@ mod tests {
                 s3_bucket: "terraform-state".to_string(),
                 dynamodb_table: "terraform-locks".to_string(),
             },
+            wide_permissions_credentials: None,
         };
 
         let engine_provider = cloud_provider
@@ -1445,6 +1509,7 @@ mod tests {
                 s3_bucket: "terraform-state".to_string(),
                 dynamodb_table: "terraform-locks".to_string(),
             },
+            wide_permissions_credentials: None,
         };
 
         let engine_provider = cloud_provider
@@ -1545,6 +1610,7 @@ mod tests {
                 s3_bucket: "terraform-state".to_string(),
                 dynamodb_table: "terraform-locks".to_string(),
             },
+            wide_permissions_credentials: None,
         };
 
         let engine_provider = cloud_provider
@@ -1580,6 +1646,7 @@ mod tests {
                 s3_bucket: "terraform-state".to_string(),
                 dynamodb_table: "terraform-locks".to_string(),
             },
+            wide_permissions_credentials: None,
         };
 
         let engine_provider = cloud_provider
@@ -1641,6 +1708,7 @@ mod tests {
                 s3_bucket: "terraform-state".to_string(),
                 dynamodb_table: "terraform-locks".to_string(),
             },
+            wide_permissions_credentials: None,
         };
 
         let engine_provider = cloud_provider
@@ -1674,6 +1742,180 @@ mod tests {
             }
             GcpCredentials::ServiceAccount(_) => panic!("expected access token credentials"),
         }
+    }
+
+    fn aws_cloud_provider_with_wide_permissions_credentials(
+        kind: &str,
+        wide_permissions_credentials: Option<serde_json::Value>,
+    ) -> CloudProvider {
+        let mut cloud_provider = json!({
+            "kind": kind,
+            "id": "aws-id",
+            "long_id": Uuid::new_v4(),
+            "name": "aws",
+            "zones": ["eu-west-3a"],
+            "options": {
+                "role_arn": "arn:aws:iam::123456789012:role/reduced-permissions",
+                "access_key_id": "AKIA_OPTIONS",
+                "secret_access_key": "OPTIONS_SECRET",
+                "session_token": "OPTIONS_TOKEN",
+                "expiration": "1790772265000"
+            },
+            "terraform_state_credentials": {
+                "access_key_id": "AKIA_TFSTATE",
+                "secret_access_key": "TFSTATE_SECRET",
+                "region": "eu-west-3",
+                "s3_bucket": "terraform-state",
+                "dynamodb_table": "terraform-locks"
+            }
+        });
+        if let Some(wide_permissions_credentials) = wide_permissions_credentials {
+            cloud_provider["wide_permissions_credentials"] = wide_permissions_credentials;
+        }
+
+        serde_json::from_value::<CloudProvider>(cloud_provider).expect("cloud provider should parse")
+    }
+
+    fn wide_permissions_credentials_json() -> serde_json::Value {
+        json!({
+            "role_arn": "arn:aws:iam::123456789012:role/wide-permissions",
+            "access_key_id": "AKIA_WIDE",
+            "secret_access_key": "WIDE_SECRET",
+            "session_token": "WIDE_TOKEN",
+            "expiration": "1790772265000"
+        })
+    }
+
+    #[test]
+    fn should_deserialize_wide_permissions_credentials() {
+        let cloud_provider =
+            aws_cloud_provider_with_wide_permissions_credentials("AWS", Some(wide_permissions_credentials_json()));
+
+        let wide = cloud_provider
+            .wide_permissions_credentials
+            .expect("wide permissions credentials should be set");
+        assert_eq!(wide.access_key_id, "AKIA_WIDE");
+        assert_eq!(wide.secret_access_key, "WIDE_SECRET");
+        assert_eq!(wide.session_token, "WIDE_TOKEN");
+    }
+
+    #[test]
+    fn should_ignore_missing_or_unresolved_wide_permissions_credentials() {
+        let unresolved = json!({
+            "role_arn": "arn:aws:iam::123456789012:role/wide-permissions",
+            "access_key_id": "",
+            "secret_access_key": "",
+            "session_token": "",
+            "expiration": "1790772265000"
+        });
+        let without_session_token = json!({
+            "access_key_id": "AKIA_WIDE",
+            "secret_access_key": "WIDE_SECRET"
+        });
+        // Unlike the cloud provider options, prefixed names are not supported
+        let with_prefixed_names = json!({
+            "aws_access_key_id": "AKIA_WIDE",
+            "aws_secret_access_key": "WIDE_SECRET",
+            "aws_session_token": "WIDE_TOKEN"
+        });
+
+        for wide_permissions_credentials in [
+            None,
+            Some(serde_json::Value::Null),
+            Some(unresolved),
+            Some(without_session_token),
+            Some(with_prefixed_names),
+        ] {
+            let cloud_provider =
+                aws_cloud_provider_with_wide_permissions_credentials("AWS", wide_permissions_credentials);
+            assert!(cloud_provider.wide_permissions_credentials.is_none());
+        }
+    }
+
+    #[test]
+    fn should_ignore_wide_permissions_credentials_for_non_aws_cloud_provider() {
+        let cloud_provider = serde_json::from_value::<CloudProvider>(json!({
+            "kind": "SCW",
+            "id": "scw-id",
+            "long_id": Uuid::new_v4(),
+            "name": "scw",
+            "zones": [],
+            "options": {
+                "scaleway_access_key": "SCW_ACCESS",
+                "scaleway_secret_key": "SCW_SECRET",
+                "scaleway_project_id": "project"
+            },
+            "terraform_state_credentials": {
+                "access_key_id": "AKIA_TFSTATE",
+                "secret_access_key": "TFSTATE_SECRET",
+                "region": "eu-west-3",
+                "s3_bucket": "terraform-state",
+                "dynamodb_table": "terraform-locks"
+            },
+            "wide_permissions_credentials": wide_permissions_credentials_json()
+        }))
+        .expect("cloud provider should parse");
+
+        assert!(cloud_provider.wide_permissions_credentials.is_none());
+    }
+
+    #[test]
+    fn should_use_wide_permissions_credentials_only_for_eks_infrastructure_deployments() {
+        let cloud_provider =
+            aws_cloud_provider_with_wide_permissions_credentials("AWS", Some(wide_permissions_credentials_json()));
+
+        // EKS infrastructure deployment: wide permissions credentials, options ones are kept aside
+        let engine_provider = cloud_provider
+            .build_engine_cloud_provider("eu-west-3", kubernetes::Kind::Eks, true)
+            .expect("aws cloud provider should be built");
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("AWS_ACCESS_KEY_ID", "AKIA_WIDE")));
+        assert!(envs.contains(&("AWS_SECRET_ACCESS_KEY", "WIDE_SECRET")));
+        assert!(envs.contains(&("AWS_SESSION_TOKEN", "WIDE_TOKEN")));
+        let engine_provider = engine_provider.downcast_ref();
+        let aws = engine_provider.as_aws().expect("cloud provider should be aws");
+        let wide_credentials = aws
+            .wide_credentials()
+            .expect("wide permissions credentials should be set");
+        assert_eq!(wide_credentials.access_key_id(), "AKIA_WIDE");
+        assert_eq!(wide_credentials.secret_access_key(), "WIDE_SECRET");
+        assert_eq!(wide_credentials.session_token(), Some("WIDE_TOKEN"));
+        let options_credentials = aws.options_credentials();
+        assert_eq!(options_credentials.access_key_id(), "AKIA_OPTIONS");
+        assert_eq!(options_credentials.secret_access_key(), "OPTIONS_SECRET");
+        assert_eq!(options_credentials.session_token(), Some("OPTIONS_TOKEN"));
+
+        // Environment deployment, or cluster that is not EKS: options credentials
+        for (cluster_kind, is_infra_deployment) in [
+            (kubernetes::Kind::Eks, false),
+            (kubernetes::Kind::EksSelfManaged, true),
+            (kubernetes::Kind::EksAnywhere, true),
+        ] {
+            let engine_provider = cloud_provider
+                .build_engine_cloud_provider("eu-west-3", cluster_kind, is_infra_deployment)
+                .expect("aws cloud provider should be built");
+            let envs = engine_provider.credentials_environment_variables();
+            assert!(envs.contains(&("AWS_ACCESS_KEY_ID", "AKIA_OPTIONS")));
+            assert!(envs.contains(&("AWS_SECRET_ACCESS_KEY", "OPTIONS_SECRET")));
+            assert!(envs.contains(&("AWS_SESSION_TOKEN", "OPTIONS_TOKEN")));
+            let engine_provider = engine_provider.downcast_ref();
+            let aws = engine_provider.as_aws().expect("cloud provider should be aws");
+            assert!(aws.wide_credentials().is_none());
+        }
+    }
+
+    #[test]
+    fn should_use_options_credentials_for_eks_infrastructure_deployment_without_wide_permissions_credentials() {
+        let cloud_provider = aws_cloud_provider_with_wide_permissions_credentials("AWS", None);
+
+        let engine_provider = cloud_provider
+            .build_engine_cloud_provider("eu-west-3", kubernetes::Kind::Eks, true)
+            .expect("aws cloud provider should be built");
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("AWS_ACCESS_KEY_ID", "AKIA_OPTIONS")));
+        let engine_provider = engine_provider.downcast_ref();
+        let aws = engine_provider.as_aws().expect("cloud provider should be aws");
+        assert!(aws.wide_credentials().is_none());
     }
 }
 

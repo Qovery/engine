@@ -54,6 +54,16 @@ pub trait InfrastructureAction: Send + Sync {
         kubernetes_upgrade_status: KubernetesUpgradeStatus,
     ) -> Result<(), Box<EngineError>>;
 
+    /// Called before connecting to an existing cluster, to give access to the credentials in use
+    /// if they don't have it yet
+    fn restore_cluster_access(
+        &self,
+        _infra_ctx: &InfrastructureContext,
+        _step: InfrastructureStep,
+    ) -> Result<(), Box<EngineError>> {
+        Ok(())
+    }
+
     fn run(&self, infra_ctx: &InfrastructureContext, action: Action) -> Result<(), Box<EngineError>> {
         let step = match action {
             Action::Create => InfrastructureStep::Create,
@@ -77,6 +87,8 @@ pub trait InfrastructureAction: Send + Sync {
 
         match action {
             Action::Create => {
+                // Not blocking, the next steps will fail with a proper error if we still can't connect
+                let _ = self.restore_cluster_access(infra_ctx, InfrastructureStep::Create);
                 let mut cluster_has_been_upgraded = false;
                 if infra_ctx.context().is_first_cluster_deployment() {
                     self.bootstap_cluster(infra_ctx)?;
@@ -162,7 +174,10 @@ pub trait InfrastructureAction: Send + Sync {
 
                 cluster
             }
-            Action::Pause => self.pause_cluster(infra_ctx),
+            Action::Pause => {
+                let _ = self.restore_cluster_access(infra_ctx, InfrastructureStep::Pause);
+                self.pause_cluster(infra_ctx)
+            }
             Action::Delete => self.delete_cluster(infra_ctx),
             Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
                 infra_ctx

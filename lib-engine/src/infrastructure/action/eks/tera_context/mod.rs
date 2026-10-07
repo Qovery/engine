@@ -306,6 +306,19 @@ pub fn eks_tera_context(
     context.insert("aws_access_key", cloud_provider.aws_credentials().access_key_id());
     context.insert("aws_secret_key", cloud_provider.aws_credentials().secret_access_key());
     context.insert("aws_session_token", &cloud_provider.aws_credentials().session_token());
+    // When running with the wide permissions credentials, the options ones are still needed to keep their access to the cluster
+    let wide_credentials = cloud_provider.wide_credentials();
+    context.insert("aws_wide_permissions_enabled", &wide_credentials.is_some());
+    let options_credentials = cloud_provider.options_credentials();
+    context.insert("aws_wide_permissions_options_access_key", options_credentials.access_key_id());
+    context.insert(
+        "aws_wide_permissions_options_secret_key",
+        options_credentials.secret_access_key(),
+    );
+    context.insert(
+        "aws_wide_permissions_options_session_token",
+        options_credentials.session_token().unwrap_or_default(),
+    );
 
     // Karpenter
     context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
