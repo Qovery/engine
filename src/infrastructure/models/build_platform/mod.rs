@@ -20,6 +20,7 @@ use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
+pub mod builder_usage;
 pub mod dockerfile_utils;
 pub mod local_docker;
 

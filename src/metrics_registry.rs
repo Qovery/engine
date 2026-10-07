@@ -67,6 +67,15 @@ pub struct BuiltImage {
     pub tag_variable_names: Vec<String>,
 }
 
+/// CPU and memory the builder pods used during a Build step, sampled from metrics-server.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BuilderUsage {
+    pub cpu_milli_max: u32,
+    pub cpu_milli_avg: u32,
+    pub memory_mib_max: u32,
+    pub samples: u32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepRecord {
     pub step_id: Uuid,
@@ -78,6 +87,8 @@ pub struct StepRecord {
     pub duration: Option<Duration>,
     pub status: Option<StepStatus>,
     pub built_image: Option<BuiltImage>,
+    pub builder_usage: Option<BuilderUsage>,
+    pub builder_oom_killed: bool,
 }
 
 #[derive(Clone)]
@@ -100,6 +111,13 @@ pub trait MetricsRegistry: Send + Sync {
         started_at: SystemTime,
         duration: Duration,
         status: StepStatus,
+    );
+    fn set_builder_usage(
+        &self,
+        id: Uuid,
+        deployment_step: StepName,
+        builder_usage: Option<BuilderUsage>,
+        builder_oom_killed: bool,
     );
     fn record_is_stopped(&self, id: Uuid, deployment_step: StepName) -> bool;
     fn get_records(&self, service_id: Uuid) -> Vec<StepRecord>;
@@ -125,6 +143,8 @@ impl StepRecord {
             duration: None,
             status: None,
             built_image: None,
+            builder_usage: None,
+            builder_oom_killed: false,
         }
     }
 }
@@ -150,6 +170,12 @@ impl<'a> StepRecordHandle<'a> {
     pub fn set_built_image(&self, built_image: BuiltImage) {
         self.metrics_registry
             .set_built_image(self.id, self.name.clone(), built_image);
+    }
+
+    /// Attach before `stop`, like `set_built_image`.
+    pub fn set_builder_usage(&self, builder_usage: Option<BuilderUsage>, builder_oom_killed: bool) {
+        self.metrics_registry
+            .set_builder_usage(self.id, self.name.clone(), builder_usage, builder_oom_killed);
     }
 }
 
@@ -273,6 +299,22 @@ impl MetricsRegistry for StdMetricsRegistry {
             .send(EngineMsg::new(EngineMsgPayload::Metrics(step_record)));
     }
 
+    fn set_builder_usage(
+        &self,
+        id: Uuid,
+        step_name: StepName,
+        builder_usage: Option<BuilderUsage>,
+        builder_oom_killed: bool,
+    ) {
+        let mut registry = self.registry.map.lock().expect("Failed to acquire lock");
+        if let Some(deployment_step_record) = registry.entry(id).or_default().get_mut(&step_name)
+            && deployment_step_record.duration.is_none()
+        {
+            deployment_step_record.builder_usage = builder_usage;
+            deployment_step_record.builder_oom_killed = builder_oom_killed;
+        }
+    }
+
     fn record_is_stopped(&self, id: Uuid, step_name: StepName) -> bool {
         let mut locked_registry = self.registry.map.lock().unwrap();
         let metrics_per_id = locked_registry.entry(id).or_default();
@@ -326,7 +368,9 @@ impl Drop for MetricsRegistryMap {
 #[cfg(test)]
 mod tests {
     use crate::events::EngineMsgPayload;
-    use crate::metrics_registry::{BuiltImage, MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus};
+    use crate::metrics_registry::{
+        BuilderUsage, BuiltImage, MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus,
+    };
     use crate::msg_publisher::StdMsgPublisher;
     use std::time::{Duration, SystemTime};
     use tokio::sync::mpsc::unbounded_channel;
@@ -467,5 +511,48 @@ mod tests {
         assert_eq!(published_record.duration, Some(Duration::from_secs(42)));
         assert_eq!(published_record.status, Some(StepStatus::Error));
         assert_eq!(metrics_registry.get_records(service_id), vec![published_record]);
+    }
+
+    fn builder_usage() -> BuilderUsage {
+        BuilderUsage {
+            cpu_milli_max: 3800,
+            cpu_milli_avg: 2100,
+            memory_mib_max: 6144,
+            samples: 24,
+        }
+    }
+
+    #[test]
+    fn builder_usage_is_published_with_the_stop_message_only() {
+        let (publisher, mut messages) = unbounded_channel();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(publisher));
+
+        let record = metrics_registry.start_record(Uuid::new_v4(), StepLabel::Service, StepName::Build);
+        let EngineMsgPayload::Metrics(started_record) = messages.try_recv().unwrap().payload;
+        record.set_builder_usage(Some(builder_usage()), true);
+        record.stop(StepStatus::Error);
+        let EngineMsgPayload::Metrics(stopped_record) = messages.try_recv().unwrap().payload;
+
+        assert_eq!((started_record.builder_usage, started_record.builder_oom_killed), (None, false));
+        assert_eq!(
+            (stopped_record.builder_usage, stopped_record.builder_oom_killed),
+            (Some(builder_usage()), true)
+        );
+    }
+
+    #[test]
+    fn builder_usage_set_after_the_stop_is_ignored() {
+        let service_id = Uuid::new_v4();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
+
+        let record = metrics_registry.start_record(service_id, StepLabel::Service, StepName::Build);
+        record.stop(StepStatus::Success);
+        record.set_builder_usage(Some(builder_usage()), true);
+
+        let stopped_record = &metrics_registry.get_records(service_id)[0];
+        assert_eq!(
+            (stopped_record.builder_usage.clone(), stopped_record.builder_oom_killed),
+            (None, false)
+        );
     }
 }

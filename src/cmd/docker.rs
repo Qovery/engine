@@ -69,6 +69,11 @@ impl DockerError {
     pub fn is_aborted(&self) -> bool {
         matches!(self, DockerError::Aborted { .. })
     }
+
+    /// The build only raises `BuilderPodTerminated` when buildx reported the pod OOMKilled.
+    pub fn is_builder_oom_killed(&self) -> bool {
+        matches!(self, DockerError::BuilderPodTerminated { .. })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -529,6 +534,14 @@ pub struct BuilderHandle {
     config_path: PathBuf,
     pub nb_builder: NonZeroUsize,
     pub builder_name: Option<String>,
+    pub pods: Option<BuilderPods>,
+}
+
+/// Where a Kubernetes builder runs: buildx creates one deployment per node, its pods named `{node_name}-…`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BuilderPods {
+    pub namespace: String,
+    pub node_names: Vec<String>,
 }
 
 impl Drop for BuilderHandle {
@@ -705,6 +718,7 @@ impl Docker {
                 config_path: self.config_path.path().to_path_buf(),
                 nb_builder: NonZeroUsize::new(1).unwrap(),
                 builder_name: None,
+                pods: None,
             }),
             BuilderLocation::Kubernetes {
                 namespace,
@@ -727,12 +741,25 @@ impl Docker {
                     });
                 }
 
+                let node_names = requested_architectures
+                    .iter()
+                    .map(|arch| {
+                        let mut node_name = format!("{builder_prefix}{exec_id}-{arch}");
+                        node_name.truncate(60);
+                        node_name.trim_matches(|c: char| !c.is_alphanumeric()).to_string()
+                    })
+                    .collect_vec();
+
                 // We create build handle here to force the drop to run if some operation fail
                 let builder_name = format!("qovery-{builder_name}");
                 let build_handle = BuilderHandle {
                     config_path: self.config_path.path().to_path_buf(),
                     nb_builder,
                     builder_name: Some(builder_name.clone()),
+                    pods: Some(BuilderPods {
+                        namespace: namespace.clone(),
+                        node_names: node_names.clone(),
+                    }),
                 };
 
                 info!("docker spawn builder {:?} {:?}", builder_name, requested_architectures);
@@ -752,10 +779,7 @@ impl Docker {
                 };
 
                 // Reference doc https://docs.docker.com/engine/reference/commandline/buildx_create
-                for (ix, arch) in requested_architectures.iter().enumerate() {
-                    let mut node_name = format!("{builder_prefix}{exec_id}-{arch}");
-                    node_name.truncate(60);
-                    let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
+                for (ix, (arch, node_name)) in requested_architectures.iter().zip(&node_names).enumerate() {
                     let platform = format!("linux/{arch}");
                     let driver_opt = kube_builder_driver_opt(
                         namespace,
@@ -780,7 +804,7 @@ impl Docker {
                         "--platform",
                         &platform,
                         "--node",
-                        node_name,
+                        node_name.as_str(),
                         "--buildkitd-flags",
                         "--debug",
                         &buildkitd_cfg_arg,
