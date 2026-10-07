@@ -61,6 +61,12 @@ message StepRecord {
   string image_name = 8;
   string image_tag = 9;
   repeated string tag_variable_names = 10;
+  // Build step only: builder pod usage sampled from metrics-server, unset when nothing was sampled.
+  optional uint32 builder_cpu_milli_max = 11;
+  optional uint32 builder_cpu_milli_avg = 12;
+  optional uint32 builder_memory_mib_max = 13;
+  optional uint32 builder_usage_samples = 14;
+  optional bool builder_oom_killed = 15;
 }
 
 message Metrics {

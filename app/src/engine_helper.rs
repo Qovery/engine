@@ -6,6 +6,7 @@ use qovery_engine::metrics_registry::{StepLabel, StepRecord, StepStatus};
 impl GrpcStepRecord {
     pub fn from_record(step_record: StepRecord) -> Self {
         let built_image = step_record.built_image.clone();
+        let builder_usage = step_record.builder_usage.as_ref();
         GrpcStepRecord {
             id: step_record.id.to_string(),
             step_id: step_record.step_id.to_string(),
@@ -30,6 +31,11 @@ impl GrpcStepRecord {
             image_name: built_image.as_ref().map(|image| image.name.clone()).unwrap_or_default(),
             image_tag: built_image.as_ref().map(|image| image.tag.clone()).unwrap_or_default(),
             tag_variable_names: built_image.map(|image| image.tag_variable_names).unwrap_or_default(),
+            builder_cpu_milli_max: builder_usage.map(|usage| usage.cpu_milli_max),
+            builder_cpu_milli_avg: builder_usage.map(|usage| usage.cpu_milli_avg),
+            builder_memory_mib_max: builder_usage.map(|usage| usage.memory_mib_max),
+            builder_usage_samples: builder_usage.map(|usage| usage.samples),
+            builder_oom_killed: step_record.builder_oom_killed.then_some(true),
         }
     }
 }
@@ -37,7 +43,7 @@ impl GrpcStepRecord {
 #[cfg(test)]
 mod tests {
     use super::{GrpcStepRecord, GrpcStepStatus, StepLabel, StepRecord, StepStatus};
-    use qovery_engine::metrics_registry::{BuiltImage, StepName};
+    use qovery_engine::metrics_registry::{BuilderUsage, BuiltImage, StepName};
     use std::time::Duration;
     use uuid::Uuid;
 
@@ -85,5 +91,47 @@ mod tests {
         assert!(grpc_record.image_name.is_empty());
         assert!(grpc_record.image_tag.is_empty());
         assert!(grpc_record.tag_variable_names.is_empty());
+    }
+
+    #[test]
+    fn builder_usage_conversion_carries_usage_and_oom_flag() {
+        let mut step_record = StepRecord::new(StepName::Build, StepLabel::Service, Uuid::new_v4());
+        step_record.builder_usage = Some(BuilderUsage {
+            cpu_milli_max: 3800,
+            cpu_milli_avg: 2100,
+            memory_mib_max: 6144,
+            samples: 24,
+        });
+        step_record.builder_oom_killed = true;
+
+        let grpc_record = GrpcStepRecord::from_record(step_record);
+
+        assert_eq!(
+            (
+                grpc_record.builder_cpu_milli_max,
+                grpc_record.builder_cpu_milli_avg,
+                grpc_record.builder_memory_mib_max,
+                grpc_record.builder_usage_samples,
+                grpc_record.builder_oom_killed,
+            ),
+            (Some(3800), Some(2100), Some(6144), Some(24), Some(true))
+        );
+    }
+
+    #[test]
+    fn record_without_builder_usage_leaves_usage_fields_unset() {
+        let grpc_record =
+            GrpcStepRecord::from_record(StepRecord::new(StepName::Build, StepLabel::Service, Uuid::new_v4()));
+
+        assert_eq!(
+            (
+                grpc_record.builder_cpu_milli_max,
+                grpc_record.builder_cpu_milli_avg,
+                grpc_record.builder_memory_mib_max,
+                grpc_record.builder_usage_samples,
+                grpc_record.builder_oom_killed,
+            ),
+            (None, None, None, None, None)
+        );
     }
 }

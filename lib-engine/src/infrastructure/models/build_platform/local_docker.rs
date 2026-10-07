@@ -23,6 +23,7 @@ use crate::cmd::docker;
 use crate::cmd::docker::{Architecture, BuilderHandle, CacheCompression, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
+use crate::infrastructure::models::build_platform::builder_usage::sample_while;
 use crate::infrastructure::models::build_platform::dockerfile_utils::{
     DockerfileSecretMounts, extract_dockerfile_args, extract_dockerfile_secret_mounts,
 };
@@ -334,27 +335,33 @@ impl LocalDocker {
         let secrets = secret_files.as_build_flags();
 
         let mut export_timings = BuildkitExportTimings::default();
-        let exit_status = self.context.docker.build(
-            &builder_handle.builder_name.as_deref(),
-            Path::new(dockerfile_complete_path),
-            Path::new(into_dir_docker_style),
-            &image_to_build,
-            &build_args,
-            &secrets,
-            image_cache.as_ref(),
-            cache_compression,
-            true,
-            &arch,
-            &mut |line| logger.send_progress(line),
-            &mut |line| logger.send_progress(line),
-            &CommandKiller::from(build.timeout, abort),
-            build
-                .git_repository()
-                .and_then(|repository| repository.docker_target_build_stage.as_ref()),
-            &mut export_timings,
-        );
+        let (exit_status, builder_usage) = sample_while(builder_handle.pods.as_ref(), || {
+            self.context.docker.build(
+                &builder_handle.builder_name.as_deref(),
+                Path::new(dockerfile_complete_path),
+                Path::new(into_dir_docker_style),
+                &image_to_build,
+                &build_args,
+                &secrets,
+                image_cache.as_ref(),
+                cache_compression,
+                true,
+                &arch,
+                &mut |line| logger.send_progress(line),
+                &mut |line| logger.send_progress(line),
+                &CommandKiller::from(build.timeout, abort),
+                build
+                    .git_repository()
+                    .and_then(|repository| repository.docker_target_build_stage.as_ref()),
+                &mut export_timings,
+            )
+        });
         record_export_timings(metrics_registry, build.image.service_long_id, &export_timings);
 
+        build_record.set_builder_usage(
+            builder_usage,
+            exit_status.as_ref().is_err_and(|err| err.is_builder_oom_killed()),
+        );
         if let Err(err) = exit_status {
             return Err(to_build_error(build.image.service_id.clone(), err));
         }
