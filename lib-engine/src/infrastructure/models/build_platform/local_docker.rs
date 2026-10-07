@@ -20,7 +20,7 @@ use uuid::Uuid;
 use crate::cmd::buildkit_progress::BuildkitExportTimings;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
-use crate::cmd::docker::{Architecture, BuilderHandle, CacheCompression, ContainerImage};
+use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage, LayerCompression};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
 use crate::infrastructure::models::build_platform::builder_usage::sample_while;
@@ -136,7 +136,7 @@ impl LocalDocker {
     fn build_image_with_docker(
         &self,
         build: &mut Build,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         logger: &EnvLogger,
@@ -147,7 +147,7 @@ impl LocalDocker {
             metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
         let build_result = self.build_image_with_docker_recorded(
             build,
-            cache_compression,
+            layer_compression,
             dockerfile_complete_path,
             into_dir_docker_style,
             logger,
@@ -162,7 +162,7 @@ impl LocalDocker {
     fn build_image_with_docker_recorded(
         &self,
         build: &mut Build,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         logger: &EnvLogger,
@@ -344,7 +344,7 @@ impl LocalDocker {
                 &build_args,
                 &secrets,
                 image_cache.as_ref(),
-                cache_compression,
+                layer_compression,
                 true,
                 &arch,
                 &mut |line| logger.send_progress(line),
@@ -440,7 +440,7 @@ impl LocalDocker {
     fn build_from_dockerfile(
         &self,
         build: &mut Build,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         dockerfile_content: &str,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
@@ -487,7 +487,7 @@ impl LocalDocker {
 
         self.build_image_with_docker(
             build,
-            cache_compression,
+            layer_compression,
             dockerfile_path.to_str().unwrap_or_default(),
             build_context_path.to_str().unwrap_or_default(),
             logger,
@@ -770,7 +770,7 @@ impl BuildPlatform for LocalDocker {
     fn build(
         &self,
         build: &mut Build,
-        cache_compression: CacheCompression,
+        layer_compression: LayerCompression,
         logger: &EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
         abort: &dyn Abort,
@@ -787,7 +787,7 @@ impl BuildPlatform for LocalDocker {
             BuildSource::Dockerfile { content } => Some(content.clone()),
         };
         if let Some(content) = synthesized_dockerfile {
-            return self.build_from_dockerfile(build, cache_compression, &content, logger, metrics_registry, abort);
+            return self.build_from_dockerfile(build, layer_compression, &content, logger, metrics_registry, abort);
         }
 
         let git_repository = build.git_repository().ok_or_else(|| BuildError::InvalidConfig {
@@ -1037,7 +1037,7 @@ impl BuildPlatform for LocalDocker {
 
         self.build_image_with_docker(
             build,
-            cache_compression,
+            layer_compression,
             dockerfile_absolute_path.to_str().unwrap_or_default(),
             build_context_path.to_str().unwrap_or_default(),
             logger,
