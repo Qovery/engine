@@ -8,14 +8,18 @@ use crate::cmd::docker::Docker;
 use crate::cmd::git;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::environment::action::deploy_external_secrets::{
+    ExternalSecretReadError, read_service_external_secret_values,
+};
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::environment::models::types::DeployedEngineVersion;
+use crate::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::Action;
 use crate::io_models::aws_apn_id::AwsApnId;
-use crate::io_models::blueprint::BlueprintVariable;
+use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{BlueprintEngineRequest, CloudProviderOptions};
 use crate::log_file_writer::LogFileWriter;
@@ -23,6 +27,8 @@ use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
 use crate::{engine_task, hack};
 use git2::{Cred, CredentialType};
+use itertools::Itertools;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
@@ -144,6 +150,55 @@ impl BlueprintTask {
             CloudProviderOptions::Azure { client_secret, .. } => vec![client_secret.to_string()],
             CloudProviderOptions::OnPremise { .. } => vec![],
         }
+    }
+
+    /// The request with its external secret references replaced by the values ESO synced for the deployed
+    /// service, or by [`UNSYNCED_SECRET_PLACEHOLDER`] for the ones not synced yet.
+    fn resolve_external_secret_references(
+        &self,
+        target_env: &BlueprintRequest,
+        infra_ctx: &InfrastructureContext,
+        event_details: &EventDetails,
+    ) -> Result<ResolvedExternalSecrets, Box<EngineError>> {
+        let references = &target_env.external_secret_references;
+        if references.is_empty() {
+            return Ok(ResolvedExternalSecrets {
+                request: target_env.clone(),
+                masks: vec![],
+                unsynced: vec![],
+            });
+        }
+
+        let synced = match target_env.import_id.as_deref() {
+            // Adopt-preview: no deployed service, so nothing synced
+            None => HashMap::new(),
+            Some(service_id) => {
+                let to_engine_error = |e: ExternalSecretReadError| {
+                    Box::new(EngineError::new_blueprint_error(event_details.clone(), BlueprintError::from(e)))
+                };
+                // Without a kubeconfig file the client silently falls back to the engine pod's own cluster
+                if !infra_ctx.kubernetes().kubeconfig_local_file_path().exists() {
+                    return Err(to_engine_error(ExternalSecretReadError(
+                        "no kubeconfig for the target cluster".to_string(),
+                    )));
+                }
+                let kube_client = infra_ctx.mk_kube_client()?;
+                read_service_external_secret_values(
+                    &kube_client.client(),
+                    &target_env.env_kube_name,
+                    service_id,
+                    references,
+                )
+                .map_err(to_engine_error)?
+            }
+        };
+
+        let (substitutions, unsynced) = external_secret_substitutions(references, &synced);
+        Ok(ResolvedExternalSecrets {
+            request: diff::with_external_secret_values(target_env, &substitutions),
+            masks: external_secret_mask_list(synced.into_values()),
+            unsynced,
+        })
     }
 
     /// Clone the blueprint repository and return the path + parsed tag info.
@@ -440,17 +495,45 @@ impl Task for BlueprintTask {
                     ));
                     let cloud_envs = infra_context.cloud_provider().credentials_environment_variables();
                     let kubeconfig_path = infra_context.kubernetes().kubeconfig_local_file_path();
+                    let external_secrets =
+                        self.resolve_external_secret_references(&target_env, &infra_context, &event_details)?;
+                    // Placeholders are masked in the live output too: only the final diff explains them
+                    let placeholders = (0..external_secrets.unsynced.len()).map(unsynced_secret_placeholder);
+                    let mut diff_secrets = [Self::get_secrets(&self.request), external_secrets.masks.clone()].concat();
+                    diff_secrets.extend(placeholders);
+                    sort_longest_first(&mut diff_secrets);
+                    let diff_logger = self.logger.with_secrets(diff_secrets);
+                    if !external_secrets.unsynced.is_empty() {
+                        diff_logger.log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(unsynced_secrets_notice(&external_secrets.unsynced), None),
+                        ));
+                    }
+                    // Diff errors and the Diffed payload are logged with self.logger, which does not know these values
+                    let obfuscation = StdObfuscationService::new(external_secrets.masks);
+                    // Label before masking: a short secret value could otherwise mangle a placeholder
+                    let present = |text: String| {
+                        obfuscation.obfuscate_secrets(label_unsynced_secrets(text, &external_secrets.unsynced))
+                    };
                     let diff = diff::diff_underlying_terraform(
                         &blueprint_dir,
-                        &target_env,
+                        &external_secrets.request,
                         &cloud_envs,
                         &kubeconfig_path,
                         tf_spec.timeout_sec,
                         tf_spec.flavor.clone(),
                         &event_details,
-                        self.logger.as_ref(),
-                    )?;
-                    Ok(BlueprintTaskOutcome::Diffed(diff))
+                        diff_logger.as_ref(),
+                    )
+                    .map_err(|e| {
+                        Box::new(EngineError::new_blueprint_error(
+                            event_details.clone(),
+                            BlueprintError::TerraformExecutionError(present(
+                                e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars),
+                            )),
+                        ))
+                    })?;
+                    Ok(BlueprintTaskOutcome::Diffed(present(diff)))
                 }
                 (true, ResolvedBlueprintSpec::Helm(helm_spec)) => {
                     // Helm-typed blueprints diff at the qovery_helm wrapper level (chart version
@@ -589,11 +672,215 @@ impl Task for BlueprintTask {
     }
 }
 
+struct ResolvedExternalSecrets {
+    request: BlueprintRequest,
+    masks: Vec<String>,
+    unsynced: Vec<String>,
+}
+
+/// Stands in for the `index`-th external secret ESO has not synced for the service yet, so the preview still shows
+/// what kind of change happens. Letters and digits, starts with a letter, 21+ chars: passes the service catalog's
+/// name, username and password rules (Redis/Valkey passwords need 16+).
+fn unsynced_secret_placeholder(index: usize) -> String {
+    format!("qovPlaceholderSecret{}", index + 1)
+}
+
+/// Value to plan each reference with: its synced value, else a placeholder. Also returns the unsynced references, in
+/// placeholder order.
+fn external_secret_substitutions(
+    references: &[String],
+    synced: &HashMap<String, String>,
+) -> (HashMap<String, String>, Vec<String>) {
+    let unsynced: Vec<String> = references
+        .iter()
+        .filter(|reference| !synced.contains_key(*reference))
+        .cloned()
+        .collect();
+    let substitutions = synced
+        .iter()
+        .map(|(reference, value)| (reference.clone(), value.clone()))
+        .chain(
+            unsynced
+                .iter()
+                .enumerate()
+                .map(|(index, reference)| (reference.clone(), unsynced_secret_placeholder(index))),
+        )
+        .collect();
+    (substitutions, unsynced)
+}
+
+fn unsynced_secrets_notice(unsynced: &[String]) -> String {
+    format!(
+        "External secret(s) {} not synced for this service yet: planned with a placeholder, the real value is applied at deploy",
+        unsynced.join(", ")
+    )
+}
+
+fn label_unsynced_secrets(text: String, unsynced: &[String]) -> String {
+    if unsynced.is_empty() {
+        return text;
+    }
+    // Highest index first: `qovPlaceholderSecret1` is a prefix of `qovPlaceholderSecret10`
+    let labelled = unsynced
+        .iter()
+        .enumerate()
+        .rev()
+        .fold(text, |text, (index, reference)| {
+            text.replace(
+                &unsynced_secret_placeholder(index),
+                &format!("<external secret {reference}, value known at deploy>"),
+            )
+        });
+    format!("# {}\n\n{}", unsynced_secrets_notice(unsynced), labelled)
+}
+
+/// Heredoc lines and bare JSON leaves shorter than this are not masked: `{` or `true` would blank out the plan.
+const MIN_MASKED_LEN: usize = 6;
+/// A JSON leaf this long is still masked in its quoted form `"leaf"`, which only matches identical string values.
+const MIN_QUOTED_LEAF_LEN: usize = 3;
+
+/// External secret values plus the forms terraform prints them in (see [`printed_forms`]), also for each leaf of a
+/// JSON value, which terraform's `jsonencode(...)` view prints one by one. Longest first: the obfuscation regex
+/// alternation is leftmost-first.
+fn external_secret_mask_list(values: impl IntoIterator<Item = String>) -> Vec<String> {
+    let mut masks: Vec<String> = values
+        .into_iter()
+        // Blank entry builds an empty regex, which matches everywhere and masks the whole plan
+        .filter(|value| !value.trim().is_empty())
+        .flat_map(|value| {
+            let leaves = json_leaves(&value)
+                .into_iter()
+                .filter(|leaf| leaf.trim().len() >= MIN_QUOTED_LEAF_LEN)
+                .flat_map(|leaf| {
+                    let quoted = [terraform_quoted(&leaf), diff::hcl_escape(&leaf)].map(|form| format!("\"{form}\""));
+                    let bare = if is_maskable(&leaf) {
+                        printed_forms(&leaf)
+                    } else {
+                        vec![]
+                    };
+                    quoted.into_iter().chain(bare)
+                });
+            printed_forms(&value).into_iter().chain(leaves).collect::<Vec<_>>()
+        })
+        .unique()
+        .collect();
+    sort_longest_first(&mut masks);
+    masks
+}
+
+/// Raw, terraform-quoted, HCL-escaped (`$$`, `%%`), and each heredoc line.
+fn printed_forms(value: &str) -> Vec<String> {
+    let lines = value.lines().filter(|line| is_maskable(line)).map(str::to_string);
+    [value.to_string(), terraform_quoted(value), diff::hcl_escape(value)]
+        .into_iter()
+        .chain(lines)
+        .collect()
+}
+
+fn terraform_quoted(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+fn is_maskable(text: &str) -> bool {
+    text.trim().len() >= MIN_MASKED_LEN
+}
+
+/// String and number leaves of a JSON object or array value; empty for anything else.
+fn json_leaves(value: &str) -> Vec<String> {
+    fn collect(node: &serde_json::Value, leaves: &mut Vec<String>) {
+        match node {
+            serde_json::Value::String(leaf) => leaves.push(leaf.clone()),
+            serde_json::Value::Number(leaf) => leaves.push(leaf.to_string()),
+            serde_json::Value::Array(items) => items.iter().for_each(|item| collect(item, leaves)),
+            serde_json::Value::Object(fields) => fields.values().for_each(|field| collect(field, leaves)),
+            serde_json::Value::Null | serde_json::Value::Bool(_) => {}
+        }
+    }
+    let mut leaves = Vec::new();
+    if let Ok(node @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) = serde_json::from_str(value) {
+        collect(&node, &mut leaves);
+    }
+    leaves
+}
+
+fn sort_longest_first(secrets: &mut [String]) {
+    secrets.sort_by_key(|secret| std::cmp::Reverse(secret.len()));
+}
+
 #[cfg(test)]
 mod tests {
     use super::BlueprintTask;
     use crate::io_models::blueprint::BlueprintVariable;
     use crate::io_models::engine_request::CloudProviderOptions;
+
+    #[test]
+    fn external_secret_mask_list_covers_quoted_tfvars_and_heredoc_forms() {
+        let masks = super::external_secret_mask_list(["p\"a$s\tx\r\nline-two\n}".to_string(), "short".to_string()]);
+
+        assert_eq!(
+            masks,
+            vec![
+                r#"p\"a$$s\tx\r\nline-two\n}"#.to_string(),
+                r#"p\"a$s\tx\r\nline-two\n}"#.to_string(),
+                "p\"a$s\tx\r\nline-two\n}".to_string(),
+                "line-two".to_string(),
+                "p\"a$s\tx".to_string(),
+                "short".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn external_secret_substitutions_plans_unsynced_references_with_placeholders() {
+        let references: Vec<String> = ["RABBIT_PW", "SYNCED", "API_KEY"].map(String::from).to_vec();
+        let synced = std::collections::HashMap::from([("SYNCED".to_string(), "real-value".to_string())]);
+
+        let (substitutions, unsynced) = super::external_secret_substitutions(&references, &synced);
+
+        assert_eq!(unsynced, vec!["RABBIT_PW".to_string(), "API_KEY".to_string()]);
+        assert_eq!(substitutions["SYNCED"], "real-value");
+        assert_eq!(substitutions["RABBIT_PW"], "qovPlaceholderSecret1");
+        assert_eq!(substitutions["API_KEY"], "qovPlaceholderSecret2");
+    }
+
+    #[test]
+    fn label_unsynced_secrets_names_them_and_replaces_each_placeholder() {
+        let unsynced: Vec<String> = (1..=10).map(|n| format!("SECRET_{n}")).collect();
+        let plan = r#"~ db_name  = "pfdemo" -> "qovPlaceholderSecret1"
+~ password = "old" -> "qovPlaceholderSecret10""#;
+
+        let labelled = super::label_unsynced_secrets(plan.to_string(), &unsynced);
+
+        assert!(labelled.starts_with("# External secret(s) SECRET_1, SECRET_2"));
+        assert!(labelled.contains(r#""pfdemo" -> "<external secret SECRET_1, value known at deploy>""#));
+        assert!(labelled.contains(r#""old" -> "<external secret SECRET_10, value known at deploy>""#));
+        assert!(!labelled.contains("qovPlaceholder"));
+        assert_eq!(super::label_unsynced_secrets(plan.to_string(), &[]), plan);
+    }
+
+    #[test]
+    fn external_secret_mask_list_skips_blank_values() {
+        assert!(super::external_secret_mask_list(["".to_string(), "  \n".to_string()]).is_empty());
+    }
+
+    #[test]
+    fn external_secret_mask_list_masks_json_leaves() {
+        let masks = super::external_secret_mask_list([
+            r#"{"engine":"app","password":"p${w}rd-1","pin":123456789,"key":"-----BEGIN-----\nMIIEabcdef\n-----END-----"}"#
+                .to_string(),
+        ]);
+
+        for expected in ["p${w}rd-1", "p$${w}rd-1", "123456789", "MIIEabcdef", "-----BEGIN-----"] {
+            assert!(masks.contains(&expected.to_string()), "missing {expected}");
+        }
+        assert!(masks.contains(&"\"app\"".to_string()));
+        assert!(!masks.contains(&"app".to_string()));
+    }
 
     #[test]
     fn aws_sts_credentials_are_all_masked() {

@@ -34,4 +34,7 @@ pub enum BlueprintError {
 
     #[error("engine_version is required for terraform/opentofu blueprints")]
     MissingEngineVersion,
+
+    #[error(transparent)]
+    ExternalSecret(#[from] crate::environment::action::deploy_external_secrets::ExternalSecretReadError),
 }
