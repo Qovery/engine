@@ -9,6 +9,8 @@ const CHART_PATH: &str = concat!(
 );
 const HTTP_LISTENER: &str = "default/qovery-cluster-public-gateway/http";
 const HTTPS_LISTENER: &str = "default/qovery-cluster-public-gateway/https";
+const CODEC_SPECIFIC_COMPRESSOR_FILTERS_JSON_PATH: &str =
+    "$..http_filters[?match(@.name, 'envoy[.]filters[.]http[.]compressor[.].*')].typed_config";
 
 fn render_chart(compression_enabled: bool) -> Vec<Value> {
     let output = Command::new("helm")
@@ -62,6 +64,11 @@ fn compression_patch_creates_response_direction_config_that_excludes_206() {
     for (json_patch, listener_name) in json_patches.iter().zip([HTTP_LISTENER, HTTPS_LISTENER]) {
         assert_eq!(json_patch["name"].as_str(), Some(listener_name));
         assert_eq!(json_patch["operation"]["op"].as_str(), Some("add"));
+        assert_eq!(
+            json_patch["operation"]["jsonPath"].as_str(),
+            Some(CODEC_SPECIFIC_COMPRESSOR_FILTERS_JSON_PATH),
+            "the patch must target Envoy Gateway's codec-specific compressor filters"
+        );
         assert_eq!(
             json_patch["operation"]["path"].as_str(),
             Some("/response_direction_config"),
