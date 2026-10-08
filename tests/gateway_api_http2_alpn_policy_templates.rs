@@ -20,6 +20,7 @@ fn render_policy(
     deploy_listenerset: bool,
     client_traffic_policy_supports_listenerset: bool,
     has_https_listeners: bool,
+    router_policy_http2_enabled: bool,
 ) -> String {
     render_policy_with_cluster_settings(
         certificate_alternative_names,
@@ -36,6 +37,7 @@ fn render_policy(
             "proxy_protocol_enabled": false,
             "use_v1beta1_reference_grant": false,
         }),
+        router_policy_http2_enabled,
     )
 }
 
@@ -45,6 +47,7 @@ fn render_policy_with_cluster_settings(
     client_traffic_policy_supports_listenerset: bool,
     has_https_listeners: bool,
     cluster_settings: serde_json::Value,
+    router_policy_http2_enabled: bool,
 ) -> String {
     render_policy_with_gateway_hosts(
         certificate_alternative_names,
@@ -56,6 +59,7 @@ fn render_policy_with_cluster_settings(
             json!({})
         },
         cluster_settings,
+        router_policy_http2_enabled,
     )
 }
 
@@ -65,6 +69,7 @@ fn render_policy_with_gateway_hosts(
     client_traffic_policy_supports_listenerset: bool,
     http_hosts_per_namespace_gateway: serde_json::Value,
     cluster_settings: serde_json::Value,
+    router_policy_http2_enabled: bool,
 ) -> String {
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
@@ -83,6 +88,7 @@ fn render_policy_with_gateway_hosts(
     context.insert("environment_long_id", &"environment-id");
     context.insert("project_long_id", &"project-id");
     context.insert("labels_group", &json!({ "common": {} }));
+    context.insert("router_policy_http2_enabled", &router_policy_http2_enabled);
     context.insert(
         "cluster_envoy_client_ip_detection_x_forwarded_for_number_trusted_hops",
         &cluster_settings["trusted_hops"],
@@ -202,7 +208,7 @@ fn render_listener_set(deploy_listenerset: bool) -> String {
 }
 
 #[test]
-fn multi_san_listenerset_gets_a_router_scoped_http2_alpn_policy() {
+fn router_policy_uses_http1_by_default() {
     let rendered = render_policy(
         json!([
             { "domain": "api.example.com" },
@@ -211,6 +217,7 @@ fn multi_san_listenerset_gets_a_router_scoped_http2_alpn_policy() {
         true,
         true,
         true,
+        false,
     );
     let policies = manifests(&rendered);
 
@@ -237,12 +244,38 @@ fn multi_san_listenerset_gets_a_router_scoped_http2_alpn_policy() {
         policy["spec"]["path"]["escapedSlashesAction"].as_str(),
         Some("UnescapeAndRedirect")
     );
-    assert_eq!(
-        policy["spec"]["tls"]["alpnProtocols"][0].as_str(),
-        Some("h2"),
-        "policy must explicitly override Envoy Gateway's HTTP/1.1 overlap fallback"
+    let alpn_protocols = policy["spec"]["tls"]["alpnProtocols"]
+        .as_sequence()
+        .expect("the router policy must define ALPN protocols");
+
+    assert_eq!(alpn_protocols.len(), 1);
+    assert_eq!(alpn_protocols[0].as_str(), Some("http/1.1"));
+}
+
+#[test]
+fn router_policy_keeps_http2_enabled() {
+    let rendered = render_policy(
+        json!([
+            { "domain": "api.example.com" },
+            { "domain": "alias.example.com" }
+        ]),
+        true,
+        true,
+        true,
+        true,
     );
-    assert_eq!(policy["spec"]["tls"]["alpnProtocols"][1].as_str(), Some("http/1.1"));
+    let policy = manifests(&rendered)
+        .into_iter()
+        .next()
+        .expect("Hyperline's multi-SAN ListenerSet must receive a ClientTrafficPolicy");
+
+    let alpn_protocols = policy["spec"]["tls"]["alpnProtocols"]
+        .as_sequence()
+        .expect("the router policy must define ALPN protocols");
+
+    assert_eq!(alpn_protocols.len(), 2);
+    assert_eq!(alpn_protocols[0].as_str(), Some("h2"));
+    assert_eq!(alpn_protocols[1].as_str(), Some("http/1.1"));
 }
 
 #[test]
@@ -268,6 +301,7 @@ fn multi_san_listenerset_keeps_configured_gateway_traffic_settings() {
             "proxy_protocol_enabled": true,
             "use_v1beta1_reference_grant": true,
         }),
+        false,
     );
     let policies = manifests(&rendered);
     let policy = policies
@@ -329,6 +363,7 @@ fn client_validation_reference_grants_are_unique_per_router_namespace() {
             "proxy_protocol_enabled": false,
             "use_v1beta1_reference_grant": false,
         }),
+        false,
     );
     let grants = manifests(&rendered)
         .into_iter()
@@ -373,6 +408,7 @@ fn multi_san_listenerset_policy_matches_the_complete_shared_policy_contract() {
             "proxy_protocol_enabled": true,
             "use_v1beta1_reference_grant": false,
         }),
+        false,
     );
     let listener_set_policy = manifests(&rendered)
         .into_iter()
@@ -382,7 +418,7 @@ fn multi_san_listenerset_policy_matches_the_complete_shared_policy_contract() {
 
     expected_spec["targetRefs"] = serde_json::to_value(&listener_set_policy["spec"]["targetRefs"])
         .expect("ListenerSet target references must convert to JSON");
-    expected_spec["tls"]["alpnProtocols"] = json!(["h2", "http/1.1"]);
+    expected_spec["tls"]["alpnProtocols"] = json!(["http/1.1"]);
 
     assert_eq!(
         serde_json::to_value(&listener_set_policy["spec"]).expect("ListenerSet policy spec must convert to JSON"),
@@ -394,7 +430,14 @@ fn multi_san_listenerset_policy_matches_the_complete_shared_policy_contract() {
 #[test]
 fn policy_is_absent_without_an_overlapping_listenerset_certificate() {
     assert!(
-        manifests(&render_policy(json!([{ "domain": "api.example.com" }]), true, true, true)).is_empty(),
+        manifests(&render_policy(
+            json!([{ "domain": "api.example.com" }]),
+            true,
+            true,
+            true,
+            false
+        ))
+        .is_empty(),
         "a single-SAN certificate already retains Envoy Gateway's default HTTP/2 ALPN"
     );
     assert!(
@@ -406,6 +449,7 @@ fn policy_is_absent_without_an_overlapping_listenerset_certificate() {
             false,
             true,
             true,
+            false,
         ))
         .is_empty(),
         "the policy must not target a ListenerSet section that was not deployed"
@@ -418,6 +462,7 @@ fn policy_is_absent_without_an_overlapping_listenerset_certificate() {
             ]),
             true,
             true,
+            false,
             false,
         ))
         .is_empty(),
@@ -435,6 +480,7 @@ fn policy_is_absent_when_the_cluster_only_accepts_gateway_targets() {
         true,
         false,
         true,
+        false,
     );
 
     assert!(
@@ -453,6 +499,7 @@ fn gke_with_an_older_client_traffic_policy_crd_keeps_its_listenerset() {
         true,
         false,
         true,
+        false,
     );
     let listener_sets = manifests(&render_listener_set(true));
 

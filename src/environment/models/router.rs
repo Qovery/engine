@@ -31,6 +31,12 @@ use tera::Context as TeraContext;
 use tracing::debug;
 use uuid::Uuid;
 
+const ORGA_9C983A44: Uuid = uuid::uuid!("9c983a44-eb28-4716-b701-1979a145cf5a");
+
+fn router_policy_http2_enabled(organization_long_id: Uuid) -> bool {
+    organization_long_id == ORGA_9C983A44
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum RouterError {
     #[error("Router invalid configuration: {0}")]
@@ -227,6 +233,10 @@ impl<T: CloudProvider> Router<T> {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
+        context.insert(
+            "router_policy_http2_enabled",
+            &router_policy_http2_enabled(environment.organization_long_id),
+        );
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
 
         // We can only have 1 router per application/container.
@@ -511,7 +521,6 @@ impl<T: CloudProvider> Router<T> {
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace_nginx);
         context.insert("grpc_hosts_per_namespace_nginx", &grpc_hosts_per_namespace_nginx);
         context.insert("grpc_hosts_per_namespace_gateway", &grpc_hosts_per_namespace_gateway);
-
         context.insert("annotations_group", &self.annotations_group);
         context.insert("labels_group", &self.labels_group);
 
@@ -1181,13 +1190,21 @@ where
 mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{
-        generate_certificate_alternative_names, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
-        to_gateway_http_routes_data_template, to_host_data_template,
+        ORGA_9C983A44, generate_certificate_alternative_names, router_policy_http2_enabled,
+        to_gateway_host_data_template, to_gateway_http_route_headers_signature, to_gateway_http_routes_data_template,
+        to_host_data_template,
     };
 
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
     use maplit::hashset;
     use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use uuid::Uuid;
+
+    #[test]
+    fn router_policy_http2_is_enabled_only_for_orga_9c983a44() {
+        assert!(router_policy_http2_enabled(ORGA_9C983A44));
+        assert!(!router_policy_http2_enabled(Uuid::new_v4()));
+    }
 
     #[test]
     pub fn test_certificate_alternative_names() {
