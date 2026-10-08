@@ -214,6 +214,7 @@ fn base() -> Json {
         "k8s_use_api_gateway": false,
         "k8s_deploy_listenerset": true,
         "k8s_deploy_client_traffic_policy_listenerset": true,
+        "router_policy_http2_enabled": false,
         "k8s_remove_nginx": false,
         "nginx_ingress_controller_configuration_snippet": "",
         "nginx_ingress_controller_server_snippet": "",

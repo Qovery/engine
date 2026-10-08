@@ -52,7 +52,9 @@ spec:
     withUnderscoresAction: DropHeader
   tls:
     alpnProtocols:
+      {{- if $.Values.router_policy_http2_enabled }}
       - h2
+      {{- end }}
       - http/1.1
     {{- if gt (len $.Values.cluster_envoy_client_validation_ca_certificates) 0 }}
     clientValidation:
