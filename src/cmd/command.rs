@@ -155,6 +155,15 @@ impl QoveryCommand {
     pub fn set_current_dir<P: AsRef<Path>>(&mut self, root_dir: P) {
         self.command.current_dir(root_dir);
     }
+
+    // `Command`'s Debug output prints the environment variables (credentials, session tokens),
+    // so messages that may reach user-facing logs must only contain the program and its arguments.
+    fn display_without_envs(&self) -> String {
+        std::iter::once(self.command.get_program())
+            .chain(self.command.get_args())
+            .map(|part| format!("{part:?}"))
+            .join(" ")
+    }
 }
 
 impl ExecutableCommand for QoveryCommand {
@@ -219,7 +228,7 @@ impl ExecutableCommand for QoveryCommand {
         STDOUT: FnMut(String),
         STDERR: FnMut(String),
     {
-        info!("command: {:?}", self.command);
+        info!("command: {}", self.display_without_envs());
         let mut cmd_handle = self
             .command
             .stdout(Stdio::piped())
@@ -286,7 +295,7 @@ impl ExecutableCommand for QoveryCommand {
                         stdout_output(line)
                     }
                     Err(err) => {
-                        error!("Error on stdout of cmd {:?}: {:?}", self.command, err);
+                        error!("Error on stdout of cmd {}: {:?}", self.display_without_envs(), err);
                         stdout_closed = true;
                         break;
                     }
@@ -318,7 +327,7 @@ impl ExecutableCommand for QoveryCommand {
                         stderr_output(line)
                     }
                     Err(err) => {
-                        error!("Error on stderr of cmd {:?}: {:?}", self.command, err);
+                        error!("Error on stderr of cmd {}: {:?}", self.display_without_envs(), err);
                         stderr_closed = true;
                         break;
                     }
@@ -347,7 +356,7 @@ impl ExecutableCommand for QoveryCommand {
                     match abort_notifier.should_abort() {
                         None => {}
                         Some(reason @ AbortReason::Timeout(_)) | Some(reason @ AbortReason::Canceled(_)) => {
-                            let msg = format!("Killing process {:?} due to {:?}", self.command, reason);
+                            let msg = format!("Killing process {} due to {:?}", self.display_without_envs(), reason);
                             warn!("{}", msg);
                             self.kill(&mut cmd_handle);
 
@@ -376,8 +385,9 @@ impl ExecutableCommand for QoveryCommand {
 
         if !exit_status.success() {
             debug!(
-                "command: {:?} terminated with error exist status {:?}",
-                self.command, exit_status
+                "command: {} terminated with error exist status {:?}",
+                self.display_without_envs(),
+                exit_status
             );
             return Err(ExitStatusError(exit_status));
         }
@@ -448,6 +458,21 @@ mod tests {
         let mut cmd = QoveryCommand::new("false", &[], &[]);
         assert!(cmd.exec().is_err());
         assert!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))));
+    }
+
+    #[test]
+    fn test_kill_message_does_not_leak_envs() {
+        let envs = [("AWS_SESSION_TOKEN", "super-secret-token")];
+        let mut cmd = QoveryCommand::new("sleep", &["120"], &envs);
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(1)));
+        match ret {
+            Err(CommandError::TimeoutError(msg)) => {
+                assert!(msg.contains("sleep"));
+                assert!(!msg.contains("super-secret-token"));
+                assert!(!msg.contains("AWS_SESSION_TOKEN"));
+            }
+            other => panic!("unexpected result: {other:?}"),
+        }
     }
 
     #[test]
