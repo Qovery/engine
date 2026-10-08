@@ -157,7 +157,7 @@ impl QoveryCommand {
     }
 
     // `Command`'s Debug output prints the environment variables (credentials, session tokens),
-    // so messages that may reach user-facing logs must only contain the program and its arguments.
+    // so engine logs get program + args only. Args can still hold secrets: never put this in user-facing errors.
     fn display_without_envs(&self) -> String {
         std::iter::once(self.command.get_program())
             .chain(self.command.get_args())
@@ -356,7 +356,8 @@ impl ExecutableCommand for QoveryCommand {
                     match abort_notifier.should_abort() {
                         None => {}
                         Some(reason @ AbortReason::Timeout(_)) | Some(reason @ AbortReason::Canceled(_)) => {
-                            let msg = format!("Killing process {} due to {:?}", self.display_without_envs(), reason);
+                            // Reaches user-facing errors: program only, args can hold secrets
+                            let msg = format!("Killing process {:?} due to {:?}", self.command.get_program(), reason);
                             warn!("{}", msg);
                             self.kill(&mut cmd_handle);
 
@@ -420,14 +421,6 @@ where
         .is_ok()
 }
 
-pub fn command_to_string<P>(binary: P, args: &[&str], envs: &[(&str, &str)]) -> String
-where
-    P: AsRef<Path>,
-{
-    let _envs = envs.iter().map(|(k, v)| format!("{k}={v}")).join(" ");
-    format!("{} {:?} {}", _envs, binary.as_ref().as_os_str(), args.join(" "))
-}
-
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::{
@@ -461,15 +454,20 @@ mod tests {
     }
 
     #[test]
-    fn test_kill_message_does_not_leak_envs() {
+    fn test_kill_message_does_not_leak_envs_nor_args() {
         let envs = [("AWS_SESSION_TOKEN", "super-secret-token")];
-        let mut cmd = QoveryCommand::new("sleep", &["120"], &envs);
+        let mut cmd = QoveryCommand::new(
+            "sh",
+            &["-c", "exec sleep 120", "sh", "--password", "super-secret-password"],
+            &envs,
+        );
         let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(1)));
         match ret {
             Err(CommandError::TimeoutError(msg)) => {
-                assert!(msg.contains("sleep"));
+                assert!(msg.contains("Killing process \"sh\""));
                 assert!(!msg.contains("super-secret-token"));
                 assert!(!msg.contains("AWS_SESSION_TOKEN"));
+                assert!(!msg.contains("super-secret-password"));
             }
             other => panic!("unexpected result: {other:?}"),
         }
