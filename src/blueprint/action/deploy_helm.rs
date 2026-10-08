@@ -236,6 +236,7 @@ mod tests {
             icon: String::new(),
             env_kube_name: "env-test-ns".into(),
             backend_type: None,
+            external_secret_references: vec![],
         }
     }
 

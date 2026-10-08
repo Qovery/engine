@@ -26,8 +26,11 @@ use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::io_models::blueprint::BlueprintRequest;
 use crate::io_models::terraform::TerraformBackendType;
 use crate::logger::Logger;
+use regex::{Captures, Regex};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 pub const DIFF_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
@@ -289,14 +292,38 @@ fn render_tfvars(request: &BlueprintRequest) -> String {
         .collect()
 }
 
-/// Escape an HCL double-quoted string value. Backslash and `"` get the usual `\` escape;
+/// Same pattern as q-core's `VariableDomain.composedVariablePattern`.
+static VARIABLE_REFERENCE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{ *([^} ]+?) *}}").expect("valid regex"));
+
+/// Copy of `request` whose variables carry the external secret values instead of their `{{ NAME }}`
+/// references. References missing from `values` stay literal.
+pub fn with_external_secret_values(request: &BlueprintRequest, values: &HashMap<String, String>) -> BlueprintRequest {
+    let mut resolved = request.clone();
+    for variable in &mut resolved.variables {
+        variable.value = VARIABLE_REFERENCE_REGEX
+            .replace_all(&variable.value, |captures: &Captures| {
+                values
+                    .get(&captures[1])
+                    .cloned()
+                    .unwrap_or_else(|| captures[0].to_string())
+            })
+            .into_owned();
+    }
+    resolved
+}
+
+/// Escape an HCL double-quoted string value. Backslash, `"`, newline, CR and tab get the usual `\` escape;
 /// `$` and `%` are doubled to suppress HCL string interpolation (`${…}`) and template-directive
 /// (`%{…}`) sequences — a variable value like `${DB_PASSWORD}` would otherwise be evaluated by
 /// the HCL parser instead of treated as a literal string. Mirrors the catalog template's
 /// `hcl_string` filter convention.
-fn hcl_escape(s: &str) -> String {
+pub(crate) fn hcl_escape(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
         .replace('$', "$$")
         .replace('%', "%%")
 }
@@ -424,6 +451,29 @@ mod tests {
     }
 
     #[test]
+    fn with_external_secret_values_substitutes_references_and_keeps_unknown_ones() {
+        let req = blueprint_request(vec![
+            ("admin_password", "{{ RABBIT_PW }}"),
+            ("url", "amqp://admin:{{RABBIT_PW}}@host"),
+            ("plain_ref", "{{ PLAIN_VAR }}"),
+        ]);
+        let values = HashMap::from([("RABBIT_PW".to_string(), r#"p"a$s"#.to_string())]);
+
+        let tfvars = render_tfvars(&with_external_secret_values(&req, &values));
+
+        assert!(tfvars.contains(r#"admin_password = "p\"a$$s""#));
+        assert!(tfvars.contains(r#"url = "amqp://admin:p\"a$$s@host""#));
+        assert!(tfvars.contains(r#"plain_ref = "{{ PLAIN_VAR }}""#));
+    }
+
+    #[test]
+    fn render_tfvars_escapes_multi_line_values() {
+        let req = blueprint_request(vec![("pem", "-----BEGIN KEY-----\nabc\r\n\tdef")]);
+        let tfvars = render_tfvars(&req);
+        assert!(tfvars.contains(r#"pem = "-----BEGIN KEY-----\nabc\r\n\tdef""#));
+    }
+
+    #[test]
     fn render_tfvars_escapes_interpolation_and_template_directives() {
         // `${DB_PASSWORD}` would be interpreted as HCL interpolation if not escaped — the parser
         // would try to evaluate the reference (or error). `%{if …}` is template-directive syntax.
@@ -525,6 +575,7 @@ mod tests {
             icon: String::new(),
             env_kube_name: "env-ns".into(),
             backend_type: None,
+            external_secret_references: vec![],
         }
     }
 

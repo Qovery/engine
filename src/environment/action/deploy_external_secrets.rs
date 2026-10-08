@@ -304,6 +304,73 @@ fn eso_api_resource() -> ApiResource {
     }
 }
 
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[error("cannot read the external secrets of the service: {0}")]
+pub struct ExternalSecretReadError(pub String);
+
+/// Current values of `keys` in the ESO-generated Secrets of a deployed service. Previews need them: they run
+/// terraform inside the engine, where the job's `$(NAME)` env expansion does not happen. A key not synced yet is
+/// absent from the result.
+pub fn read_service_external_secret_values(
+    kube_client: &kube::Client,
+    namespace: &str,
+    service_id: &str,
+    keys: &[String],
+) -> Result<HashMap<String, String>, ExternalSecretReadError> {
+    let eso_api: Api<DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &eso_api_resource());
+    let list_params = ListParams::default().labels(&format!("qovery.com/service-id={service_id}"));
+    let external_secrets = block_on(eso_api.list(&list_params)).map_err(|e| ExternalSecretReadError(e.to_string()))?;
+    let target_secret_by_key = target_secret_names_by_key(&external_secrets.items);
+
+    let secret_api: Api<Secret> = Api::namespaced(kube_client.clone(), namespace);
+    let mut secrets_by_name: HashMap<&str, Option<Secret>> = HashMap::new();
+    let mut values = HashMap::with_capacity(keys.len());
+    for key in keys {
+        let value = match target_secret_by_key.get(key) {
+            Some(secret_name) => {
+                if !secrets_by_name.contains_key(secret_name.as_str()) {
+                    let secret = block_on(secret_api.get_opt(secret_name))
+                        .map_err(|e| ExternalSecretReadError(e.to_string()))?;
+                    secrets_by_name.insert(secret_name.as_str(), secret);
+                }
+                secrets_by_name
+                    .get(secret_name.as_str())
+                    .and_then(|secret| secret.as_ref())
+                    .and_then(|secret| secret.data.as_ref())
+                    .and_then(|data| data.get(key))
+                    .and_then(|bytes| String::from_utf8(bytes.0.clone()).ok())
+            }
+            None => None,
+        };
+        if let Some(value) = value {
+            values.insert(key.clone(), value);
+        }
+    }
+    Ok(values)
+}
+
+/// `spec.data[].secretKey` → `spec.target.name` across the ExternalSecrets of one service.
+fn target_secret_names_by_key(external_secrets: &[DynamicObject]) -> HashMap<String, String> {
+    let mut by_key = HashMap::new();
+    for spec in external_secrets
+        .iter()
+        .map(|external_secret| &external_secret.data["spec"])
+    {
+        let Some(target) = spec["target"]["name"].as_str() else {
+            continue;
+        };
+        for key in spec["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry["secretKey"].as_str())
+        {
+            by_key.insert(key.to_string(), target.to_string());
+        }
+    }
+    by_key
+}
+
 /// Waits for External Secrets to be ready and fetches their values
 /// Targets either the new secret or the previous secret based on annotation `reconcile.external-secrets.io/data-hash`
 /// Returns the mapping between the external secret and the target secret name with decoded secret values
@@ -549,5 +616,47 @@ pub fn clean_unused_secrets_generated_by_eso(
         {
             error!("Failed to delete unused ESO secret {secret_name} for service {service_id}: {err}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn external_secret(target: Option<&str>, keys: &[&str]) -> DynamicObject {
+        let mut spec = json!({ "data": keys.iter().map(|key| json!({ "secretKey": key, "remoteRef": { "key": "remote" } })).collect::<Vec<_>>() });
+        if let Some(target) = target {
+            spec["target"] = json!({ "name": target });
+        }
+        serde_json::from_value(json!({
+            "apiVersion": "external-secrets.io/v1",
+            "kind": "ExternalSecret",
+            "metadata": { "name": "terraform-z123-access" },
+            "spec": spec,
+        }))
+        .expect("valid ExternalSecret")
+    }
+
+    #[test]
+    fn target_secret_names_by_key_maps_every_key_of_every_external_secret() {
+        let by_key = target_secret_names_by_key(&[
+            external_secret(Some("secret-a-1234"), &["RABBIT_PW", "RABBIT_USER"]),
+            external_secret(Some("secret-b-5678"), &["API_KEY"]),
+        ]);
+
+        assert_eq!(
+            by_key,
+            HashMap::from([
+                ("RABBIT_PW".to_string(), "secret-a-1234".to_string()),
+                ("RABBIT_USER".to_string(), "secret-a-1234".to_string()),
+                ("API_KEY".to_string(), "secret-b-5678".to_string()),
+            ])
+        );
+    }
+
+    #[test]
+    fn target_secret_names_by_key_skips_external_secrets_without_target() {
+        assert!(target_secret_names_by_key(&[external_secret(None, &["RABBIT_PW"])]).is_empty());
     }
 }

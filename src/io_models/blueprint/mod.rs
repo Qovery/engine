@@ -67,6 +67,11 @@ pub struct BlueprintRequest {
     /// helm-typed blueprints or non-DIFF actions. Reuses the env-engine's existing enum.
     #[serde(default)]
     pub backend_type: Option<crate::io_models::terraform::TerraformBackendType>,
+
+    /// External secret names referenced as `{{ NAME }}` by `variables`. DIFF reads their values from the
+    /// deployed service's ESO Secrets: the real deploy expands them in the terraform job, the preview cannot.
+    #[serde(default)]
+    pub external_secret_references: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
