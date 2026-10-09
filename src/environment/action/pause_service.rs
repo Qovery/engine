@@ -345,6 +345,18 @@ fn get_patch_remove_node_selector(key: &str) -> (PatchParams, Patch<Value>) {
     (patch_params, Patch::Json(json_patch::Patch(patch_operations)))
 }
 
+// Evicted/completed pods stay listed (phase Failed/Succeeded) but are not running, they must not block scale-down
+fn count_active_pods(pods: &[Pod]) -> usize {
+    pods.iter()
+        .filter(|pod| {
+            !matches!(
+                pod.status.as_ref().and_then(|s| s.phase.as_deref()),
+                Some("Failed") | Some("Succeeded")
+            )
+        })
+        .count()
+}
+
 async fn wait_for_pods_to_be_in_correct_state(
     kube: &Client,
     namespace: &str,
@@ -360,7 +372,7 @@ async fn wait_for_pods_to_be_in_correct_state(
         Api::namespaced(kube.clone(), namespace)
     };
     while let Ok(pod) = pods.list(list_params).await {
-        if pod.items.len() == desired_size {
+        if count_active_pods(&pod.items) == desired_size {
             break;
         }
 
@@ -521,6 +533,34 @@ impl DeploymentAction for PauseServiceAction {
 
     fn on_restart(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod count_active_pods_tests {
+    use super::count_active_pods;
+    use k8s_openapi::api::core::v1::{Pod, PodStatus};
+
+    fn pod_with_phase(phase: &str) -> Pod {
+        Pod {
+            status: Some(PodStatus {
+                phase: Some(phase.to_string()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_count_active_pods_ignores_failed_and_succeeded() {
+        let pods = vec![
+            pod_with_phase("Running"),
+            pod_with_phase("Pending"),
+            pod_with_phase("Failed"),
+            pod_with_phase("Succeeded"),
+            Pod::default(),
+        ];
+        assert_eq!(count_active_pods(&pods), 3);
     }
 }
 
