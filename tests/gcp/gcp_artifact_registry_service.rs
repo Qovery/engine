@@ -226,7 +226,6 @@ fn test_delete_repository() {
 
 #[cfg(feature = "test-quarantine")]
 #[test]
-// #[ignore = "docker login fails on the CI because of not TTY, TODO(ENG-1631): activate it in the CI"]
 #[named]
 fn test_get_docker_image() {
     // setup:
@@ -303,7 +302,7 @@ fn test_get_docker_image() {
             vec![destination_image_tag.to_string()],
         );
 
-        docker.login(&registry_url).expect("Cannot execute Docker login");
+        docker.login(&repository_url).expect("Cannot execute Docker login");
         docker
             .pull(
                 &source_container_image,
@@ -357,7 +356,6 @@ fn test_get_docker_image() {
 
 #[cfg(feature = "test-quarantine")]
 #[test]
-// #[ignore = "docker login fails on the CI because of not TTY, TODO(ENG-1631): activate it in the CI"]
 #[named]
 fn test_delete_docker_image() {
     // setup:
@@ -434,7 +432,7 @@ fn test_delete_docker_image() {
             vec![destination_image_tag.to_string()],
         );
 
-        docker.login(&registry_url).expect("Cannot execute Docker login");
+        docker.login(&repository_url).expect("Cannot execute Docker login");
         docker
             .pull(
                 &source_container_image,
