@@ -522,6 +522,22 @@ fn is_valid_kubernetes_secret_name(name: &str) -> bool {
     bytes.iter().all(|byte| is_dns_subdomain_char(*byte))
 }
 
+/// EKS control plane log types that can be exported to CloudWatch.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum EksLogType {
+    /// Kubernetes API server logs.
+    Api,
+    /// Kubernetes audit logs.
+    Audit,
+    /// Authentication requests to the cluster.
+    Authenticator,
+    /// Kubernetes controller manager logs.
+    ControllerManager,
+    /// Kubernetes scheduler logs.
+    Scheduler,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
@@ -618,6 +634,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_alb_controller_load_balancer_scheme: AwsAlbLoadBalancerScheme,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
+    #[serde(alias = "aws.cloudwatch.eks_logs_types")]
+    pub aws_cloudwatch_eks_logs_types: Vec<EksLogType>,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
     pub aws_eks_encrypt_secrets_kms_key_arn: String,
     #[serde(alias = "aws.eks.enable_pod_identity_addon")]
@@ -844,6 +862,13 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_node_iam_policy_arns: Vec::new(),
             aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
+            aws_cloudwatch_eks_logs_types: vec![
+                EksLogType::Api,
+                EksLogType::Audit,
+                EksLogType::Authenticator,
+                EksLogType::ControllerManager,
+                EksLogType::Scheduler,
+            ],
             database_postgresql_deny_any_access: false,
             database_postgresql_allowed_cidrs: default_database_cirds.clone(),
             database_mysql_deny_any_access: false,
