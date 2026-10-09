@@ -3,6 +3,8 @@ config:
   envoyGateway:
     gateway:
       controllerName: qovery.com/gateway-controller
+    extensionApis:
+      enableLua: true
     logging:
       level:
         default: warn
