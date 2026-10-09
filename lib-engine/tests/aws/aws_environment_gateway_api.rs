@@ -12161,7 +12161,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_aws_eks() 
             );
         }
 
-        assert_multi_san_client_traffic_policies(kube_client.clone(), namespace, router_id, &router_name);
+        // Router org is Uuid::new_v4() (working_environment), never on the HTTP/2 allowlist
+        assert_multi_san_client_traffic_policies(kube_client.clone(), namespace, router_id, &router_name, false);
 
         // clean up:
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);

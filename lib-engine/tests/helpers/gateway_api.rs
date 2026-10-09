@@ -3,22 +3,31 @@ use kube::api::{ApiResource, ListParams};
 use qovery_engine::cmd::kubectl::kubectl_client_traffic_policy_supports_listenerset;
 use qovery_engine::runtime::block_on;
 use retry::delay::Fibonacci;
+use serde_json::json;
 use uuid::Uuid;
 
 // Qovery overrides Envoy Gateway's upstream controller name in the bootstrap chart.
 // Policy status is written by that configured controller, not by Envoy's default name.
 const ENVOY_GATEWAY_CONTROLLER_NAME: &str = "qovery.com/gateway-controller";
 
-/// Asserts that a multi-SAN router's ListenerSet received an accepted HTTP/2 ALPN policy.
+/// Asserts that a multi-SAN router's ListenerSet received an accepted ALPN policy.
+/// `http2_enabled` must match whether the router's org is on the HTTP/2 allowlist.
 pub fn assert_multi_san_client_traffic_policies(
     kube_client: kube::Client,
     router_namespace: &str,
     router_id: Uuid,
     router_name: &str,
+    http2_enabled: bool,
 ) {
     if !kubectl_client_traffic_policy_supports_listenerset(&kube_client) {
         return;
     }
+
+    let expected_alpn_protocols = if http2_enabled {
+        json!(["h2", "http/1.1"])
+    } else {
+        json!(["http/1.1"])
+    };
 
     let api_resource = ApiResource {
         group: "gateway.envoyproxy.io".to_string(),
@@ -77,8 +86,7 @@ pub fn assert_multi_san_client_traffic_policies(
             Some(expected_listener_set_name.as_str())
         );
         assert!(policy.data["spec"]["targetRefs"][0].get("sectionName").is_none());
-        assert_eq!(policy.data["spec"]["tls"]["alpnProtocols"][0].as_str(), Some("h2"));
-        assert_eq!(policy.data["spec"]["tls"]["alpnProtocols"][1].as_str(), Some("http/1.1"));
+        assert_eq!(policy.data["spec"]["tls"]["alpnProtocols"], expected_alpn_protocols);
     }
 }
 
