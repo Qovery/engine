@@ -190,7 +190,12 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
         let records = metrics_registry_for_deployment.get_records(environment.applications.first().unwrap().long_id);
-        assert_eq!(records.len(), 6);
+        // Push and cache export timings are parsed from buildkit output, best effort: only checked when recorded
+        let export_records: Vec<_> = records
+            .iter()
+            .filter(|step| matches!(step.step_name, StepName::ImagePush | StepName::CacheExport))
+            .collect();
+        assert_eq!(records.len(), 6 + export_records.len(), "unexpected step records: {records:?}");
 
         let record_provision_repo = records
             .iter()
@@ -218,6 +223,11 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         assert_eq!(record_build.id, environment.applications.first().unwrap().long_id);
         assert_eq!(record_build.status, Some(StepStatus::Success));
         assert!(record_build.duration.is_some());
+
+        for record in export_records {
+            assert_eq!(record.label, StepLabel::Service);
+            assert_eq!(record.status, Some(StepStatus::Success));
+        }
 
         let record_deployment = records
             .iter()
