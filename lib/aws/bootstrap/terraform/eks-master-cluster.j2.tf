@@ -58,7 +58,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   role_arn        = aws_iam_role.eks_cluster.arn
   version         = var.eks_k8s_versions.masters
 
-  enabled_cluster_log_types = ["api","audit","authenticator","controllerManager","scheduler"]
+  enabled_cluster_log_types = {{ aws_cloudwatch_eks_logs_types | json_encode() }}
   upgrade_policy {
       support_type = "STANDARD"
   }

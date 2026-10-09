@@ -417,6 +417,10 @@ pub fn eks_tera_context(
         "aws_cloudwatch_eks_logs_retention_days",
         &kubernetes.advanced_settings().aws_cloudwatch_eks_logs_retention_days,
     );
+    context.insert(
+        "aws_cloudwatch_eks_logs_types",
+        &kubernetes.advanced_settings().aws_cloudwatch_eks_logs_types,
+    );
 
     // AWS - EKS/EC2 Metadata
     // https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-IMDS-existing-instances.html
