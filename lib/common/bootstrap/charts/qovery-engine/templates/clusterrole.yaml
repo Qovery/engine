@@ -45,6 +45,14 @@ rules:
       - get
       - list
       - watch
+  # builder CPU / memory sampled during builds (build_platform/builder_usage.rs)
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
 {{- else }}
     # empty
 {{- end }}
