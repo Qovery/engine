@@ -657,6 +657,19 @@ mod tests {
     }
 
     #[test]
+    fn envoy_gateway_configurations_enable_lua_extension_api() {
+        for configuration_values in [
+            include_str!("../../lib/common/bootstrap/chart_values/envoy-gateway.yaml"),
+            include_str!("../../lib/self-managed/demo_chart_values/envoy-gateway.yaml"),
+            include_str!("../../../platform-catalog/components/envoy-gateway/config/static-values/base.yaml"),
+        ] {
+            let values: serde_yaml::Value = serde_yaml::from_str(configuration_values).expect("valid Envoy values");
+
+            assert_eq!(values["config"]["envoyGateway"]["extensionApis"]["enableLua"], true);
+        }
+    }
+
+    #[test]
     fn dedicated_envoy_gateway_crd_override_enables_gateway_api_and_envoy_crds() {
         let values: serde_yaml::Value =
             serde_yaml::from_str(include_str!("../../lib/common/bootstrap/chart_values/envoy-gateway-crd.yaml"))
