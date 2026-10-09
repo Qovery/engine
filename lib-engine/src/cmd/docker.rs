@@ -953,8 +953,6 @@ impl Docker {
             return Ok(());
         }
 
-        info!("Docker login {} as user {}", registry, username);
-
         let password = registry
             .password()
             .and_then(|password| urlencoding::decode(password).ok())
@@ -970,21 +968,15 @@ impl Docker {
             }
         };
 
-        let args = vec![
-            "--config",
-            self.config_path.path().to_str().unwrap_or(""),
-            "login",
-            &registry_host,
-            "-u",
-            &username,
-            "-p",
-            &password,
-        ];
+        info!("Docker login {} as user {}", registry_host, username);
+
+        let args = login_args(self.config_path.path().to_str().unwrap_or(""), &registry_host, &username);
 
         let _lock = LOGIN_LOCK.lock().unwrap();
-        docker_exec(
+        docker_exec_with_stdin(
             &args,
             &self.get_all_envs(&[]),
+            Some(password.into_owned()),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -1517,6 +1509,18 @@ where
     }
 }
 
+fn login_args<'a>(config_path: &'a str, registry_host: &'a str, username: &'a str) -> [&'a str; 7] {
+    [
+        "--config",
+        config_path,
+        "login",
+        registry_host,
+        "-u",
+        username,
+        "--password-stdin",
+    ]
+}
+
 fn docker_exec<F, X>(
     args: &[&str],
     envs: &[(&str, &str)],
@@ -1528,8 +1532,26 @@ where
     F: FnMut(String),
     X: FnMut(String),
 {
+    docker_exec_with_stdin(args, envs, None, stdout_output, stderr_output, cmd_killer)
+}
+
+fn docker_exec_with_stdin<F, X>(
+    args: &[&str],
+    envs: &[(&str, &str)],
+    stdin: Option<String>,
+    stdout_output: &mut F,
+    stderr_output: &mut X,
+    cmd_killer: &CommandKiller,
+) -> Result<(), DockerError>
+where
+    F: FnMut(String),
+    X: FnMut(String),
+{
     let mut cmd = QoveryCommand::new("docker", args, envs);
     cmd.set_kill_grace_period(Duration::from_secs(0));
+    if let Some(input) = stdin {
+        cmd.set_stdin(input);
+    }
     let ret = cmd.exec_with_abort(stdout_output, stderr_output, cmd_killer);
 
     match ret {
@@ -1849,6 +1871,20 @@ mod builder_placement_tests {
                 "0/2 nodes are available: 2 Insufficient ephemeral-storage.".to_string(),
             ))
         );
+    }
+}
+
+#[cfg(test)]
+mod login_tests {
+    use crate::cmd::docker::login_args;
+
+    #[test]
+    fn test_login_args_read_password_from_stdin() {
+        let args = login_args("/tmp/docker-config", "europe-west9-docker.pkg.dev", "_json_key");
+
+        assert!(args.contains(&"--password-stdin"));
+        assert!(!args.contains(&"-p"));
+        assert!(!args.contains(&"--password"));
     }
 }
 

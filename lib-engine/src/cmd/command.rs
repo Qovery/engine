@@ -1,5 +1,5 @@
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -131,6 +131,7 @@ pub trait ExecutableCommand {
 pub struct QoveryCommand {
     command: Command,
     kill_grace_period: Duration,
+    stdin: Option<String>,
 }
 
 impl QoveryCommand {
@@ -145,11 +146,18 @@ impl QoveryCommand {
         QoveryCommand {
             command,
             kill_grace_period: Duration::from_secs(60 * 5),
+            stdin: None,
         }
     }
 
     pub fn set_kill_grace_period(&mut self, grace_period: Duration) {
         self.kill_grace_period = grace_period;
+    }
+
+    /// Unlike args, stdin never reaches the command log: pass secrets here.
+    /// Written before output is read: keep it under the pipe buffer (16KiB on macOS, 64KiB on Linux).
+    pub fn set_stdin(&mut self, input: impl Into<String>) {
+        self.stdin = Some(input.into());
     }
 
     pub fn set_current_dir<P: AsRef<Path>>(&mut self, root_dir: P) {
@@ -229,12 +237,22 @@ impl ExecutableCommand for QoveryCommand {
         STDERR: FnMut(String),
     {
         info!("command: {}", self.display_without_envs());
+        if self.stdin.is_some() {
+            self.command.stdin(Stdio::piped());
+        }
         let mut cmd_handle = self
             .command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(ExecutionError)?;
+
+        if let (Some(input), Some(mut stdin)) = (&self.stdin, cmd_handle.stdin.take()) {
+            // A write error means the child exited early: its exit status reports the real failure.
+            let _ = stdin.write_all(input.as_bytes());
+            // Close now: commands reading until EOF (docker login --password-stdin) wait for it
+            drop(stdin);
+        }
 
         // Read stdout/stderr until timeout is reached
         let reader_timeout = Duration::from_secs(1);
@@ -513,5 +531,25 @@ mod tests {
         let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &cmd_killer);
 
         assert!(matches!(ret, Err(CommandError::Killed(_))));
+    }
+
+    #[test]
+    fn test_command_with_stdin() {
+        let mut cmd = QoveryCommand::new("cat", &[], &[]);
+        cmd.set_stdin("my-secret\nsecond line");
+        let mut output = vec![];
+        let ret = cmd.exec_with_output(&mut |line| output.push(line), &mut |_| {});
+
+        assert!(ret.is_ok());
+        assert_eq!(output, vec!["my-secret", "second line"]);
+        assert!(!format!("{:?}", cmd.command).contains("my-secret"));
+    }
+
+    #[test]
+    fn test_command_with_stdin_when_child_exits_without_reading() {
+        let mut cmd = QoveryCommand::new("false", &[], &[]);
+        cmd.set_stdin("my-secret");
+
+        assert!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))));
     }
 }

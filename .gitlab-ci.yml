@@ -141,6 +141,18 @@ default:
     KUBERNETES_NODE_SELECTOR_NODEPOOL: "karpenter.sh/nodepool=gitlab-runner-nvme"
     KUBERNETES_NODE_TOLERATIONS_NODEPOOL: "nodepool/gitlab-runner-nvme=true:NoSchedule"
 
+# Flaky tests are retried by nextest (lib-engine/nextest.config.toml), so skip nextest's
+# test-failure exit code 100: a job retry would rerun the multi-hour suite for a test that already failed 4 times.
+# Still retried: setup failures (1), build failures (101), OOM kill (137).
+.retry-infra-only:
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - api_failure
+      - scheduler_failure
+    exit_codes: [1, 101, 137]
+
 # Template for test jobs to run in parallel after minimal-tests
 .needs-minimal-tests:
   needs:
@@ -802,8 +814,7 @@ scw-managed-services:
 scw-self-hosted:
   stage: tests-scw
   extends:
-    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .on-demand-node, .nvme-node]
-  retry: 1
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .on-demand-node, .nvme-node, .retry-infra-only]
   timeout: 3 hours
   dependencies:
     - build-and-lint-code
@@ -915,8 +926,7 @@ gcp-whole-enchilada:
 quarantine:
   stage: tests-quarantine
   extends:
-    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .nvme-node]
-  retry: 2
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .nvme-node, .retry-infra-only]
   timeout: 4 hours
   script:
     - ./helper.sh quarantine
