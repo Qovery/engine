@@ -10,7 +10,50 @@ pub enum Ec2Ami {
     Custom(String),
 }
 
+/// AWS does not publish EKS-optimized Amazon Linux 2 AMIs for Kubernetes 1.33 or later.
+const LAST_KUBERNETES_MINOR_WITH_AL2_AMI: u8 = 32;
+/// From Kubernetes 1.35, the kubelet refuses to start on cgroup v1 nodes (`failCgroupV1` defaults to true),
+/// and Amazon Linux 2 only runs cgroup v1.
+const FIRST_KUBERNETES_MINOR_WITHOUT_CGROUP_V1: u8 = 35;
+
 impl Ec2Ami {
+    /// Resolves the AMI that nodes actually run for a given Kubernetes version.
+    /// - AL2023 (the default) stays on AL2 up to 1.32, to avoid replacing nodes of older clusters.
+    /// - AL2 moves to AL2023 from 1.33, as no AL2 AMI exists for those versions.
+    /// - Custom AMIs are kept as is: see `custom_ami_compatibility_error`.
+    pub fn for_kubernetes_version(self, kubernetes_version: &KubernetesVersion) -> Ec2Ami {
+        let has_al2_ami = kubernetes_version.minor() <= LAST_KUBERNETES_MINOR_WITH_AL2_AMI;
+        match self {
+            Ec2Ami::AmazonLinux2 | Ec2Ami::AmazonLinux2023 if has_al2_ami => Ec2Ami::AmazonLinux2,
+            Ec2Ami::AmazonLinux2 | Ec2Ami::AmazonLinux2023 => Ec2Ami::AmazonLinux2023,
+            ami => ami,
+        }
+    }
+
+    /// Standard AMI used by GPU nodes when the cluster uses a custom AMI.
+    pub fn default_for_kubernetes_version(kubernetes_version: &KubernetesVersion) -> Ec2Ami {
+        Ec2Ami::AmazonLinux2023.for_kubernetes_version(kubernetes_version)
+    }
+
+    /// Returns an error message when a custom AMI cannot run nodes for the given Kubernetes version.
+    pub fn custom_ami_compatibility_error(&self, kubernetes_version: &KubernetesVersion) -> Option<String> {
+        match self {
+            Ec2Ami::Custom(v)
+                if Self::parse_custom_value(v).0 == "AL2"
+                    && kubernetes_version.minor() >= FIRST_KUBERNETES_MINOR_WITHOUT_CGROUP_V1 =>
+            {
+                Some(format!(
+                    "Custom AMI `{v}` is based on Amazon Linux 2, which only supports cgroup v1. \
+                     The kubelet refuses to start on cgroup v1 nodes from Kubernetes {}.{}: \
+                     use an AL2023 or Bottlerocket based AMI.",
+                    kubernetes_version.major(),
+                    FIRST_KUBERNETES_MINOR_WITHOUT_CGROUP_V1,
+                ))
+            }
+            _ => None,
+        }
+    }
+
     pub fn is_custom(&self) -> bool {
         matches!(self, Ec2Ami::Custom(_))
     }
@@ -139,6 +182,7 @@ impl Display for Ec2Ami {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_ami_type() {
@@ -307,6 +351,76 @@ mod tests {
         );
         // Standard variants return None
         assert_eq!(Ec2Ami::AmazonLinux2.custom_ami_reference(), None);
+    }
+
+    fn k8s_version(minor: u8) -> KubernetesVersion {
+        KubernetesVersion::from_str(&format!("1.{minor}")).expect("valid kubernetes version")
+    }
+
+    #[test]
+    fn test_for_kubernetes_version() {
+        // AL2023 (default) stays on AL2 for older versions to avoid node replacement
+        assert!(Ec2Ami::AmazonLinux2023.for_kubernetes_version(&k8s_version(32)) == Ec2Ami::AmazonLinux2);
+        assert!(Ec2Ami::AmazonLinux2023.for_kubernetes_version(&k8s_version(33)) == Ec2Ami::AmazonLinux2023);
+        assert!(Ec2Ami::AmazonLinux2023.for_kubernetes_version(&k8s_version(35)) == Ec2Ami::AmazonLinux2023);
+        // AL2 has no AMI from 1.33, and is cgroup v1 only
+        assert!(Ec2Ami::AmazonLinux2.for_kubernetes_version(&k8s_version(32)) == Ec2Ami::AmazonLinux2);
+        assert!(Ec2Ami::AmazonLinux2.for_kubernetes_version(&k8s_version(33)) == Ec2Ami::AmazonLinux2023);
+        assert!(Ec2Ami::AmazonLinux2.for_kubernetes_version(&k8s_version(35)) == Ec2Ami::AmazonLinux2023);
+        // Bottlerocket and custom AMIs are kept as is
+        assert!(Ec2Ami::Bottlerocket.for_kubernetes_version(&k8s_version(35)) == Ec2Ami::Bottlerocket);
+        assert!(
+            Ec2Ami::Custom("al2:ami-123".to_string()).for_kubernetes_version(&k8s_version(35))
+                == Ec2Ami::Custom("al2:ami-123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_default_for_kubernetes_version() {
+        assert!(Ec2Ami::default_for_kubernetes_version(&k8s_version(32)) == Ec2Ami::AmazonLinux2);
+        assert!(Ec2Ami::default_for_kubernetes_version(&k8s_version(33)) == Ec2Ami::AmazonLinux2023);
+        assert!(Ec2Ami::default_for_kubernetes_version(&k8s_version(35)) == Ec2Ami::AmazonLinux2023);
+    }
+
+    #[test]
+    fn test_custom_ami_compatibility_error() {
+        // AL2 custom AMIs are cgroup v1 only: rejected from 1.35
+        assert!(
+            Ec2Ami::Custom("al2:ami-123".to_string())
+                .custom_ami_compatibility_error(&k8s_version(34))
+                .is_none()
+        );
+        assert!(
+            Ec2Ami::Custom("al2:ami-123".to_string())
+                .custom_ami_compatibility_error(&k8s_version(35))
+                .is_some()
+        );
+        assert!(
+            Ec2Ami::Custom("AL2:ami-123".to_string())
+                .custom_ami_compatibility_error(&k8s_version(35))
+                .is_some()
+        );
+        // Other families are fine
+        assert!(
+            Ec2Ami::Custom("ami-123".to_string())
+                .custom_ami_compatibility_error(&k8s_version(35))
+                .is_none()
+        );
+        assert!(
+            Ec2Ami::Custom("al2023:ami-123".to_string())
+                .custom_ami_compatibility_error(&k8s_version(35))
+                .is_none()
+        );
+        assert!(
+            Ec2Ami::Custom("bottlerocket:ami-123".to_string())
+                .custom_ami_compatibility_error(&k8s_version(35))
+                .is_none()
+        );
+        assert!(
+            Ec2Ami::AmazonLinux2
+                .custom_ami_compatibility_error(&k8s_version(35))
+                .is_none()
+        );
     }
 
     #[test]
