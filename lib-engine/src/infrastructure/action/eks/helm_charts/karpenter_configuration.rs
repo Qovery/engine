@@ -111,30 +111,7 @@ impl KarpenterConfigurationChart {
             } else {
                 Vec::with_capacity(0)
             },
-            // TODO(benjaminch): once 1.33 is fully released, we can remove this override
-            eks_ec2_ami: match eks_ec2_ami {
-                Ec2Ami::AmazonLinux2 => Ec2Ami::AmazonLinux2,
-                Ec2Ami::Bottlerocket => Ec2Ami::Bottlerocket,
-                // Custom AMIs bypass version-based downgrade logic
-                Ec2Ami::Custom(v) => Ec2Ami::Custom(v),
-                // Just making sure not to switch to AmazonLinux2023 for earlier k8s versions avoiding node replacement
-                // AL2023 is the new default
-                Ec2Ami::AmazonLinux2023 => match kubernetes_version {
-                    KubernetesVersion::V1_23 { .. }
-                    | KubernetesVersion::V1_24 { .. }
-                    | KubernetesVersion::V1_25 { .. }
-                    | KubernetesVersion::V1_26 { .. }
-                    | KubernetesVersion::V1_27 { .. }
-                    | KubernetesVersion::V1_28 { .. }
-                    | KubernetesVersion::V1_29 { .. }
-                    | KubernetesVersion::V1_30 { .. }
-                    | KubernetesVersion::V1_31 { .. }
-                    | KubernetesVersion::V1_32 { .. } => Ec2Ami::AmazonLinux2,
-                    KubernetesVersion::V1_33 { .. }
-                    | KubernetesVersion::V1_34 { .. }
-                    | KubernetesVersion::V1_35 { .. } => Ec2Ami::AmazonLinux2023,
-                },
-            },
+            eks_ec2_ami: eks_ec2_ami.for_kubernetes_version(&kubernetes_version),
             aws_storage_type,
             pleco_resources_ttl,
             resource_tags,
@@ -238,12 +215,21 @@ impl KarpenterConfigurationChart {
 
 impl ToCommonHelmChart for KarpenterConfigurationChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        // Only block deployments: destroying the chart must stay possible to clean up the cluster
+        if self.replace_cluster_autoscaler
+            && let Some(msg) = self
+                .eks_ec2_ami
+                .custom_ami_compatibility_error(&self.kubernetes_version)
+        {
+            return Err(HelmChartError::CreateTemplateError {
+                chart_name: Self::chart_name(),
+                msg,
+            });
+        }
+
         // GPU nodes always use the standard AMI (not affected by custom AMI setting)
         let gpu_ec2_ami = if self.eks_ec2_ami.is_custom() {
-            match self.kubernetes_version {
-                KubernetesVersion::V1_33 { .. } | KubernetesVersion::V1_34 { .. } => Ec2Ami::AmazonLinux2023,
-                _ => Ec2Ami::AmazonLinux2,
-            }
+            Ec2Ami::default_for_kubernetes_version(&self.kubernetes_version)
         } else {
             match &self.eks_ec2_ami {
                 Ec2Ami::AmazonLinux2 => Ec2Ami::AmazonLinux2,
@@ -747,10 +733,12 @@ mod tests {
     use serde::Deserialize;
     use serde_yaml::{self, Value};
     use std::env;
+    use std::str::FromStr;
     use uuid::Uuid;
 
     use crate::cmd::helm::Helm;
     use crate::constants::AWS_APN_ID_TAG_KEY;
+    use crate::helm::{CommonChart, HelmChartError};
     use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -1833,8 +1821,8 @@ mod tests {
         spec: Ec2NodeClassSpec,
     }
 
-    fn generate_chart_yaml_with_ami(ec2_ami: Ec2Ami) -> String {
-        let chart = KarpenterConfigurationChart::new(
+    fn create_chart_with_ami(ec2_ami: Ec2Ami, kubernetes_version: KubernetesVersion) -> KarpenterConfigurationChart {
+        KarpenterConfigurationChart::new(
             None,
             "test-cluster".to_string(),
             true,
@@ -1843,7 +1831,7 @@ mod tests {
             Uuid::new_v4(),
             "org-id",
             Uuid::new_v4(),
-            KUBERNETES_VERSION,
+            kubernetes_version,
             "us-east-1",
             KarpenterParameters {
                 spot_enabled: false,
@@ -1874,7 +1862,11 @@ mod tests {
             0,
             std::collections::HashMap::new(),
             AwsApnId::from("pc:test-apn-id"),
-        );
+        )
+    }
+
+    fn generate_chart_yaml_with_ami(ec2_ami: Ec2Ami) -> String {
+        let chart = create_chart_with_ami(ec2_ami, KUBERNETES_VERSION);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -2006,6 +1998,79 @@ mod tests {
             node_classes.iter().all(|nc| nc.metadata.name != "gpu"),
             "GPU nodeclass should not be rendered when gpu_override is None"
         );
+    }
+
+    fn chart_value(chart: &CommonChart, key: &str) -> String {
+        chart
+            .chart_info
+            .values
+            .iter()
+            .find(|v| v.key == key)
+            .unwrap_or_else(|| panic!("missing chart value `{key}`"))
+            .value
+            .clone()
+    }
+
+    fn k8s_version(version: &str) -> KubernetesVersion {
+        KubernetesVersion::from_str(version).expect("valid kubernetes version")
+    }
+
+    #[test]
+    fn test_gpu_ami_with_custom_ami_follows_kubernetes_version() {
+        // (kubernetes version, expected GPU AMI family)
+        for (version, expected_gpu_ami_family) in [("1.32", "AL2"), ("1.33", "AL2023"), ("1.35", "AL2023")] {
+            let chart =
+                create_chart_with_ami(Ec2Ami::Custom("ami-0123456789abcdef0".to_string()), k8s_version(version))
+                    .to_common_helm_chart()
+                    .expect("chart should render");
+            assert_eq!(
+                chart_value(&chart, "gpuAmiFamily"),
+                expected_gpu_ami_family,
+                "kubernetes {version}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_al2_ami_is_replaced_by_al2023_when_no_al2_ami_exists() {
+        // (kubernetes version, expected AMI family, expected alias)
+        for (version, expected_family, expected_alias) in [
+            ("1.32", "AL2", "al2@latest"),
+            ("1.33", "AL2023", "al2023@latest"),
+            ("1.35", "AL2023", "al2023@latest"),
+        ] {
+            let chart = create_chart_with_ami(Ec2Ami::AmazonLinux2, k8s_version(version))
+                .to_common_helm_chart()
+                .expect("chart should render");
+            assert_eq!(chart_value(&chart, "amiFamily"), expected_family, "kubernetes {version}");
+            assert_eq!(chart_value(&chart, "gpuAmiFamily"), expected_family, "kubernetes {version}");
+            assert_eq!(
+                chart_value(&chart, "amiSelectorTermsAlias"),
+                expected_alias,
+                "kubernetes {version}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_custom_al2_ami_is_rejected_from_kubernetes_1_35() {
+        let ami = || Ec2Ami::Custom("al2:ami-0123456789abcdef0".to_string());
+        assert!(
+            create_chart_with_ami(ami(), k8s_version("1.34"))
+                .to_common_helm_chart()
+                .is_ok()
+        );
+
+        let result = create_chart_with_ami(ami(), k8s_version("1.35")).to_common_helm_chart();
+        assert!(
+            matches!(result, Err(HelmChartError::CreateTemplateError { ref msg, .. }) if msg.contains("cgroup v1")),
+            "AL2 custom AMI must be rejected on 1.35"
+        );
+
+        // Destroying the chart must still work, to allow cleaning up the cluster
+        let mut chart = create_chart_with_ami(ami(), k8s_version("1.35"));
+        chart.replace_cluster_autoscaler = false;
+        assert!(chart.to_common_helm_chart().is_ok());
     }
 
     #[test]
