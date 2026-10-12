@@ -371,9 +371,9 @@ pub enum PlatformUnitErrorCode {
     Internal,
     /// The worker cannot reach the host Docker daemon.
     DockerUnavailable,
-    /// No running Docker Operator container matches the request's cluster and organization.
+    /// No running Docker Operator container matches the request's cluster.
     OperatorNotFound,
-    /// Several running Docker Operator containers match the request's cluster and organization.
+    /// Several running Docker Operator containers match the request's cluster.
     OperatorAmbiguous,
     /// The Operator container uses a setting the update cannot reproduce; nothing was changed.
     UnsupportedConfiguration,

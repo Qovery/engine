@@ -1091,7 +1091,6 @@ CMD ["${COMMAND}"]
             images: RefCell::new(Vec::new()),
         };
         let cluster_id = Uuid::new_v4();
-        let organization_id = Uuid::new_v4();
 
         let registry = format!("127.0.0.1:{}", 40_000 + Uuid::new_v4().as_u128() % 20_000);
         docker(&[
@@ -1120,7 +1119,7 @@ CMD ["${COMMAND}"]
             "--env".to_string(),
             format!("CLUSTER_ID={cluster_id}"),
             "--env".to_string(),
-            format!("ORGANIZATION_ID={organization_id}"),
+            format!("ORGANIZATION_ID={}", Uuid::nil()),
             "--env".to_string(),
             "CLUSTER_JWT_TOKEN=e2e-jwt".to_string(),
         ];
@@ -1166,10 +1165,7 @@ CMD ["${COMMAND}"]
         let cli = DockerCli::new(None);
         assert_eq!(cli.container_exists(&ContainerId::from(worker.as_str())), Ok(true));
         assert_eq!(cli.container_exists(&ContainerId::from(&*"0".repeat(64))), Ok(false));
-        let identity = OperatorIdentity {
-            cluster_id,
-            organization_id,
-        };
+        let identity = OperatorIdentity { cluster_id };
         let health = HealthCheck {
             window: Duration::from_secs(8),
             poll_interval: Duration::from_secs(1),

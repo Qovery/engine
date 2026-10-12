@@ -33,7 +33,6 @@ pub fn image() -> ImageInspect {
 pub fn identity() -> OperatorIdentity {
     OperatorIdentity {
         cluster_id: Uuid::parse_str(CLUSTER_ID).unwrap(),
-        organization_id: Uuid::parse_str(ORGANIZATION_ID).unwrap(),
     }
 }
 

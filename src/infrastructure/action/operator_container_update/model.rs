@@ -276,9 +276,11 @@ impl Environment {
         &self.0
     }
 
+    /// Returns the value of the last entry named `name`, as Docker applies the last one.
     pub fn value(&self, name: &str) -> Option<&str> {
         self.0
             .iter()
+            .rev()
             .filter_map(|entry| entry.split_once('='))
             .find(|(entry_name, _)| *entry_name == name)
             .map(|(_, value)| value)
@@ -854,5 +856,19 @@ mod tests {
         let debug = format!("{log_config:?}");
         assert!(debug.contains("splunk-token"), "{debug}");
         assert!(!debug.contains("\"secret\""), "{debug}");
+    }
+
+    #[test]
+    fn environment_value_is_the_last_entry_of_a_duplicated_name() {
+        let env = Environment(
+            ["RUST_LOG=info", "CLUSTER_ID=a", "RUST_LOG=debug", "EMPTY="]
+                .map(str::to_string)
+                .to_vec(),
+        );
+
+        assert_eq!(env.value("RUST_LOG"), Some("debug"));
+        assert_eq!(env.value("CLUSTER_ID"), Some("a"));
+        assert_eq!(env.value("EMPTY"), Some(""));
+        assert_eq!(env.value("MISSING"), None);
     }
 }

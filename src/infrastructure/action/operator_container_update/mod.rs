@@ -149,7 +149,6 @@ pub(crate) fn update_operator_container(
             metadata: request.metadata.as_ref(),
             identity: OperatorIdentity {
                 cluster_id: request.kubernetes.long_id,
-                organization_id: request.organization_long_id,
             },
             event_details: request.event_details(),
         },
@@ -311,12 +310,12 @@ fn run_update<D: OperatorDocker>(
     let operator = find_operator(docker.list_running_containers()?, &plan.identity).map_err(|err| match err {
         DiscoveryError::NotFound => UpdateFailure::new(
             UpdateFailureKind::OperatorNotFound,
-            "no running Docker Operator container matches this cluster and organization",
+            "no running Docker Operator container matches this cluster",
         ),
         DiscoveryError::Ambiguous(names) => UpdateFailure::new(
             UpdateFailureKind::OperatorAmbiguous,
             format!(
-                "several running Docker Operator containers match this cluster and organization: {}",
+                "several running Docker Operator containers match this cluster: {}",
                 names.iter().map(ContainerName::as_str).collect::<Vec<_>>().join(", ")
             ),
         ),

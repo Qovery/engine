@@ -10,7 +10,6 @@ use uuid::Uuid;
 pub const OPERATOR_RUNTIME_ENV: &str = "QOVERY_OPERATOR_RUNTIME";
 pub const OPERATOR_RUNTIME_DOCKER: &str = "DOCKER";
 pub const CLUSTER_ID_ENV: &str = "CLUSTER_ID";
-pub const ORGANIZATION_ID_ENV: &str = "ORGANIZATION_ID";
 pub const OPERATOR_VERSION_ENV: &str = "OPERATOR_VERSION";
 const DOCKER_SOCKET_PATH_ENV: &str = "DOCKER_SOCKET_PATH";
 const DEFAULT_DOCKER_SOCKET_PATH: &str = "/var/run/docker.sock";
@@ -37,16 +36,13 @@ const NULL_DEFAULT_FIELDS: [&str; 3] = ["MemorySwappiness", "Init", "StopTimeout
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct OperatorIdentity {
     pub cluster_id: Uuid,
-    pub organization_id: Uuid,
 }
 
 impl OperatorIdentity {
     pub fn matches(&self, container: &ContainerInspect) -> bool {
         let env = &container.config.env;
-        let env_uuid = |name: &str| env.value(name).and_then(|value| Uuid::parse_str(value).ok());
         env.value(OPERATOR_RUNTIME_ENV) == Some(OPERATOR_RUNTIME_DOCKER)
-            && env_uuid(CLUSTER_ID_ENV) == Some(self.cluster_id)
-            && env_uuid(ORGANIZATION_ID_ENV) == Some(self.organization_id)
+            && env.value(CLUSTER_ID_ENV).and_then(|value| Uuid::parse_str(value).ok()) == Some(self.cluster_id)
     }
 }
 
@@ -398,8 +394,8 @@ fn is_daemon_assigned_host_setting(field: &str, value: &Value) -> bool {
 mod tests {
     use super::*;
     use crate::infrastructure::action::operator_container_update::fixtures::{
-        container, extra_env, identity, image, override_differs, override_equal, previous_update, readme, readme_env,
-        rootless, running, with_env,
+        CLUSTER_ID, container, extra_env, identity, image, override_differs, override_equal, previous_update, readme,
+        readme_env, rootless, running, with_env,
     };
     use crate::infrastructure::action::operator_container_update::model::{
         EndpointSettings, ImageReference, LogDriver, RestartPolicyName,
@@ -740,7 +736,7 @@ mod tests {
         let operator = readme();
         let worker = container("container_worker");
         let other_cluster = with_env(readme(), &format!("{CLUSTER_ID_ENV}={}", Uuid::new_v4()));
-        let other_organization = with_env(readme(), &format!("{ORGANIZATION_ID_ENV}={}", Uuid::new_v4()));
+        let other_runtime = with_env(readme(), &format!("{OPERATOR_RUNTIME_ENV}=KUBERNETES"));
         let second = running("container_custom_name_network_log");
 
         let found = find_operator(vec![worker.clone(), operator.clone()], &identity()).unwrap();
@@ -749,7 +745,7 @@ mod tests {
         for (name, containers) in [
             ("worker only", vec![worker.clone()]),
             ("other cluster", vec![other_cluster]),
-            ("other organization", vec![other_organization]),
+            ("other runtime", vec![other_runtime]),
         ] {
             assert_eq!(
                 find_operator(containers, &identity()).unwrap_err(),
@@ -764,5 +760,50 @@ mod tests {
                 ContainerName::from("bastion-operator")
             ])
         );
+    }
+
+    #[test]
+    fn discovery_ignores_the_organization_of_the_operator() {
+        let mut without_organization = readme();
+        without_organization
+            .config
+            .env
+            .0
+            .retain(|entry| !entry.starts_with("ORGANIZATION_ID="));
+
+        for (name, operator) in [
+            (
+                "nil organization",
+                with_env(readme(), &format!("ORGANIZATION_ID={}", Uuid::nil())),
+            ),
+            (
+                "other organization",
+                with_env(readme(), &format!("ORGANIZATION_ID={}", Uuid::new_v4())),
+            ),
+            ("no organization", without_organization),
+        ] {
+            let expected = operator.id.clone();
+            assert_eq!(
+                find_operator(vec![operator], &identity()).map(|found| found.id),
+                Ok(expected),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn discovery_reads_the_last_cluster_id_entry() {
+        let other_cluster_entry = format!("{CLUSTER_ID_ENV}={}", Uuid::new_v4());
+        let mut restored = with_env(readme(), &other_cluster_entry);
+        restored.config.env.0.push(format!("{CLUSTER_ID_ENV}={CLUSTER_ID}"));
+        let mut overridden = readme();
+        overridden.config.env.0.push(other_cluster_entry);
+        let expected = restored.id.clone();
+
+        assert_eq!(
+            find_operator(vec![overridden], &identity()).unwrap_err(),
+            DiscoveryError::NotFound
+        );
+        assert_eq!(find_operator(vec![restored], &identity()).map(|found| found.id), Ok(expected));
     }
 }
