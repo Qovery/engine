@@ -793,6 +793,8 @@ pub enum Tag {
     InvalidEnginePayload,
     /// PlatformPreflightFailed: a mandatory in-cluster preflight check blocked platform mutation.
     PlatformPreflightFailed,
+    /// OperatorContainerUpdateFailed: a Docker Operator container update was refused or rolled back.
+    OperatorContainerUpdateFailed,
     /// InvalidEngineApiInput: represents an error where Engine's API input is not valid and cannot be deserialized.
     InvalidEngineApiInputCannotBeDeserialized,
     /// MissingRequiredEnvVariable: represents an error where a required env variable is not set.
@@ -1555,6 +1557,30 @@ impl EngineError {
             None,
             None,
             Some("Resolve the mandatory preflight checks and retry the deployment.".to_string()),
+        )
+    }
+
+    /// Creates an error when a Docker Operator container update is refused or rolled back.
+    pub fn new_operator_container_update_failed(event_details: EventDetails, message: String) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::OperatorContainerUpdateFailed,
+            format!("Operator container update failed: {message}"),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates an error when the Docker daemon cannot run an Operator container update operation.
+    pub fn new_operator_container_docker_failure(event_details: EventDetails, message: String) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DockerError,
+            format!("Operator container update failed: {message}"),
+            None,
+            None,
+            None,
         )
     }
 

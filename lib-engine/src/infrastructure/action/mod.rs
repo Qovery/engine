@@ -11,6 +11,7 @@ mod gke;
 pub(super) mod kubeconfig_helper;
 mod kubectl_utils;
 pub mod metrics_resource_profile;
+pub(crate) mod operator_container_update;
 pub mod platform_components;
 mod platform_preflight;
 mod scaleway;

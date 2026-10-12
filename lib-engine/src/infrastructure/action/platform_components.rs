@@ -12,9 +12,9 @@ use crate::io_models::Action;
 use crate::io_models::container::Registry;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{
-    PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction, PlatformPreflightCheckResult,
-    PlatformPreflightCheckStatus, PlatformPreflightRequest, PlatformPreflightRequirement, PlatformUnitErrorCode,
-    PlatformUnitResult,
+    OperatorContainerUpdateUnit, PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction,
+    PlatformPreflightCheckResult, PlatformPreflightCheckStatus, PlatformPreflightRequest, PlatformPreflightRequirement,
+    PlatformUnitErrorCode, PlatformUnitResult,
 };
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -29,8 +29,8 @@ const HELM_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 const HELM_DIFF_TIMEOUT: Duration = Duration::from_secs(120);
 const HELM_UPGRADE_TIMEOUT: Duration = Duration::from_secs(600);
 
-const LEGACY_REQUEST_SCHEMA_VERSION: u32 = 1;
-const PREFLIGHT_REQUEST_SCHEMA_VERSION: u32 = 2;
+pub(super) const LEGACY_REQUEST_SCHEMA_VERSION: u32 = 1;
+pub(super) const PREFLIGHT_REQUEST_SCHEMA_VERSION: u32 = 2;
 
 /// Kubernetes reads the container termination message from this path by default and truncates
 /// it at 4096 bytes. Override with `QOVERY_TERMINATION_MESSAGE_PATH` (tests, local runs).
@@ -139,10 +139,13 @@ pub fn deploy_platform_components(
         .unwrap_or(&[]);
     let schema_version = engine_v2_options.map(|options| options.schema_version.as_str());
     let preflight = engine_v2_options.and_then(|options| options.preflight.as_ref());
+    let operator_container_update = engine_v2_options.and_then(|options| options.operator_container_update.as_ref());
 
     // Whitelist validation, fail-closed: nothing executes when any part of the request is
     // outside what this path explicitly supports.
-    let result_schema_version = match validate_platform_request(request.action, schema_version, units, preflight) {
+    let result_schema_version = match validate_platform_request(request.action, schema_version, units, preflight)
+        .and_then(|schema_version| refuse_operator_container_update(operator_container_update).map(|()| schema_version))
+    {
         Ok(schema_version) => schema_version,
         Err(violation) => {
             let unit_results = units
@@ -504,6 +507,19 @@ fn validate_platform_request(
     Ok(schema_version)
 }
 
+fn refuse_operator_container_update(
+    operator_container_update: Option<&OperatorContainerUpdateUnit>,
+) -> Result<(), PlatformValidationError> {
+    match operator_container_update {
+        None => Ok(()),
+        Some(_) => Err(PlatformValidationError {
+            code: PlatformUnitErrorCode::InvalidPayload,
+            message: "platform_components_only does not accept operator_container_update".to_string(),
+            unit_key: None,
+        }),
+    }
+}
+
 // The catalog selects the namespace; validate Kubernetes syntax, not component identity.
 fn is_valid_namespace(namespace: &str) -> bool {
     let bytes = namespace.as_bytes();
@@ -516,14 +532,14 @@ fn is_valid_namespace(namespace: &str) -> bool {
             .all(|byte| is_lowercase_alphanumeric(byte) || *byte == b'-')
 }
 
-fn result_schema_version_for(schema_version: Option<&str>) -> u32 {
+pub(super) fn result_schema_version_for(schema_version: Option<&str>) -> u32 {
     match schema_version.and_then(|version| version.parse::<u32>().ok()) {
         Some(PREFLIGHT_REQUEST_SCHEMA_VERSION) => PREFLIGHT_REQUEST_SCHEMA_VERSION,
         _ => LEGACY_REQUEST_SCHEMA_VERSION,
     }
 }
 
-fn write_platform_execution_result(
+pub(super) fn write_platform_execution_result(
     logger: &impl InfraLogger,
     result_logger: &impl InfraLogger,
     schema_version: u32,
@@ -1000,6 +1016,19 @@ mod tests {
         let err = validate_create_request(Some("1"), &[valid_unit()], Some(&preflight))
             .err()
             .unwrap();
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert_eq!(err.unit_key, None);
+    }
+
+    #[test]
+    fn helm_mode_refuses_an_operator_container_update_target() {
+        assert!(refuse_operator_container_update(None).is_ok());
+        let err = refuse_operator_container_update(Some(&OperatorContainerUpdateUnit {
+            key: "qovery-operator".to_string(),
+            image: "public.ecr.aws/r3m4q3r9/qovery-operator:v1.223.0".to_string(),
+            operator_version: "v1.223.0".to_string(),
+        }))
+        .unwrap_err();
         assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
         assert_eq!(err.unit_key, None);
     }

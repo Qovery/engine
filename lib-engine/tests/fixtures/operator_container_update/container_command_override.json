@@ -1,0 +1,218 @@
+[
+    {
+        "Id": "d0e3725bd8c9b5e95af4bd2e73d3baa88c9e9e29a573800efeebe5cf2e794868",
+        "Created": "2026-10-07T15:02:43.549457044Z",
+        "Path": "/bin/sh",
+        "Args": [
+            "-c",
+            "sleep 3600"
+        ],
+        "State": {
+            "Status": "created",
+            "Running": false,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 0,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "0001-01-01T00:00:00Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:fb2da875ec0f2bdaad1c8c75625e622f0c4a6b00751a73427c34e6ebb6dacb22",
+        "ResolvConfPath": "",
+        "HostnamePath": "",
+        "HostsPath": "",
+        "LogPath": "",
+        "Name": "/fx-command-override",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [
+                "/var/run/docker.sock:/var/run/docker.sock"
+            ],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "bridge",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "unless-stopped",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": null,
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "private",
+            "Dns": null,
+            "DnsOptions": [],
+            "DnsSearch": [],
+            "ExtraHosts": null,
+            "GroupAdd": [
+                "0"
+            ],
+            "IpcMode": "private",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": [],
+            "BlkioDeviceReadBps": [],
+            "BlkioDeviceWriteBps": [],
+            "BlkioDeviceReadIOps": [],
+            "BlkioDeviceWriteIOps": [],
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": [],
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": false,
+            "PidsLimit": null,
+            "Ulimits": [],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/interrupts",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/sys/devices/virtual/powercap",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "ID": "d0e3725bd8c9b5e95af4bd2e73d3baa88c9e9e29a573800efeebe5cf2e794868",
+                "LowerDir": "/var/lib/docker/overlay2/5b215b9a26df68d7691016a707f719e11bed88da3765f78446fd954fd08d38c0-init/diff:/var/lib/docker/overlay2/q3i5ryilgbhom4tlueqsezzi5/diff:/var/lib/docker/overlay2/1c2q33701rpuf0spbj54tce3s/diff:/var/lib/docker/overlay2/ah1b3xzinknvxzlpbzzufl3sm/diff",
+                "MergedDir": "/var/lib/docker/overlay2/5b215b9a26df68d7691016a707f719e11bed88da3765f78446fd954fd08d38c0/merged",
+                "UpperDir": "/var/lib/docker/overlay2/5b215b9a26df68d7691016a707f719e11bed88da3765f78446fd954fd08d38c0/diff",
+                "WorkDir": "/var/lib/docker/overlay2/5b215b9a26df68d7691016a707f719e11bed88da3765f78446fd954fd08d38c0/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "bind",
+                "Source": "/var/run/docker.sock",
+                "Destination": "/var/run/docker.sock",
+                "Mode": "",
+                "RW": true,
+                "Propagation": "rprivate"
+            }
+        ],
+        "Config": {
+            "Hostname": "d0e3725bd8c9",
+            "Domainname": "",
+            "User": "1000",
+            "AttachStdin": false,
+            "AttachStdout": true,
+            "AttachStderr": true,
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "QOVERY_OPERATOR_RUNTIME=DOCKER",
+                "ORGANIZATION_ID=5e2f1d0c-7a4b-4c3d-8e9f-0a1b2c3d4e5f",
+                "CLUSTER_ID=0c6a3b8e-1f0e-4b0a-9a51-6b1f8f7a2c11",
+                "CLUSTER_JWT_TOKEN=fixture-jwt",
+                "GRPC_SERVER=https://engine.qovery.com:443",
+                "QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX=-eksanywhere",
+                "QOVERY_WORKER_DEPLOYMENT_TYPES=INFRASTRUCTURE",
+                "MAX_CONCURRENT_WORKER_JOBS=1",
+                "DOCKER_SOCKET_PATH=/var/run/docker.sock",
+                "QOVERY_BASTION_WORKSPACE_HOST_PATH=/qovery/workspace",
+                "RUST_LOG=info",
+                "PATH=/bin",
+                "QOVERY_FIXTURE_DEFAULT=image-n-value"
+            ],
+            "Cmd": [
+                "sleep 3600"
+            ],
+            "Image": "qovery-operator-fixture:n",
+            "Volumes": null,
+            "WorkingDir": "/home/app",
+            "Entrypoint": [
+                "/bin/sh",
+                "-c"
+            ],
+            "Labels": {
+                "org.opencontainers.image.title": "qovery-operator-fixture",
+                "org.opencontainers.image.version": "n"
+            }
+        },
+        "NetworkSettings": {
+            "SandboxID": "",
+            "SandboxKey": "",
+            "Ports": {},
+            "Networks": {
+                "bridge": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": null,
+                    "DriverOpts": null,
+                    "GwPriority": 0,
+                    "NetworkID": "",
+                    "EndpointID": "",
+                    "Gateway": "",
+                    "IPAddress": "",
+                    "MacAddress": "",
+                    "IPPrefixLen": 0,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "DNSNames": null
+                }
+            }
+        }
+    }
+]

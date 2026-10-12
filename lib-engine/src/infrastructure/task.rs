@@ -6,6 +6,7 @@ use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
+use crate::infrastructure::action::operator_container_update::update_operator_container;
 use crate::infrastructure::action::platform_components::{deploy_platform_components, fail_unknown_execution_mode};
 use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::context::Context;
@@ -193,9 +194,21 @@ impl Task for InfrastructureTask {
             .as_ref()
             .and_then(|metadata| metadata.engine_v2_options.as_ref())
             .map(|engine_v2_options| &engine_v2_options.execution_mode);
+        let context_action = match infrastructure_path(execution_mode) {
+            InfrastructurePath::OperatorContainerUpdate => {
+                let ret =
+                    update_operator_container(&self.request, self.docker.socket_url().as_ref(), self.logger.clone());
+                self.handle_transaction_result(self.logger.clone(), ret, execution_mode);
+                drop(guard);
+                engine_task::disable_log_file_writer(&self.log_file_writer);
+                info!("infrastructure task {} finished", self.id());
+                return;
+            }
+            InfrastructurePath::WithInfrastructureContext(action) => action,
+        };
         // Platform-components-only requests install Helm charts in-cluster and never build or
         // push images: skip the (often credential-gated) container registry, like blueprints do.
-        let require_container_registry = !matches!(execution_mode, Some(ExecutionMode::PlatformComponentsOnly));
+        let require_container_registry = context_action != ContextAction::PlatformComponents;
         let infra_ctx = match self.request.to_infrastructure_context(
             &self.info_context(),
             self.request.event_details(),
@@ -215,10 +228,10 @@ impl Task for InfrastructureTask {
         // platform-components-only, never enter the cluster infrastructure lifecycle
         // (SelfManaged forbids create/pause/delete/restart); apply only the compiled
         // platform Helm units carried by the request metadata.
-        let ret = match execution_mode {
-            Some(ExecutionMode::PlatformComponentsOnly) => deploy_platform_components(&infra_ctx, &self.request),
-            Some(ExecutionMode::Unknown) => Err(fail_unknown_execution_mode(&infra_ctx, &self.request)),
-            None => infra_ctx
+        let ret = match context_action {
+            ContextAction::PlatformComponents => deploy_platform_components(&infra_ctx, &self.request),
+            ContextAction::UnknownExecutionMode => Err(fail_unknown_execution_mode(&infra_ctx, &self.request)),
+            ContextAction::ClusterLifecycle => infra_ctx
                 .kubernetes()
                 .as_infra_actions()
                 .run(&infra_ctx, self.request.action.into()),
@@ -295,6 +308,32 @@ impl Task for InfrastructureTask {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InfrastructurePath {
+    OperatorContainerUpdate,
+    WithInfrastructureContext(ContextAction),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ContextAction {
+    PlatformComponents,
+    UnknownExecutionMode,
+    ClusterLifecycle,
+}
+
+fn infrastructure_path(execution_mode: Option<&ExecutionMode>) -> InfrastructurePath {
+    match execution_mode {
+        Some(ExecutionMode::OperatorContainerUpdate) => InfrastructurePath::OperatorContainerUpdate,
+        Some(ExecutionMode::PlatformComponentsOnly) => {
+            InfrastructurePath::WithInfrastructureContext(ContextAction::PlatformComponents)
+        }
+        Some(ExecutionMode::Unknown) => {
+            InfrastructurePath::WithInfrastructureContext(ContextAction::UnknownExecutionMode)
+        }
+        None => InfrastructurePath::WithInfrastructureContext(ContextAction::ClusterLifecycle),
+    }
+}
+
 fn infrastructure_progress_step(
     action: Action,
     execution_mode: Option<&ExecutionMode>,
@@ -303,6 +342,8 @@ fn infrastructure_progress_step(
     match (execution_mode, succeeded, action) {
         (Some(ExecutionMode::PlatformComponentsOnly), true, _) => InfrastructureStep::Created,
         (Some(ExecutionMode::PlatformComponentsOnly), false, _) => InfrastructureStep::CreateError,
+        (Some(ExecutionMode::OperatorContainerUpdate), true, _) => InfrastructureStep::Created,
+        (Some(ExecutionMode::OperatorContainerUpdate), false, _) => InfrastructureStep::CreateError,
         (Some(ExecutionMode::Unknown), _, _) => InfrastructureStep::GlobalError,
         (None, false, Action::Create) => InfrastructureStep::CreateError,
         (None, false, Action::Pause) => InfrastructureStep::PauseError,
@@ -328,6 +369,10 @@ fn infrastructure_progress_message(
             "✅ Platform components successfully deployed".to_string()
         }
         (Some(ExecutionMode::PlatformComponentsOnly), false) => "❌ Platform components deployment failed".to_string(),
+        (Some(ExecutionMode::OperatorContainerUpdate), true) => {
+            "✅ Operator container successfully updated".to_string()
+        }
+        (Some(ExecutionMode::OperatorContainerUpdate), false) => "❌ Operator container update failed".to_string(),
         (Some(ExecutionMode::Unknown), _) => "❌ Unsupported execution mode: request refused".to_string(),
         (_, true) => format!("Kubernetes cluster successfully {infrastructure_step}"),
         (_, false) => format!("Kubernetes cluster failure {infrastructure_step}"),
@@ -379,6 +424,51 @@ mod tests {
         assert_eq!(
             infrastructure_progress_step(Action::Create, Some(&ExecutionMode::Unknown), false),
             InfrastructureStep::GlobalError
+        );
+    }
+
+    #[test]
+    fn operator_container_update_is_dispatched_without_an_infrastructure_context() {
+        for (execution_mode, expected) in [
+            (
+                Some(&ExecutionMode::OperatorContainerUpdate),
+                InfrastructurePath::OperatorContainerUpdate,
+            ),
+            (
+                Some(&ExecutionMode::PlatformComponentsOnly),
+                InfrastructurePath::WithInfrastructureContext(ContextAction::PlatformComponents),
+            ),
+            (
+                Some(&ExecutionMode::Unknown),
+                InfrastructurePath::WithInfrastructureContext(ContextAction::UnknownExecutionMode),
+            ),
+            (
+                None,
+                InfrastructurePath::WithInfrastructureContext(ContextAction::ClusterLifecycle),
+            ),
+        ] {
+            assert_eq!(infrastructure_path(execution_mode), expected, "{execution_mode:?}");
+        }
+    }
+
+    #[test]
+    fn operator_container_update_reports_create_steps_and_its_own_messages() {
+        let mode = Some(&ExecutionMode::OperatorContainerUpdate);
+        assert_eq!(
+            infrastructure_progress_step(Action::Create, mode, true),
+            InfrastructureStep::Created
+        );
+        assert_eq!(
+            infrastructure_progress_step(Action::Create, mode, false),
+            InfrastructureStep::CreateError
+        );
+        assert_eq!(
+            infrastructure_progress_message(mode, &InfrastructureStep::Created, true),
+            "✅ Operator container successfully updated"
+        );
+        assert_eq!(
+            infrastructure_progress_message(mode, &InfrastructureStep::CreateError, false),
+            "❌ Operator container update failed"
         );
     }
 

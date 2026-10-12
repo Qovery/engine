@@ -1,0 +1,54 @@
+[
+    {
+        "Id": "sha256:fb2da875ec0f2bdaad1c8c75625e622f0c4a6b00751a73427c34e6ebb6dacb22",
+        "RepoTags": [
+            "qovery-operator-fixture:n"
+        ],
+        "RepoDigests": [],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2026-10-07T15:02:02.305375261Z",
+        "Config": {
+            "User": "1000",
+            "Env": [
+                "PATH=/bin",
+                "QOVERY_FIXTURE_DEFAULT=image-n-value"
+            ],
+            "Entrypoint": [
+                "/bin/sh",
+                "-c"
+            ],
+            "Cmd": [
+                "trap 'exit 0' TERM; while true; do sleep 1; done"
+            ],
+            "WorkingDir": "/home/app",
+            "Labels": {
+                "org.opencontainers.image.title": "qovery-operator-fixture",
+                "org.opencontainers.image.version": "n"
+            },
+            "ArgsEscaped": true
+        },
+        "Architecture": "arm64",
+        "Os": "linux",
+        "Size": 23013843,
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/1c2q33701rpuf0spbj54tce3s/diff:/var/lib/docker/overlay2/ah1b3xzinknvxzlpbzzufl3sm/diff",
+                "MergedDir": "/var/lib/docker/overlay2/q3i5ryilgbhom4tlueqsezzi5/merged",
+                "UpperDir": "/var/lib/docker/overlay2/q3i5ryilgbhom4tlueqsezzi5/diff",
+                "WorkDir": "/var/lib/docker/overlay2/q3i5ryilgbhom4tlueqsezzi5/work"
+            },
+            "Name": "overlay2"
+        },
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:6b9ebe2ea44059e51d38d1818f62950fd2714cf691f84e39de8ce4846661208b",
+                "sha256:1266e73762f4935100fdb560b5e3f6a28336e451764054af250cd50eb4677c5b",
+                "sha256:e4a8f777ebaafb3787511200d1d1c5ab08308764a648507350e6c462b53e09d8"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-10-07T15:02:02.34676972Z"
+        }
+    }
+]
