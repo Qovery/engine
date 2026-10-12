@@ -27,15 +27,22 @@ MAX_BATCH_CHARS = 400_000
 MAX_BATCH_LIMIT = 4
 GRAFANA_BASE_URL = "https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff"
 GRAFANA_TF_FILTER = "(%5C%2B%20%7C-%20%7C~%20%7C-%2F%5C%2B%20)"
-CLAUDE_MODEL = "claude-sonnet-5"
-CLAUDE_VERDICT_MODEL = "claude-opus-4-8"
+CLAUDE_MODEL = "claude-sonnet-5-5"
+CLAUDE_VERDICT_MODEL = "claude-opus-5-5"
+# Set explicitly: both models always think when `thinking` is omitted, and the API default
+# effort differs per model (Sonnet 5.5: high, Opus 5.5: medium) and may move again.
+CLAUDE_EFFORT = "high"
+CLAUDE_VERDICT_EFFORT = "medium"
+# Thinking counts toward max_tokens even though its text is not returned, so leave room
+# for it on top of the JSON answer.
+CLAUDE_MAX_TOKENS = 16000
+CLAUDE_TIMEOUT_SECONDS = 300
 
 # USD per 1M tokens, keyed by model id: (input_rate, output_rate).
 # Keep in sync with CLAUDE_MODEL / CLAUDE_VERDICT_MODEL above.
-# Sonnet 5 standard rates ($3/$15); introductory rates ($2/$10) apply through 2026-08-31.
 PRICING_PER_MTK = {
-    "claude-sonnet-5": (3.00, 15.00),
-    "claude-opus-4-8": (5.00, 25.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-opus-5-5": (4.00, 20.00),
 }
 
 # Qovery-owned organizations. Clusters belonging to these orgs are labeled in the
@@ -306,12 +313,22 @@ def _extract_json(text: str) -> dict:
     return obj
 
 
+class ClaudeTerminalError(ValueError):
+    """A Claude stop reason that a retry will not fix (refusal, max_tokens)."""
+
+
 def retry(fn, max_attempts=RETRY_MAX_ATTEMPTS, delay=RETRY_DELAY_SECONDS):
-    """Call fn() up to max_attempts times, sleeping delay seconds between retries."""
+    """Call fn() up to max_attempts times, sleeping delay seconds between retries.
+
+    ClaudeTerminalError is re-raised at once: retries are nested (per call and per
+    group), so retrying it would resend the same full-size prompt up to 9 times.
+    """
     last_error = None
     for attempt in range(max_attempts):
         try:
             return fn()
+        except ClaudeTerminalError:
+            raise
         except Exception as e:
             last_error = e
             if attempt < max_attempts - 1:
@@ -494,15 +511,17 @@ def _reconcile_verdict_severity(verdict_severity: str, findings: list) -> str:
     return max(candidates, key=lambda s: SEVERITY_ORDER.get(s, 0))
 
 
-def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str = None) -> dict:
+def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str = None, effort: str = None) -> dict:
     """Send a prompt to Claude and return the parsed JSON response.
 
     usage_acc, if provided, is a per-model dict: {model_id: {input_tokens, output_tokens}}.
     """
     model = model or CLAUDE_MODEL
+    effort = effort or CLAUDE_EFFORT
     payload = json.dumps({
         "model": model,
-        "max_tokens": 8192,
+        "max_tokens": CLAUDE_MAX_TOKENS,
+        "output_config": {"effort": effort},
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(
@@ -514,7 +533,7 @@ def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str =
             "content-type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    with urllib.request.urlopen(req, timeout=CLAUDE_TIMEOUT_SECONDS) as resp:
         data = json.loads(resp.read())
     if usage_acc is not None:
         usage = data.get("usage", {})
@@ -522,6 +541,14 @@ def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str =
             "input_tokens": usage.get("input_tokens", 0),
             "output_tokens": usage.get("output_tokens", 0),
         }})
+    # Check stop_reason before content: a safety-classifier decline is an HTTP 200 with
+    # empty or partial content, and max_tokens means thinking plus text hit the cap mid-answer.
+    stop_reason = data.get("stop_reason")
+    if stop_reason == "refusal":
+        category = (data.get("stop_details") or {}).get("category")
+        raise ClaudeTerminalError(f"{model} declined the request (stop_reason=refusal, category={category})")
+    if stop_reason == "max_tokens":
+        raise ClaudeTerminalError(f"{model} response truncated at max_tokens={CLAUDE_MAX_TOKENS}")
     # Models may prepend non-text blocks (e.g. adaptive thinking) — select text blocks by type.
     text = "".join(b.get("text", "") for b in data["content"] if b.get("type") == "text")
     if not text:
@@ -676,7 +703,7 @@ def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc
         f"Findings:\n{json.dumps(input_findings)}"
     )
 
-    return _call_claude(prompt, api_key, usage_acc, model=CLAUDE_VERDICT_MODEL)
+    return _call_claude(prompt, api_key, usage_acc, model=CLAUDE_VERDICT_MODEL, effort=CLAUDE_VERDICT_EFFORT)
 
 
 def main(

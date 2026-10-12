@@ -13,7 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ci_release_ai_check import (
     parse_cluster_ids, query_loki, analyze_with_claude, retry,
     LOKI_LIMIT, MAX_BATCH_CHARS, MAX_BATCH_LIMIT, CLAUDE_MODEL,
-    CLAUDE_VERDICT_MODEL, PRICING_PER_MTK, _merge_usage, _call_claude,
+    CLAUDE_VERDICT_MODEL, CLAUDE_EFFORT, CLAUDE_VERDICT_EFFORT, CLAUDE_MAX_TOKENS,
+    PRICING_PER_MTK, _merge_usage, _call_claude, generate_summary, ClaudeTerminalError,
     _apply_severity_overrides, _reconcile_verdict_severity,
     parse_qovery_cluster_names, QOVERY_ORGS,
     _grafana_url, normalize_diff, fingerprint_and_group,
@@ -975,6 +976,18 @@ class TestRetry(unittest.TestCase):
         self.assertEqual(result, "ok")
         self.assertEqual(call_count, 1)
 
+    def test_terminal_error_is_not_retried(self):
+        call_count = 0
+
+        def refuse():
+            nonlocal call_count
+            call_count += 1
+            raise ClaudeTerminalError("declined")
+
+        with self.assertRaises(ClaudeTerminalError):
+            retry(refuse, max_attempts=3, delay=0)
+        self.assertEqual(call_count, 1)
+
     def test_succeeds_after_failures(self):
         call_count = 0
 
@@ -997,15 +1010,17 @@ class TestRetry(unittest.TestCase):
             retry(always_fail, max_attempts=3, delay=0)
 
 
-def _claude_resp(text, usage=None, content=None):
+def _claude_resp(text, usage=None, content=None, **fields):
     """Build a mocked Anthropic Messages API response.
 
     content, if given, overrides the default single-text-block content list —
     used to simulate responses with thinking or other non-text blocks.
+    fields are extra top-level response fields (e.g. stop_reason, stop_details).
     """
     body = {"content": content if content is not None else [{"type": "text", "text": text}]}
     if usage is not None:
         body["usage"] = usage
+    body.update(fields)
     m = MagicMock()
     m.read.return_value = json.dumps(body).encode()
     m.__enter__ = lambda s: s
@@ -1135,10 +1150,91 @@ class TestCallClaudeUsage(unittest.TestCase):
         self.assertEqual(_call_claude("p", "k", None), {"x": 1})
 
 
+class TestCallClaudeRequest(unittest.TestCase):
+    def _sent_body(self, mock_urlopen):
+        return json.loads(mock_urlopen.call_args[0][0].data)
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_default_call_uses_analysis_model_and_effort(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp('{}')
+        _call_claude("p", "k")
+        body = self._sent_body(mock_urlopen)
+        self.assertEqual(body["model"], CLAUDE_MODEL)
+        self.assertEqual(body["output_config"], {"effort": CLAUDE_EFFORT})
+        self.assertEqual(body["max_tokens"], CLAUDE_MAX_TOKENS)
+        # thinking is never sent: both models reject {"type": "disabled"} with a 400.
+        self.assertNotIn("thinking", body)
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_verdict_uses_verdict_model_and_effort(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp('{"verdict": "ok", "verdict_severity": "info", "severity_overrides": {}}')
+        generate_summary([], {}, "k")
+        body = self._sent_body(mock_urlopen)
+        self.assertEqual(body["model"], CLAUDE_VERDICT_MODEL)
+        self.assertEqual(body["output_config"], {"effort": CLAUDE_VERDICT_EFFORT})
+        self.assertNotIn("thinking", body)
+
+
+class TestCallClaudeStopReason(unittest.TestCase):
+    """stop_reason is checked before content: a classifier decline is an HTTP 200 with
+    empty content, which would otherwise surface as an opaque 'No text block' error."""
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_refusal_raises_naming_category(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(
+            None, content=[], stop_reason="refusal",
+            stop_details={"type": "refusal", "category": "cyber", "explanation": None},
+        )
+        with self.assertRaises(ClaudeTerminalError) as ctx:
+            _call_claude("p", "k")
+        self.assertIn("refusal", str(ctx.exception))
+        self.assertIn("cyber", str(ctx.exception))
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_refusal_with_null_stop_details_raises(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(None, content=[], stop_reason="refusal", stop_details=None)
+        with self.assertRaises(ClaudeTerminalError) as ctx:
+            _call_claude("p", "k")
+        self.assertIn("refusal", str(ctx.exception))
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_refusal_is_sent_once_through_nested_retries(self, mock_urlopen):
+        # main() wraps analyze_with_claude in retry(), which wraps each call in retry() again.
+        mock_urlopen.return_value = _claude_resp(None, content=[], stop_reason="refusal")
+        with self.assertRaises(ClaudeTerminalError):
+            retry(lambda: analyze_with_claude("logs", "k"), delay=0)
+        self.assertEqual(mock_urlopen.call_count, 1)
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_refusal_usage_is_still_recorded(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(
+            None, {"input_tokens": 100, "output_tokens": 0}, content=[], stop_reason="refusal",
+        )
+        usage = {}
+        with self.assertRaises(ValueError):
+            _call_claude("p", "k", usage)
+        self.assertEqual(usage, {CLAUDE_MODEL: {"input_tokens": 100, "output_tokens": 0}})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_max_tokens_raises_instead_of_parsing_truncated_json(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(None, content=[
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": '{"severity": "rev'},
+        ], stop_reason="max_tokens")
+        with self.assertRaises(ClaudeTerminalError) as ctx:
+            _call_claude("p", "k")
+        self.assertIn("max_tokens", str(ctx.exception))
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_end_turn_parses_text(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp('{"severity": "info"}', stop_reason="end_turn")
+        self.assertEqual(_call_claude("p", "k"), {"severity": "info"})
+
+
 class TestCallClaudeContentBlocks(unittest.TestCase):
     """Text blocks must be selected by type, not position: models with adaptive
-    thinking (claude-sonnet-5) prepend a thinking block on complex prompts, which
-    made content[0]["text"] raise KeyError('text') on most analysis calls."""
+    thinking (claude-sonnet-5 onwards; always on for claude-opus-5-5) prepend a thinking
+    block, which made content[0]["text"] raise KeyError('text') on most analysis calls."""
 
     @patch("ci_release_ai_check.urllib.request.urlopen")
     def test_thinking_block_before_text_is_skipped(self, mock_urlopen):
@@ -1146,6 +1242,15 @@ class TestCallClaudeContentBlocks(unittest.TestCase):
             {"type": "thinking", "thinking": "Let me look at this diff...", "signature": "sig"},
             {"type": "text", "text": '{"severity": "info"}'},
         ])
+        self.assertEqual(_call_claude("p", "k"), {"severity": "info"})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_empty_thinking_block_before_text_is_skipped(self, mock_urlopen):
+        # Default thinking display is "omitted": the block arrives with an empty string.
+        mock_urlopen.return_value = _claude_resp(None, content=[
+            {"type": "thinking", "thinking": "", "signature": "sig"},
+            {"type": "text", "text": '{"severity": "info"}'},
+        ], stop_reason="end_turn")
         self.assertEqual(_call_claude("p", "k"), {"severity": "info"})
 
     @patch("ci_release_ai_check.urllib.request.urlopen")
@@ -1204,10 +1309,10 @@ class TestCostReporting(unittest.TestCase):
         with _run_main(_ONE_CLUSTER_TABLE) as report:
             usage = report["usage"]
 
-        # Sonnet: 1M in * $3 + 0.2M out * $15 = $6.00 ; Opus: 0.01M * $5 + 0.002M * $25 = $0.10
-        self.assertEqual(usage["by_model"][CLAUDE_MODEL]["estimated_cost_usd"], 6.0)
-        self.assertEqual(usage["by_model"][CLAUDE_VERDICT_MODEL]["estimated_cost_usd"], 0.1)
-        self.assertEqual(usage["estimated_cost_usd"], 6.1)
+        # Sonnet: 1M in * $2 + 0.2M out * $10 = $4.00 ; Opus: 0.01M * $4 + 0.002M * $20 = $0.08
+        self.assertEqual(usage["by_model"][CLAUDE_MODEL]["estimated_cost_usd"], 4.0)
+        self.assertEqual(usage["by_model"][CLAUDE_VERDICT_MODEL]["estimated_cost_usd"], 0.08)
+        self.assertEqual(usage["estimated_cost_usd"], 4.08)
         self.assertEqual(usage["input_tokens"], 1_010_000)
         self.assertEqual(usage["output_tokens"], 202_000)
         self.assertEqual(usage["model_analysis"], CLAUDE_MODEL)
