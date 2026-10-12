@@ -4,10 +4,14 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 /// `PlatformComponentsOnly` means: do not run any cluster infrastructure lifecycle action
 /// (create/pause/delete/restart); apply only the platform Helm units provided in
 /// `EngineV2Options::platform_helm_units`.
+/// `OperatorContainerUpdate` replaces the Docker Operator container of the request's cluster with
+/// `EngineV2Options::operator_container_update`, without any cloud provider or Kubernetes access.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum ExecutionMode {
     #[serde(rename = "platform_components_only")]
     PlatformComponentsOnly,
+    #[serde(rename = "operator_container_update")]
+    OperatorContainerUpdate,
     #[serde(other)]
     Unknown,
 }
@@ -51,6 +55,17 @@ pub enum PlatformHelmUnitAction {
     /// Forward-compat catch-all: must produce a structured error at execution.
     #[serde(other)]
     Unknown,
+}
+
+/// Target of a Docker Operator container update, compiled by q-core. The Engine validates every
+/// field before touching Docker.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct OperatorContainerUpdateUnit {
+    pub key: String,
+    /// `<repository>:<tag>` or `<repository>@sha256:<digest>`.
+    pub image: String,
+    /// Written to the new container's `OPERATOR_VERSION`.
+    pub operator_version: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -307,6 +322,16 @@ impl PlatformUnitResult {
         }
     }
 
+    /// A succeeded unit whose message carries a fact for q-core, such as the image digest that runs.
+    pub fn succeeded_with_message(key: &str, message: &str) -> Self {
+        PlatformUnitResult {
+            key: key.to_string(),
+            status: PlatformUnitStatus::Succeeded,
+            error_code: None,
+            message: Some(truncate_message(message)),
+        }
+    }
+
     pub fn failed(key: &str, error_code: PlatformUnitErrorCode, message: &str) -> Self {
         PlatformUnitResult {
             key: key.to_string(),
@@ -344,6 +369,24 @@ pub enum PlatformUnitErrorCode {
     HelmFailed,
     Timeout,
     Internal,
+    /// The worker cannot reach the host Docker daemon.
+    DockerUnavailable,
+    /// No running Docker Operator container matches the request's cluster and organization.
+    OperatorNotFound,
+    /// Several running Docker Operator containers match the request's cluster and organization.
+    OperatorAmbiguous,
+    /// The Operator container uses a setting the update cannot reproduce; nothing was changed.
+    UnsupportedConfiguration,
+    /// The target image cannot be pulled or pinned to a digest.
+    ImagePullFailed,
+    /// The target image does not run on the host platform.
+    ImagePlatformMismatch,
+    /// A Docker operation failed before the cut-over; the Operator was not stopped.
+    DockerOperationFailed,
+    /// The new Operator container failed and the previous one was restored.
+    RolledBack,
+    /// The new Operator container failed and the previous one could not be restored.
+    RollbackFailed,
 }
 
 /// Kubernetes truncates termination messages at 4096 bytes: keep individual messages short so
@@ -397,6 +440,8 @@ mod tests {
     fn execution_mode_deserializes_from_q_core_wire_value() {
         let mode: ExecutionMode = serde_json::from_str(r#""platform_components_only""#).unwrap();
         assert_eq!(mode, ExecutionMode::PlatformComponentsOnly);
+        let mode: ExecutionMode = serde_json::from_str(r#""operator_container_update""#).unwrap();
+        assert_eq!(mode, ExecutionMode::OperatorContainerUpdate);
     }
 
     #[test]
@@ -451,9 +496,45 @@ mod tests {
         let engine_v2_options = metadata.engine_v2_options.unwrap();
         assert_eq!(engine_v2_options.execution_mode, ExecutionMode::PlatformComponentsOnly);
         assert_eq!(engine_v2_options.preflight, None);
+        assert_eq!(engine_v2_options.operator_container_update, None);
         let units = engine_v2_options.platform_helm_units;
         assert_eq!(units.len(), 1);
         assert_eq!(units[0].key, "cluster-agent");
+    }
+
+    #[test]
+    fn metadata_deserializes_q_core_operator_container_update_payload() {
+        use crate::io_models::context::Metadata;
+
+        let metadata: Metadata = serde_json::from_str(
+            r#"{
+                "dry_run_deploy": false,
+                "cluster_operator_engine_v2": true,
+                "engine_v2_options": {
+                    "schema_version": "1",
+                    "execution_mode": "operator_container_update",
+                    "template": {"key": "eks-anywhere", "version": "1.0.0"},
+                    "platform_helm_units": [],
+                    "operator_container_update": {
+                        "key": "qovery-operator",
+                        "image": "public.ecr.aws/r3m4q3r9/qovery-operator:v1.223.0",
+                        "operator_version": "v1.223.0"
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        let engine_v2_options = metadata.engine_v2_options.unwrap();
+        assert_eq!(engine_v2_options.execution_mode, ExecutionMode::OperatorContainerUpdate);
+        assert!(engine_v2_options.platform_helm_units.is_empty());
+        assert_eq!(
+            engine_v2_options.operator_container_update,
+            Some(OperatorContainerUpdateUnit {
+                key: "qovery-operator".to_string(),
+                image: "public.ecr.aws/r3m4q3r9/qovery-operator:v1.223.0".to_string(),
+                operator_version: "v1.223.0".to_string(),
+            })
+        );
     }
 
     #[test]
@@ -553,6 +634,33 @@ mod tests {
             json,
             r#"{"schema_version":1,"execution_id":"exec-1","units":[{"key":"cluster-agent","status":"SUCCEEDED"},{"key":"shell-agent","status":"FAILED","error_code":"HELM_FAILED","message":"helm upgrade failed"},{"key":"loki","status":"SKIPPED","message":"UPSTREAM_FAILED"}]}"#
         );
+    }
+
+    #[test]
+    fn operator_container_update_results_serialize_their_codes_and_digest() {
+        let digest = format!("public.ecr.aws/r3m4q3r9/qovery-operator@sha256:{}", "a".repeat(64));
+        let units = [
+            PlatformUnitResult::succeeded_with_message("qovery-operator", &digest),
+            PlatformUnitResult::failed("qovery-operator", PlatformUnitErrorCode::RolledBack, "unhealthy"),
+        ];
+        assert_eq!(
+            serde_json::to_string(&units).unwrap(),
+            format!(
+                r#"[{{"key":"qovery-operator","status":"SUCCEEDED","message":"{digest}"}},{{"key":"qovery-operator","status":"FAILED","error_code":"ROLLED_BACK","message":"unhealthy"}}]"#
+            )
+        );
+        for (code, wire) in [
+            (PlatformUnitErrorCode::DockerUnavailable, "DOCKER_UNAVAILABLE"),
+            (PlatformUnitErrorCode::OperatorNotFound, "OPERATOR_NOT_FOUND"),
+            (PlatformUnitErrorCode::OperatorAmbiguous, "OPERATOR_AMBIGUOUS"),
+            (PlatformUnitErrorCode::UnsupportedConfiguration, "UNSUPPORTED_CONFIGURATION"),
+            (PlatformUnitErrorCode::ImagePullFailed, "IMAGE_PULL_FAILED"),
+            (PlatformUnitErrorCode::ImagePlatformMismatch, "IMAGE_PLATFORM_MISMATCH"),
+            (PlatformUnitErrorCode::DockerOperationFailed, "DOCKER_OPERATION_FAILED"),
+            (PlatformUnitErrorCode::RollbackFailed, "ROLLBACK_FAILED"),
+        ] {
+            assert_eq!(serde_json::to_value(code).unwrap(), wire);
+        }
     }
 
     #[test]
