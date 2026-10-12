@@ -53,6 +53,13 @@ rules:
     verbs:
       - get
       - list
+  # node a builder ran on, reported with the build step (build_platform/builder_usage.rs)
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
 {{- else }}
     # empty
 {{- end }}

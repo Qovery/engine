@@ -76,6 +76,22 @@ pub struct BuilderUsage {
     pub samples: u32,
 }
 
+/// Node a Build step's builder ran on, so build time can be joined with that node's disk and CPU load.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BuilderNode {
+    pub instance_id: Option<String>,
+    pub instance_type: Option<String>,
+    pub node_pool: Option<String>,
+    pub capacity_type: Option<String>,
+}
+
+/// What the builder used and where it ran during a Build step.
+#[derive(Debug, Default, PartialEq)]
+pub struct BuilderObservation {
+    pub usage: Option<BuilderUsage>,
+    pub node: Option<BuilderNode>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct StepRecord {
     pub step_id: Uuid,
@@ -89,6 +105,7 @@ pub struct StepRecord {
     pub built_image: Option<BuiltImage>,
     pub builder_usage: Option<BuilderUsage>,
     pub builder_oom_killed: bool,
+    pub builder_node: Option<BuilderNode>,
 }
 
 #[derive(Clone)]
@@ -112,11 +129,11 @@ pub trait MetricsRegistry: Send + Sync {
         duration: Duration,
         status: StepStatus,
     );
-    fn set_builder_usage(
+    fn set_builder_observation(
         &self,
         id: Uuid,
         deployment_step: StepName,
-        builder_usage: Option<BuilderUsage>,
+        builder: BuilderObservation,
         builder_oom_killed: bool,
     );
     fn record_is_stopped(&self, id: Uuid, deployment_step: StepName) -> bool;
@@ -145,6 +162,7 @@ impl StepRecord {
             built_image: None,
             builder_usage: None,
             builder_oom_killed: false,
+            builder_node: None,
         }
     }
 }
@@ -173,9 +191,9 @@ impl<'a> StepRecordHandle<'a> {
     }
 
     /// Attach before `stop`, like `set_built_image`.
-    pub fn set_builder_usage(&self, builder_usage: Option<BuilderUsage>, builder_oom_killed: bool) {
+    pub fn set_builder_observation(&self, builder: BuilderObservation, builder_oom_killed: bool) {
         self.metrics_registry
-            .set_builder_usage(self.id, self.name.clone(), builder_usage, builder_oom_killed);
+            .set_builder_observation(self.id, self.name.clone(), builder, builder_oom_killed);
     }
 }
 
@@ -299,18 +317,19 @@ impl MetricsRegistry for StdMetricsRegistry {
             .send(EngineMsg::new(EngineMsgPayload::Metrics(step_record)));
     }
 
-    fn set_builder_usage(
+    fn set_builder_observation(
         &self,
         id: Uuid,
         step_name: StepName,
-        builder_usage: Option<BuilderUsage>,
+        builder: BuilderObservation,
         builder_oom_killed: bool,
     ) {
         let mut registry = self.registry.map.lock().expect("Failed to acquire lock");
         if let Some(deployment_step_record) = registry.entry(id).or_default().get_mut(&step_name)
             && deployment_step_record.duration.is_none()
         {
-            deployment_step_record.builder_usage = builder_usage;
+            deployment_step_record.builder_usage = builder.usage;
+            deployment_step_record.builder_node = builder.node;
             deployment_step_record.builder_oom_killed = builder_oom_killed;
         }
     }
@@ -369,7 +388,8 @@ impl Drop for MetricsRegistryMap {
 mod tests {
     use crate::events::EngineMsgPayload;
     use crate::metrics_registry::{
-        BuilderUsage, BuiltImage, MetricsRegistry, StdMetricsRegistry, StepLabel, StepName, StepStatus,
+        BuilderNode, BuilderObservation, BuilderUsage, BuiltImage, MetricsRegistry, StdMetricsRegistry, StepLabel,
+        StepName, StepStatus,
     };
     use crate::msg_publisher::StdMsgPublisher;
     use std::time::{Duration, SystemTime};
@@ -529,7 +549,13 @@ mod tests {
 
         let record = metrics_registry.start_record(Uuid::new_v4(), StepLabel::Service, StepName::Build);
         let EngineMsgPayload::Metrics(started_record) = messages.try_recv().unwrap().payload;
-        record.set_builder_usage(Some(builder_usage()), true);
+        record.set_builder_observation(
+            BuilderObservation {
+                usage: Some(builder_usage()),
+                node: None,
+            },
+            true,
+        );
         record.stop(StepStatus::Error);
         let EngineMsgPayload::Metrics(stopped_record) = messages.try_recv().unwrap().payload;
 
@@ -541,13 +567,46 @@ mod tests {
     }
 
     #[test]
+    fn builder_node_is_published_with_the_stop_message_only() {
+        let (publisher, mut messages) = unbounded_channel();
+        let metrics_registry = StdMetricsRegistry::new(Box::new(publisher));
+        let builder_node = BuilderNode {
+            instance_id: Some("i-0abc".to_string()),
+            instance_type: Some("c6id.4xlarge".to_string()),
+            node_pool: Some("qovery-default-public".to_string()),
+            capacity_type: Some("on-demand".to_string()),
+        };
+
+        let record = metrics_registry.start_record(Uuid::new_v4(), StepLabel::Service, StepName::Build);
+        let EngineMsgPayload::Metrics(started_record) = messages.try_recv().unwrap().payload;
+        record.set_builder_observation(
+            BuilderObservation {
+                usage: None,
+                node: Some(builder_node.clone()),
+            },
+            false,
+        );
+        record.stop(StepStatus::Success);
+        let EngineMsgPayload::Metrics(stopped_record) = messages.try_recv().unwrap().payload;
+
+        assert_eq!(started_record.builder_node, None);
+        assert_eq!(stopped_record.builder_node, Some(builder_node));
+    }
+
+    #[test]
     fn builder_usage_set_after_the_stop_is_ignored() {
         let service_id = Uuid::new_v4();
         let metrics_registry = StdMetricsRegistry::new(Box::new(StdMsgPublisher::new()));
 
         let record = metrics_registry.start_record(service_id, StepLabel::Service, StepName::Build);
         record.stop(StepStatus::Success);
-        record.set_builder_usage(Some(builder_usage()), true);
+        record.set_builder_observation(
+            BuilderObservation {
+                usage: Some(builder_usage()),
+                node: None,
+            },
+            true,
+        );
 
         let stopped_record = &metrics_registry.get_records(service_id)[0];
         assert_eq!(
