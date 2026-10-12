@@ -67,6 +67,11 @@ message StepRecord {
   optional uint32 builder_memory_mib_max = 13;
   optional uint32 builder_usage_samples = 14;
   optional bool builder_oom_killed = 15;
+  // Build step only: node the builder ran on, unset when it could not be read.
+  optional string builder_instance_id = 16;
+  optional string builder_instance_type = 17;
+  optional string builder_node_pool = 18;
+  optional string builder_capacity_type = 19;
 }
 
 message Metrics {

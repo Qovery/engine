@@ -7,6 +7,7 @@ impl GrpcStepRecord {
     pub fn from_record(step_record: StepRecord) -> Self {
         let built_image = step_record.built_image.clone();
         let builder_usage = step_record.builder_usage.as_ref();
+        let builder_node = step_record.builder_node.clone();
         GrpcStepRecord {
             id: step_record.id.to_string(),
             step_id: step_record.step_id.to_string(),
@@ -36,6 +37,10 @@ impl GrpcStepRecord {
             builder_memory_mib_max: builder_usage.map(|usage| usage.memory_mib_max),
             builder_usage_samples: builder_usage.map(|usage| usage.samples),
             builder_oom_killed: step_record.builder_oom_killed.then_some(true),
+            builder_instance_id: builder_node.as_ref().and_then(|node| node.instance_id.clone()),
+            builder_instance_type: builder_node.as_ref().and_then(|node| node.instance_type.clone()),
+            builder_node_pool: builder_node.as_ref().and_then(|node| node.node_pool.clone()),
+            builder_capacity_type: builder_node.and_then(|node| node.capacity_type),
         }
     }
 }
@@ -43,7 +48,7 @@ impl GrpcStepRecord {
 #[cfg(test)]
 mod tests {
     use super::{GrpcStepRecord, GrpcStepStatus, StepLabel, StepRecord, StepStatus};
-    use qovery_engine::metrics_registry::{BuilderUsage, BuiltImage, StepName};
+    use qovery_engine::metrics_registry::{BuilderNode, BuilderUsage, BuiltImage, StepName};
     use std::time::Duration;
     use uuid::Uuid;
 
@@ -132,6 +137,50 @@ mod tests {
                 grpc_record.builder_oom_killed,
             ),
             (None, None, None, None, None)
+        );
+    }
+
+    #[test]
+    fn builder_node_conversion_carries_instance_and_pool() {
+        let mut step_record = StepRecord::new(StepName::Build, StepLabel::Service, Uuid::new_v4());
+        step_record.builder_node = Some(BuilderNode {
+            instance_id: Some("i-0123456789abcdef0".to_string()),
+            instance_type: Some("c6id.4xlarge".to_string()),
+            node_pool: Some("qovery-default-public".to_string()),
+            capacity_type: None,
+        });
+
+        let grpc_record = GrpcStepRecord::from_record(step_record);
+
+        assert_eq!(
+            (
+                grpc_record.builder_instance_id,
+                grpc_record.builder_instance_type,
+                grpc_record.builder_node_pool,
+                grpc_record.builder_capacity_type,
+            ),
+            (
+                Some("i-0123456789abcdef0".to_string()),
+                Some("c6id.4xlarge".to_string()),
+                Some("qovery-default-public".to_string()),
+                None
+            )
+        );
+    }
+
+    #[test]
+    fn record_without_builder_node_leaves_node_fields_unset() {
+        let grpc_record =
+            GrpcStepRecord::from_record(StepRecord::new(StepName::Build, StepLabel::Service, Uuid::new_v4()));
+
+        assert_eq!(
+            (
+                grpc_record.builder_instance_id,
+                grpc_record.builder_instance_type,
+                grpc_record.builder_node_pool,
+                grpc_record.builder_capacity_type,
+            ),
+            (None, None, None, None)
         );
     }
 }

@@ -4,10 +4,13 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::Context;
+use k8s_openapi::api::core::v1::{Node, Pod};
+use kube::Api;
+use kube::api::ListParams;
 use serde::Deserialize;
 
 use crate::cmd::docker::BuilderPods;
-use crate::metrics_registry::BuilderUsage;
+use crate::metrics_registry::{BuilderNode, BuilderObservation, BuilderUsage};
 use crate::runtime::block_on;
 
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(15);
@@ -75,20 +78,21 @@ fn memory_mib(quantity: &str) -> Option<u64> {
     )
 }
 
+fn is_builder_pod(pod_name: &str, node_names: &[String]) -> bool {
+    node_names.iter().any(|node_name| {
+        pod_name
+            .strip_prefix(node_name.as_str())
+            .is_some_and(|suffix| suffix.starts_with('-'))
+    })
+}
+
 /// Busiest of the builder's pods, as limits apply per pod: buildx names each pod `{node_name}-{suffix}`.
 /// A pod with an unreadable quantity is skipped; None when no pod of this builder can be read.
 fn builder_sample(pod_metrics: &PodMetricsList, node_names: &[String]) -> Option<Sample> {
     let builder_pods = pod_metrics
         .items
         .iter()
-        .filter(|pod| {
-            node_names.iter().any(|node_name| {
-                pod.metadata
-                    .name
-                    .strip_prefix(node_name.as_str())
-                    .is_some_and(|suffix| suffix.starts_with('-'))
-            })
-        })
+        .filter(|pod| is_builder_pod(&pod.metadata.name, node_names))
         .collect::<Vec<_>>();
     builder_pods
         .into_iter()
@@ -142,27 +146,88 @@ impl UsageAccumulator {
     }
 }
 
-/// Runs `work` while sampling the builder's CPU and memory on a scoped thread. Best effort: no builder
-/// pods, a missing metrics API or a failed call only loses samples, never fails `work`.
-pub fn sample_while<R>(pods: Option<&BuilderPods>, work: impl FnOnce() -> R) -> (R, Option<BuilderUsage>) {
+/// Runs `work` while sampling the builder's CPU and memory and looking up its node once it ends. Best
+/// effort: no builder pods, a missing metrics API or a failed call only loses data, never fails `work`.
+pub fn sample_while<R>(pods: Option<&BuilderPods>, work: impl FnOnce() -> R) -> (R, BuilderObservation) {
     let Some(pods) = pods else {
-        return (work(), None);
+        return (work(), BuilderObservation::default());
     };
     let client = match block_on(kube::Client::try_default()) {
         Ok(client) => client,
         Err(err) => {
             debug!("Cannot sample builder usage: {err}");
-            return (work(), None);
+            return (work(), BuilderObservation::default());
         }
     };
-    sample_with(
+    let sampler_client = client.clone();
+    let (result, usage) = sample_with(
         SAMPLE_INTERVAL,
         move || {
-            let client = client.clone();
+            let client = sampler_client.clone();
             async move { fetch_sample(&client, pods).await }
         },
         work,
+    );
+    // Must run before the builder is deleted, which happens after this function returns.
+    let node = match block_on(fetch_builder_node(&client, pods)) {
+        Ok(node) => node,
+        Err(err) => {
+            debug!("Cannot fetch the builder node: {err:#}");
+            None
+        }
+    };
+    (result, BuilderObservation { usage, node })
+}
+
+/// Node of the builder's first pod (the first requested architecture on multi-arch builds).
+async fn fetch_builder_node(client: &kube::Client, pods: &BuilderPods) -> anyhow::Result<Option<BuilderNode>> {
+    let pod_api: Api<Pod> = Api::namespaced(client.clone(), &pods.namespace);
+    let builder_pods = tokio::time::timeout(
+        REQUEST_TIMEOUT,
+        pod_api.list(&ListParams::default().labels("qovery.com/is-builder=true")),
     )
+    .await
+    .context("builder pod list timed out")??;
+    let node_name = pods.node_names.iter().find_map(|node_name| {
+        builder_pods.items.iter().find_map(|pod| {
+            let pod_name = pod.metadata.name.as_deref()?;
+            is_builder_pod(pod_name, std::slice::from_ref(node_name))
+                .then(|| pod.spec.as_ref()?.node_name.clone())
+                .flatten()
+        })
+    });
+    let Some(node_name) = node_name else {
+        return Ok(None);
+    };
+    let node_api: Api<Node> = Api::all(client.clone());
+    let node = tokio::time::timeout(REQUEST_TIMEOUT, node_api.get(&node_name))
+        .await
+        .context("builder node read timed out")??;
+    Ok(Some(builder_node(&node)))
+}
+
+fn builder_node(node: &Node) -> BuilderNode {
+    let label = |key: &str| {
+        node.metadata
+            .labels
+            .as_ref()
+            .and_then(|labels| labels.get(key))
+            .cloned()
+    };
+    BuilderNode {
+        // AWS providerID: aws:///<zone>/<instance id>
+        instance_id: node
+            .spec
+            .as_ref()
+            .and_then(|spec| spec.provider_id.as_deref())
+            .filter(|provider_id| provider_id.starts_with("aws://"))
+            .and_then(|provider_id| provider_id.rsplit('/').next())
+            .filter(|instance_id| !instance_id.is_empty())
+            .map(str::to_string),
+        instance_type: label("node.kubernetes.io/instance-type"),
+        node_pool: label("karpenter.sh/nodepool"),
+        capacity_type: label("karpenter.sh/capacity-type"),
+    }
 }
 
 async fn fetch_sample(client: &kube::Client, pods: &BuilderPods) -> anyhow::Result<Option<Sample>> {
@@ -422,8 +487,47 @@ mod tests {
 
     #[test]
     fn no_builder_pods_runs_the_work_without_sampling() {
-        let (result, usage) = sample_while(None, || 42);
+        let (result, observation) = sample_while(None, || 42);
 
-        assert_eq!((result, usage), (42, None));
+        assert_eq!((result, observation), (42, BuilderObservation::default()));
+    }
+
+    #[test]
+    fn builder_node_reads_the_ec2_instance_and_karpenter_labels() {
+        let node: Node = serde_json::from_str(
+            r#"{"metadata":{"name":"ip-10-0-1-2.ec2.internal","labels":{
+                "node.kubernetes.io/instance-type":"c6id.4xlarge",
+                "karpenter.sh/nodepool":"qovery-default-public",
+                "karpenter.sh/capacity-type":"on-demand"}},
+              "spec":{"providerID":"aws:///us-east-2a/i-0123456789abcdef0"}}"#,
+        )
+        .expect("valid node");
+
+        assert_eq!(
+            builder_node(&node),
+            BuilderNode {
+                instance_id: Some("i-0123456789abcdef0".to_string()),
+                instance_type: Some("c6id.4xlarge".to_string()),
+                node_pool: Some("qovery-default-public".to_string()),
+                capacity_type: Some("on-demand".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn builder_node_ignores_an_aws_provider_id_without_instance() {
+        let node: Node =
+            serde_json::from_str(r#"{"metadata":{"name":"n"},"spec":{"providerID":"aws:///"}}"#).expect("valid node");
+
+        assert_eq!(builder_node(&node), BuilderNode::default());
+    }
+
+    #[test]
+    fn builder_node_ignores_a_non_aws_provider_id() {
+        let node: Node =
+            serde_json::from_str(r#"{"metadata":{"name":"n"},"spec":{"providerID":"gce://project/zone/n"}}"#)
+                .expect("valid node");
+
+        assert_eq!(builder_node(&node), BuilderNode::default());
     }
 }
