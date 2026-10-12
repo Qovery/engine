@@ -76,7 +76,9 @@ base64url() {
 # Removes potentially existing sensitive files upon exit (error or not)
 cleanup() {
   local exit_code=$?
-  for f in "$JWT_FILE" "$TOKEN_FILE" "$GIT_ASKPASS_FILE"; do
+  for f in "$JWT_FILE" "$TOKEN_FILE" "$GIT_ASKPASS_FILE" "$COMMIT_CONTENT_FILE" \
+           "$COMMIT_ADDITIONS_FILE" "$COMMIT_DELETIONS_FILE" \
+           "$COMMIT_ADDITIONS_FILE.tmp" "$COMMIT_DELETIONS_FILE.tmp"; do
     [ -n "$f" ] && [ -f "$f" ] && rm -f "$f"
   done
   exit "$exit_code"
@@ -245,23 +247,36 @@ github_app_signed_commit_and_pr() {
   case "$-" in *x*) xtrace_state=1 ;; *) xtrace_state=0 ;; esac
 
   # --- 1. Collect local changes (run inside a checkout of the repo) ---------
-  additions='[]'
-  deletions='[]'
+  # Accumulated JSON and base64 file content live in temp files and are fed to
+  # jq via --rawfile / a file argument (never --arg/--argjson), since large
+  # files blow past the OS argv size limit.
+  COMMIT_CONTENT_FILE=$(mktemp)
+  COMMIT_ADDITIONS_FILE=$(mktemp)
+  COMMIT_DELETIONS_FILE=$(mktemp)
+  echo '[]' > "$COMMIT_ADDITIONS_FILE"
+  echo '[]' > "$COMMIT_DELETIONS_FILE"
+
   while IFS=$'\t' read -r status path1 path2; do
     case "$status" in
       A|M)
-        additions=$(jq --arg p "$path1" --arg c "$(base64 < "$path1" | tr -d '\n')" \
-          '. + [{path:$p, contents:$c}]' <<<"$additions") ;;
+        base64 < "$path1" | tr -d '\n' > "$COMMIT_CONTENT_FILE"
+        jq --arg p "$path1" --rawfile c "$COMMIT_CONTENT_FILE" \
+          '. + [{path:$p, contents:$c}]' "$COMMIT_ADDITIONS_FILE" > "$COMMIT_ADDITIONS_FILE.tmp" \
+          && mv "$COMMIT_ADDITIONS_FILE.tmp" "$COMMIT_ADDITIONS_FILE" ;;
       D)
-        deletions=$(jq --arg p "$path1" '. + [{path:$p}]' <<<"$deletions") ;;
+        jq --arg p "$path1" '. + [{path:$p}]' "$COMMIT_DELETIONS_FILE" > "$COMMIT_DELETIONS_FILE.tmp" \
+          && mv "$COMMIT_DELETIONS_FILE.tmp" "$COMMIT_DELETIONS_FILE" ;;
       R*)
-        deletions=$(jq --arg p "$path1" '. + [{path:$p}]' <<<"$deletions")
-        additions=$(jq --arg p "$path2" --arg c "$(base64 < "$path2" | tr -d '\n')" \
-          '. + [{path:$p, contents:$c}]' <<<"$additions") ;;
+        jq --arg p "$path1" '. + [{path:$p}]' "$COMMIT_DELETIONS_FILE" > "$COMMIT_DELETIONS_FILE.tmp" \
+          && mv "$COMMIT_DELETIONS_FILE.tmp" "$COMMIT_DELETIONS_FILE"
+        base64 < "$path2" | tr -d '\n' > "$COMMIT_CONTENT_FILE"
+        jq --arg p "$path2" --rawfile c "$COMMIT_CONTENT_FILE" \
+          '. + [{path:$p, contents:$c}]' "$COMMIT_ADDITIONS_FILE" > "$COMMIT_ADDITIONS_FILE.tmp" \
+          && mv "$COMMIT_ADDITIONS_FILE.tmp" "$COMMIT_ADDITIONS_FILE" ;;
     esac
   done < <(git diff --cached --name-status)
 
-  if [[ "$additions" == "[]" && "$deletions" == "[]" ]]; then
+  if [[ "$(jq 'length' "$COMMIT_ADDITIONS_FILE")" -eq 0 && "$(jq 'length' "$COMMIT_DELETIONS_FILE")" -eq 0 ]]; then
     echo "Nothing to commit"; return 0
   fi
 
@@ -282,14 +297,14 @@ github_app_signed_commit_and_pr() {
   jq -n \
     --arg repo "$REPO" --arg branch "$NEW_BRANCH" --arg head "$HEAD_SHA" \
     --arg msg  "$MESSAGE" \
-    --argjson add "$additions" --argjson del "$deletions" \
+    --slurpfile add "$COMMIT_ADDITIONS_FILE" --slurpfile del "$COMMIT_DELETIONS_FILE" \
   '{
     query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid url } } }",
     variables: { input: {
       branch: { repositoryNameWithOwner: $repo, branchName: $branch },
       expectedHeadOid: $head,
       message: { headline: $msg },
-      fileChanges: { additions: $add, deletions: $del }
+      fileChanges: { additions: $add[0], deletions: $del[0] }
     }}
   }' \
   | GH_TOKEN="$("$GIT_ASKPASS")" gh api graphql --input - --jq '.data.createCommitOnBranch.commit.url'
