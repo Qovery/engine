@@ -583,6 +583,7 @@ pub fn environment_3_apps_3_databases(
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     }
 }
 
@@ -652,6 +653,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     }
 }
 
@@ -721,6 +723,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         helms: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     }
 }
 

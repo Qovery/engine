@@ -81,6 +81,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     };
 
     match options {

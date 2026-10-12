@@ -57,6 +57,20 @@ pub struct EnvironmentRequest {
     pub annotations_groups: BTreeMap<Uuid, AnnotationsGroup>,
     #[serde(default = "default_labels_groups")]
     pub labels_groups: BTreeMap<Uuid, LabelsGroup>,
+    // Requests sent before core knew about routing modes have no field and keep the legacy behavior.
+    #[serde(default)]
+    pub routing_mode: EnvironmentRoutingMode,
+}
+
+/// How the Gateway API listeners of the environment's routers are grouped.
+/// Core sends these exact names, so each variant name is pinned instead of derived.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
+pub enum EnvironmentRoutingMode {
+    #[default]
+    #[serde(rename = "PER_ROUTER_LISTENER_SET")]
+    PerRouterListenerSet,
+    #[serde(rename = "PER_HOSTNAME_LISTENER_SET")]
+    PerHostnameListenerSet,
 }
 
 fn default_max_parallel_build() -> u32 {
@@ -386,7 +400,7 @@ impl EnvironmentRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_basic_auth_secret;
+    use super::{EnvironmentRequest, EnvironmentRoutingMode, resolve_basic_auth_secret};
     use crate::environment::models::router::RouterError;
     use crate::io_models::environment::DomainError;
     use crate::io_models::variable_utils::VariableInfo;
@@ -464,5 +478,70 @@ mod tests {
             }
             other => panic!("unexpected error variant: {other:?}"),
         }
+    }
+
+    fn environment_request_json(routing_mode: Option<&str>) -> serde_json::Value {
+        let mut json = serde_json::json!({
+            "execution_id": "exec-123",
+            "long_id": "11111111-1111-1111-1111-111111111111",
+            "name": "production",
+            "kube_name": "z99999999-production",
+            "project_long_id": "22222222-2222-2222-2222-222222222222",
+            "organization_long_id": "33333333-3333-3333-3333-333333333333",
+            "action": "CREATE",
+            "applications": [],
+            "containers": [],
+            "jobs": [],
+            "routers": [],
+            "databases": []
+        });
+        if let Some(routing_mode) = routing_mode {
+            json["routing_mode"] = serde_json::Value::String(routing_mode.to_string());
+        }
+        json
+    }
+
+    #[test]
+    fn environment_request_without_routing_mode_uses_one_listener_set_per_router() {
+        let request: EnvironmentRequest =
+            serde_json::from_value(environment_request_json(None)).expect("request without routing_mode should parse");
+
+        assert_eq!(request.routing_mode, EnvironmentRoutingMode::PerRouterListenerSet);
+    }
+
+    #[test]
+    fn environment_request_reads_the_routing_mode_sent_by_core() {
+        let request: EnvironmentRequest =
+            serde_json::from_value(environment_request_json(Some("PER_HOSTNAME_LISTENER_SET")))
+                .expect("request with routing_mode should parse");
+
+        assert_eq!(request.routing_mode, EnvironmentRoutingMode::PerHostnameListenerSet);
+        let serialized = serde_json::to_value(&request).expect("request should serialize");
+        assert_eq!(serialized["routing_mode"], "PER_HOSTNAME_LISTENER_SET");
+    }
+
+    #[test]
+    fn environment_routing_mode_wire_names_are_pinned() {
+        assert_eq!(
+            serde_json::to_string(&EnvironmentRoutingMode::PerRouterListenerSet).unwrap(),
+            "\"PER_ROUTER_LISTENER_SET\""
+        );
+        assert_eq!(
+            serde_json::to_string(&EnvironmentRoutingMode::PerHostnameListenerSet).unwrap(),
+            "\"PER_HOSTNAME_LISTENER_SET\""
+        );
+        assert_eq!(
+            serde_json::from_value::<EnvironmentRoutingMode>(serde_json::json!("PER_ROUTER_LISTENER_SET")).unwrap(),
+            EnvironmentRoutingMode::PerRouterListenerSet
+        );
+        assert!(serde_json::from_value::<EnvironmentRoutingMode>(serde_json::json!(42)).is_err());
+    }
+
+    #[test]
+    fn environment_request_with_unknown_routing_mode_is_rejected() {
+        let result =
+            serde_json::from_value::<EnvironmentRequest>(environment_request_json(Some("PER_SERVICE_LISTENER_SET")));
+
+        assert!(result.is_err());
     }
 }
