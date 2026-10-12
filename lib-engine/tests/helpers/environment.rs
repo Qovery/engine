@@ -139,6 +139,7 @@ pub fn working_environment(
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     };
 
     if with_router {
@@ -519,6 +520,7 @@ pub fn environment_2_app_2_routers_1_psql(
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     }
 }
 
@@ -651,6 +653,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     }
 }
 
@@ -768,6 +771,7 @@ pub fn environment_only_http_server(
         agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
+        routing_mode: Default::default(),
     };
 
     if with_router {
