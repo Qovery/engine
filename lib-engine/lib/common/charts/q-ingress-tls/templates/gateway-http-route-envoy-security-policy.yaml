@@ -52,19 +52,20 @@ spec:
     defaultAction: Allow
     {{- end }}
     rules:
-    {{- if (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) }}
-    - action: Allow
-      principal:
-        clientCIDRs:
-        {{- range $index7, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_whitelist_source_range) }}
-        - {{ (toJson (trim $c)) }}
-        {{- end }}
-    {{- end }}
+    {{/* Envoy uses the first matching rule; denylist must take precedence over whitelist. */}}
     {{- if $.Values.advanced_settings.network_gateway_api_denylist_source_range }}
     - action: Deny
       principal:
         clientCIDRs:
         {{- range $index8, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_denylist_source_range) }}
+        - {{ (toJson (trim $c)) }}
+        {{- end }}
+    {{- end }}
+    {{- if (and $.Values.advanced_settings.network_gateway_api_whitelist_source_range (ne (toString $.Values.advanced_settings.network_gateway_api_whitelist_source_range) "0.0.0.0/0")) }}
+    - action: Allow
+      principal:
+        clientCIDRs:
+        {{- range $index7, $c := (splitList "," $.Values.advanced_settings.network_gateway_api_whitelist_source_range) }}
         - {{ (toJson (trim $c)) }}
         {{- end }}
     {{- end }}
