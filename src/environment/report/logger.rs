@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::events::EnvironmentStep::{DatabaseOutput, JobOutput, TerraformServiceOutput};
+use crate::events::EnvironmentStep::{AgenticWorkflowOutput, DatabaseOutput, JobOutput, TerraformServiceOutput};
 
 pub struct EnvLogger {
     logger: Arc<Box<dyn Logger>>,
@@ -149,6 +149,11 @@ impl EnvLogger {
         self.send_core_configuration(safe_message, json, JobOutput);
     }
 
+    /// Send workflow outputs to core using the workflow variable update path.
+    pub fn send_core_configuration_for_agentic_workflow(&self, safe_message: String, json: String) {
+        self.send_core_configuration(safe_message, json, AgenticWorkflowOutput);
+    }
+
     pub fn send_core_configuration_for_database(&self, safe_message: String, json: String) {
         self.send_core_configuration(safe_message, json, DatabaseOutput);
     }
@@ -196,6 +201,11 @@ impl EnvProgressLogger<'_> {
 
     pub fn core_configuration_for_job(&self, msg: String, json: String) {
         self.logger.send_core_configuration_for_job(msg, json)
+    }
+
+    /// Send workflow outputs while the deployment is in progress.
+    pub fn core_configuration_for_agentic_workflow(&self, msg: String, json: String) {
+        self.logger.send_core_configuration_for_agentic_workflow(msg, json)
     }
 
     pub fn core_configuration_for_database(&self, msg: String, json: String) {
@@ -253,5 +263,54 @@ impl LoggerState {
             2 => LoggerState::Error,
             _ => panic!("invalid usize value for LoggerState"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::{Transmitter, io};
+    use crate::io_models::QoveryIdentifier;
+    use crate::logger::UnboundedSenderLogger;
+    use tokio::sync::mpsc::unbounded_channel;
+    use uuid::Uuid;
+
+    #[test]
+    fn agentic_workflow_output_preserves_secrets_and_uses_dedicated_wire_step() {
+        let workflow_id = Uuid::new_v4();
+        let details = EventDetails::new(
+            None,
+            QoveryIdentifier::new(Uuid::new_v4()),
+            QoveryIdentifier::new(Uuid::new_v4()),
+            "execution".to_string(),
+            Stage::Environment(EnvironmentStep::Deploy),
+            Transmitter::Job(workflow_id, "workflow".to_string()),
+        );
+        let (sender, mut receiver) = unbounded_channel();
+        let logger = EnvLogger {
+            logger: Arc::new(Box::new(UnboundedSenderLogger::new(sender, vec!["secret-value".to_string()]))),
+            event_details_progress: details.clone(),
+            event_details_progress_executing: details.clone(),
+            event_details_success: details,
+            #[cfg(feature = "env-logger-check")]
+            state: AtomicUsize::new(LoggerState::Progress as usize),
+            executing: AtomicBool::new(false),
+        };
+        let output = r#"{"COST":{"value":"0.75","sensitive":false},"TOKEN":{"value":"secret-value","sensitive":true}}"#;
+
+        EnvProgressLogger::new(&logger)
+            .core_configuration_for_agentic_workflow("Workflow output succeeded".to_string(), output.to_string());
+        logger.send_success("Done".to_string());
+
+        let event = receiver.try_recv().unwrap();
+        assert_eq!(
+            event.get_details().stage(),
+            &Stage::Environment(EnvironmentStep::AgenticWorkflowOutput)
+        );
+        assert!(event.get_details().stage().is_core_output());
+        let serialized = serde_json::to_value(io::EngineEvent::from(event)).unwrap();
+        assert_eq!(serialized["details"]["stage"]["step"], "AgenticWorkflowOutput");
+        assert_eq!(serialized["details"]["transmitter"]["id"], workflow_id.to_string());
+        assert_eq!(serialized["message"]["full_details"], output);
     }
 }
