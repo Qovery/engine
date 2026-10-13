@@ -64,7 +64,9 @@ struct FakeState {
     images: HashMap<String, ImageInspect>,
     crashing_images: HashSet<String>,
     failing: Option<(DockerOperation, FailureTiming)>,
+    repeated_failures: usize,
     failing_inspect: Option<ContainerId>,
+    on_pull: Option<fn(&mut FakeState)>,
     calls: Vec<String>,
     next_id: u64,
 }
@@ -92,7 +94,9 @@ impl FakeDocker {
                 ]),
                 crashing_images: HashSet::from([pinned('2')]),
                 failing: None,
+                repeated_failures: 0,
                 failing_inspect: None,
+                on_pull: None,
                 calls: Vec::new(),
                 next_id: 1,
             }),
@@ -143,7 +147,10 @@ impl FakeDocker {
         state.calls.push(call);
         let timing = match state.failing {
             Some((failing, timing)) if failing == operation => {
-                state.failing = None;
+                match state.repeated_failures {
+                    0 => state.failing = None,
+                    _ => state.repeated_failures -= 1,
+                }
                 Some(timing)
             }
             _ => None,
@@ -222,7 +229,12 @@ impl OperatorDocker for FakeDocker {
     }
 
     fn pull_image(&self, image: &ImageReference) -> Result<(), DockerFailure> {
-        self.mutate(DockerOperation::Pull, format!("pull {image}"), |_| Ok(()))
+        self.mutate(DockerOperation::Pull, format!("pull {image}"), |state| {
+            if let Some(on_pull) = state.on_pull.take() {
+                on_pull(state);
+            }
+            Ok(())
+        })
     }
 
     fn inspect_image(&self, image: ImageLookup<'_>) -> Result<ImageInspect, DockerFailure> {
@@ -623,7 +635,7 @@ fn rollback_reports_a_failure_when_the_old_container_cannot_be_inspected_but_sti
 }
 
 #[test]
-fn leftovers_of_an_interrupted_update_are_removed_before_pulling() {
+fn leftover_next_is_removed_before_pulling_and_previous_just_before_the_cut_over() {
     let operator = readme();
     let mut leftover_next = leftover("qovery-operator-next", "abc", ContainerStatus::Created);
     leftover_next
@@ -631,17 +643,144 @@ fn leftovers_of_an_interrupted_update_are_removed_before_pulling() {
         .labels
         .insert(UPDATE_LABEL.to_string(), "interrupted-exec".to_string());
     let stale_previous = leftover("qovery-operator-previous", "def", ContainerStatus::Exited);
-    let docker = FakeDocker::new(vec![operator, leftover_next, stale_previous]);
+    let docker = FakeDocker::new(vec![operator.clone(), leftover_next, stale_previous]);
 
     run_update(&docker, &TestLogger, &plan(TARGET)).unwrap();
 
     assert_eq!(
-        docker.calls()[..3],
+        docker.calls(),
         [
             "rm qovery-operator-next",
-            "rm qovery-operator-previous",
             "pull localhost:5000/qovery-operator:n1",
+            "create qovery-operator-next",
+            "rm qovery-operator-previous",
+            "stop qovery-operator",
+            "rename qovery-operator -> qovery-operator-previous",
+            "rename qovery-operator-next -> qovery-operator",
+            "start qovery-operator",
         ]
+    );
+    assert_eq!(docker.named("qovery-operator-previous").unwrap().id, operator.id);
+}
+
+fn operator_with_stale_previous() -> (ContainerInspect, ContainerInspect) {
+    (readme(), leftover("qovery-operator-previous", "def", ContainerStatus::Exited))
+}
+
+fn assert_operator_and_previous_untouched(
+    docker: &FakeDocker,
+    operator: &ContainerInspect,
+    previous: &ContainerInspect,
+    case: &str,
+) {
+    let running = docker.named(NAME).unwrap_or_else(|| panic!("{case}: no `{NAME}`"));
+    assert_eq!(running.id, operator.id, "{case}");
+    assert_eq!(running.state.status, ContainerStatus::Running, "{case}");
+    let kept = docker
+        .named("qovery-operator-previous")
+        .unwrap_or_else(|| panic!("{case}: `qovery-operator-previous` was removed"));
+    assert_eq!(kept.id, previous.id, "{case}");
+    assert!(docker.named("qovery-operator-next").is_none(), "{case}");
+    assert!(
+        !docker.calls().contains(&"rm qovery-operator-previous".to_string()),
+        "{case}: {:?}",
+        docker.calls()
+    );
+}
+
+#[test]
+fn failures_before_the_cut_over_keep_the_previous_operator() {
+    struct Case {
+        name: &'static str,
+        prepare: fn(&FakeDocker),
+        expected: UpdateFailureKind,
+    }
+    for case in [
+        Case {
+            name: "pull failure",
+            prepare: |docker| {
+                docker.state.borrow_mut().failing = Some((DockerOperation::Pull, FailureTiming::BeforeActing))
+            },
+            expected: UpdateFailureKind::ImagePullFailed,
+        },
+        Case {
+            name: "platform mismatch",
+            prepare: |docker| {
+                docker.state.borrow_mut().platform = Some(Platform {
+                    os: PlatformOs::Linux,
+                    architecture: Architecture::AMD64,
+                })
+            },
+            expected: UpdateFailureKind::ImagePlatformMismatch,
+        },
+        Case {
+            name: "create failure",
+            prepare: |docker| {
+                docker.state.borrow_mut().failing = Some((DockerOperation::Create, FailureTiming::BeforeActing))
+            },
+            expected: UpdateFailureKind::DockerOperationFailed,
+        },
+    ] {
+        let (operator, previous) = operator_with_stale_previous();
+        let docker = FakeDocker::new(vec![operator.clone(), previous.clone()]);
+        (case.prepare)(&docker);
+
+        let failure = run_update(&docker, &TestLogger, &plan(TARGET)).unwrap_err();
+
+        assert_eq!(failure.kind, case.expected, "{}: {}", case.name, failure.message);
+        assert_operator_and_previous_untouched(&docker, &operator, &previous, case.name);
+    }
+}
+
+#[test]
+fn failed_removal_of_the_previous_operator_aborts_before_stopping_the_old_one() {
+    let (operator, previous) = operator_with_stale_previous();
+    let docker = FakeDocker::new(vec![operator.clone(), previous.clone()])
+        .failing(DockerOperation::Remove, FailureTiming::BeforeActing);
+
+    let failure = run_update(&docker, &TestLogger, &plan(TARGET)).unwrap_err();
+
+    assert_eq!(failure.kind, UpdateFailureKind::DockerOperationFailed, "{}", failure.message);
+    assert_eq!(
+        docker.calls(),
+        [
+            "pull localhost:5000/qovery-operator:n1",
+            "create qovery-operator-next",
+            "rm qovery-operator-previous",
+            "rm qovery-operator-next",
+        ]
+    );
+    let running = docker.named(NAME).unwrap();
+    assert_eq!(running.id, operator.id);
+    assert_eq!(running.state.status, ContainerStatus::Running);
+    assert_eq!(docker.named("qovery-operator-previous").unwrap().id, previous.id);
+    assert!(docker.named("qovery-operator-next").is_none());
+}
+
+fn start_previous_during_the_pull(docker: &FakeDocker) {
+    docker.state.borrow_mut().on_pull = Some(|state| {
+        let previous = state
+            .containers
+            .iter_mut()
+            .find(|container| container.name.as_str() == "qovery-operator-previous")
+            .unwrap();
+        previous.state.status = ContainerStatus::Running;
+    });
+}
+
+#[test]
+fn previous_operator_started_during_the_pull_is_refused_and_kept() {
+    let (operator, previous) = operator_with_stale_previous();
+    let docker = FakeDocker::new(vec![operator.clone(), previous.clone()]);
+    start_previous_during_the_pull(&docker);
+
+    let failure = run_update(&docker, &TestLogger, &plan(TARGET)).unwrap_err();
+
+    assert_eq!(failure.kind, UpdateFailureKind::UnsupportedConfiguration, "{}", failure.message);
+    assert_operator_and_previous_untouched(&docker, &operator, &previous, "started during the pull");
+    assert_eq!(
+        docker.named("qovery-operator-previous").unwrap().state.status,
+        ContainerStatus::Running
     );
 }
 
@@ -776,6 +915,67 @@ fn preflight_refusals_leave_the_operator_untouched() {
             case.name,
             docker.calls()
         );
+    }
+}
+
+#[test]
+fn next_left_behind_after_an_aborted_cut_over_is_reported_with_the_original_failure() {
+    struct Case {
+        name: &'static str,
+        prepare: fn(&FakeDocker),
+        expected: UpdateFailureKind,
+        expected_calls: &'static [&'static str],
+    }
+    for case in [
+        Case {
+            name: "previous cannot be removed",
+            prepare: |docker| docker.state.borrow_mut().repeated_failures = 1,
+            expected: UpdateFailureKind::DockerOperationFailed,
+            expected_calls: &[
+                "pull localhost:5000/qovery-operator:n1",
+                "create qovery-operator-next",
+                "rm qovery-operator-previous",
+                "rm qovery-operator-next",
+            ],
+        },
+        Case {
+            name: "previous started during the pull",
+            prepare: start_previous_during_the_pull,
+            expected: UpdateFailureKind::UnsupportedConfiguration,
+            expected_calls: &[
+                "pull localhost:5000/qovery-operator:n1",
+                "create qovery-operator-next",
+                "rm qovery-operator-next",
+            ],
+        },
+    ] {
+        let (operator, previous) = operator_with_stale_previous();
+        let docker = FakeDocker::new(vec![operator.clone(), previous.clone()])
+            .failing(DockerOperation::Remove, FailureTiming::BeforeActing);
+        (case.prepare)(&docker);
+
+        let failure = run_update(&docker, &TestLogger, &plan(TARGET)).unwrap_err();
+
+        assert_eq!(failure.kind, case.expected, "{}: {}", case.name, failure.message);
+        assert!(
+            failure
+                .message
+                .contains("`qovery-operator-next` could not be removed: docker rm failed"),
+            "{}: {}",
+            case.name,
+            failure.message
+        );
+        assert_eq!(docker.calls(), case.expected_calls, "{}", case.name);
+        let running = docker.named(NAME).unwrap();
+        assert_eq!(running.id, operator.id, "{}", case.name);
+        assert_eq!(running.state.status, ContainerStatus::Running, "{}", case.name);
+        assert_eq!(
+            docker.named("qovery-operator-previous").unwrap().id,
+            previous.id,
+            "{}",
+            case.name
+        );
+        assert!(docker.named("qovery-operator-next").is_some(), "{}", case.name);
     }
 }
 
@@ -1207,6 +1407,15 @@ CMD ["${COMMAND}"]
         assert_eq!(inspect(&next_name, "{{.Id}}"), None);
         assert_eq!(inspect(&worker_name, "{{.Id}}").unwrap(), worker);
         assert_eq!(inspect(&worker_name, "{{.State.Status}}").unwrap(), "running");
+
+        let failure = update(&format!("{registry}/qovery-operator-e2e:missing")).unwrap_err();
+
+        assert_eq!(failure.kind, UpdateFailureKind::ImagePullFailed, "{}", failure.message);
+        assert_eq!(inspect(&previous_name, "{{.Id}}").unwrap(), original_operator);
+        assert_eq!(inspect(&previous_name, "{{.State.Status}}").unwrap(), "exited");
+        assert_eq!(inspect(&operator_name, "{{.Id}}").unwrap(), updated_operator);
+        assert_eq!(inspect(&operator_name, "{{.State.Status}}").unwrap(), "running");
+        assert_eq!(inspect(&next_name, "{{.Id}}"), None);
 
         let failure = update(&image_crash).unwrap_err();
 
