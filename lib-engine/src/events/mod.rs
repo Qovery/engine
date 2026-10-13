@@ -498,6 +498,9 @@ pub enum EnvironmentStep {
     /// JobOutput: contains the environment variables to upsert
     JobOutput,
 
+    /// AgenticWorkflowOutput: contains the workflow output variables to upsert.
+    AgenticWorkflowOutput,
+
     /// DatabaseOutput: contains the environment variables to upsert
     DatabaseOutput,
 
@@ -525,6 +528,7 @@ impl EnvironmentStep {
         matches!(
             self,
             EnvironmentStep::JobOutput
+                | EnvironmentStep::AgenticWorkflowOutput
                 | EnvironmentStep::DatabaseOutput
                 | EnvironmentStep::TerraformServiceOutput
                 | EnvironmentStep::TerraformResources
@@ -565,6 +569,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::Restarted => "restarted",
                 EnvironmentStep::RestartedError => "restarted-error",
                 EnvironmentStep::JobOutput => "job-output",
+                EnvironmentStep::AgenticWorkflowOutput => "agentic-workflow-output",
                 EnvironmentStep::DatabaseOutput => "database-output",
                 EnvironmentStep::Recap => "recap",
                 EnvironmentStep::GlobalError => "global-error",
@@ -839,6 +844,7 @@ impl EventDetails {
                 | EnvironmentStep::DeletedError
                 | EnvironmentStep::RestartedError
                 | EnvironmentStep::JobOutput
+                | EnvironmentStep::AgenticWorkflowOutput
                 | EnvironmentStep::Recap
                 | EnvironmentStep::DatabaseOutput
                 | EnvironmentStep::TerraformServiceOutput

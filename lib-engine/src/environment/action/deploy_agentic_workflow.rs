@@ -68,8 +68,8 @@ impl DeploymentAction for AgenticWorkflow {
                 self.output_variable_validation_pattern(),
             )) {
                 Ok(None) => {}
-                Ok(Some(output)) => logger.core_configuration_for_job(
-                    "Job output succeeded. Environment variables will be synchronized.".to_string(),
+                Ok(Some(output)) => logger.core_configuration_for_agentic_workflow(
+                    "Agentic workflow output succeeded. Environment variables will be synchronized.".to_string(),
                     serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string()),
                 ),
                 Err(err) => log_job_output_error(logger, &event_details, err),
