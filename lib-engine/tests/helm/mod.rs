@@ -37,6 +37,7 @@ use qovery_engine::io_models::application::{
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions, DiskIOPS};
 use qovery_engine::io_models::engine_location::EngineLocation;
+use qovery_engine::io_models::environment::EnvironmentRoutingMode;
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::models::{
@@ -155,6 +156,7 @@ fn test_environment(kube: &dyn Kubernetes, domain: &str) -> Environment {
         kube.context(),
         1,
         1,
+        EnvironmentRoutingMode::PerRouterListenerSet,
         vec![Box::new(app)],
         vec![Box::new(test_container(kube))],
         vec![Box::new(test_router(kube, app_id))],
@@ -1060,6 +1062,7 @@ pub fn application_context_with_ndots(ndots: u8) -> TestInfo {
         test_kube.context(),
         1,
         1,
+        EnvironmentRoutingMode::PerRouterListenerSet,
         vec![Box::new(app)],
         vec![],
         vec![Box::new(test_router(test_kube.as_ref(), app_id))],
@@ -1271,6 +1274,7 @@ pub fn container_context_with_ndots(ndots: u8) -> TestInfo {
         test_kube.context(),
         1,
         1,
+        EnvironmentRoutingMode::PerRouterListenerSet,
         vec![],
         vec![Box::new(container)],
         vec![],
@@ -1503,6 +1507,7 @@ pub fn job_context_with_ndots(ndots: u8) -> TestInfo {
         test_kube.context(),
         1,
         1,
+        EnvironmentRoutingMode::PerRouterListenerSet,
         vec![],
         vec![],
         vec![],

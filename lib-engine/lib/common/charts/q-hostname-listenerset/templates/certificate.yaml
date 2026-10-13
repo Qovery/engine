@@ -1,0 +1,23 @@
+{{- /*
+  The Certificate is the renewal owner of the TLS Secret referenced by the listener.
+  cert-manager keeps renewing it as long as this release exists.
+  Uninstalling the release removes the Certificate but cert-manager leaves the Secret in place.
+*/ -}}
+{{- range $namespace := $.Values.namespaces }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ toJson $.Values.tls_secret_name }}
+  namespace: {{ toJson $namespace }}
+  labels:
+    {{- include "qovery.hostnameListenerSetLabels" $ | nindent 4 }}
+spec:
+  secretName: {{ toJson $.Values.tls_secret_name }}
+  dnsNames:
+  - {{ toJson $.Values.hostname }}
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: letsencrypt-qovery
+{{- end }}

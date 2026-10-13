@@ -1,0 +1,38 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- range $namespace_key, $gateway_http_routes := $.Values.gateway_http_routes_per_namespace }}
+{{- if (ge (int (len $gateway_http_routes)) 1) }}
+{{- $num_routes := (len $gateway_http_routes) }}
+{{- range $index2, $route := $gateway_http_routes }}
+{{- $route_index := $index2 }}
+{{- range $index3, $rule := $route.rules }}
+{{- if $rule.path_rewrite }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: {{ $.Values.sanitized_name }}-rewrite-{{ $route_index }}-{{ $index3 }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  urlRewrite:
+    path:
+      type: ReplaceRegexMatch
+      replaceRegexMatch:
+        pattern: {{ (toJson $rule.path) }}
+        substitution: {{ (toJson $rule.path_rewrite) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

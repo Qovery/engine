@@ -20,6 +20,7 @@ mod helm_release_custom_resources;
 mod managed_db_start;
 mod pause_service;
 mod restart_service;
+mod router_listener_set_ownership;
 #[cfg(test)]
 pub mod test_utils;
 mod utils;

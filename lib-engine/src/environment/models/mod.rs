@@ -21,6 +21,8 @@ pub mod port;
 pub mod probe;
 pub mod registry_image_source;
 pub mod router;
+pub(crate) mod router_listener_set;
+pub(crate) mod router_listener_set_ownership;
 pub mod scaleway;
 pub mod selfmanaged;
 pub mod terraform_service;

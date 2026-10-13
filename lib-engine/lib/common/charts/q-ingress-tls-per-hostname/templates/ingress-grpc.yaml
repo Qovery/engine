@@ -1,0 +1,149 @@
+{{- if (or (not $.Values.k8s_remove_nginx) (eq $.Values.k8s_remove_nginx false)) }}
+{{- range $namespace_key, $grpc_hosts := $.Values.grpc_hosts_per_namespace_nginx }}
+{{- if (ge (int (len $grpc_hosts)) 1) }}
+{{- $path_rewrite := (include "qovery.firstPathRewrite" $grpc_hosts) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $.Values.sanitized_name }}-grpc
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    qovery.com/gateway-api-deployed: "true" # TODO(QOV-1400): to be removed once migration is done, just to flag which ingress have the gateway deployed
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+  annotations:
+    {{- if (and (eq $.Values.k8s_use_api_gateway true) (gt (int (len $.Values.certificate_alternative_names)) 0)) }}
+    # ListenerSet manages certificates for custom domains
+    {{- else }}
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {{- end }}
+    {{- if (eq $.Values.has_wildcard_domain true) }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {{- else }}
+    external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
+    {{- end }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: {{ $.Values.advanced_settings.network_ingress_force_ssl_redirect | quote }}
+    {{- if $.Values.grpc_hosts_has_regex_path }}
+    nginx.ingress.kubernetes.io/use-regex: {{ $.Values.grpc_hosts_has_regex_path | quote }}
+    {{- end }}
+    {{- if (ne (toString $path_rewrite) "") }}
+    nginx.ingress.kubernetes.io/rewrite-target: {{ (toJson $path_rewrite) }}
+    {{- end }}
+    nginx.ingress.kubernetes.io/proxy-body-size: "{{ $.Values.advanced_settings.network_ingress_proxy_body_size_mb }}m"
+    {{- if (eq $.Values.advanced_settings.network_ingress_sticky_session_enable true) }}
+    # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+    nginx.ingress.kubernetes.io/session-cookie-name: "INGRESSCOOKIE_QOVERY"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-expires: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-samesite: "Lax"
+    {{- end }}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: {{ $.Values.advanced_settings.network_ingress_proxy_connect_timeout_seconds | quote }}
+    {{- if $.Values.advanced_settings.network_ingress_whitelist_source_range }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ (toJson $.Values.advanced_settings.network_ingress_whitelist_source_range) }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_ingress_denylist_source_range }}
+    nginx.ingress.kubernetes.io/denylist-source-range: {{ (toJson $.Values.advanced_settings.network_ingress_denylist_source_range) }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_ingress_basic_auth_env_var }}
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: htaccess-{{ $.Values.sanitized_name }}
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
+    {{- end }}
+    # RATE LIMITING
+    {{- if $.Values.advanced_settings.network_ingress_nginx_limit_rpm }}
+    nginx.ingress.kubernetes.io/limit-rpm: {{ $.Values.advanced_settings.network_ingress_nginx_limit_rpm | quote }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_ingress_nginx_limit_rps }}
+    nginx.ingress.kubernetes.io/limit-rps: {{ $.Values.advanced_settings.network_ingress_nginx_limit_rps | quote }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_ingress_nginx_limit_burst_multiplier }}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: {{ $.Values.advanced_settings.network_ingress_nginx_limit_burst_multiplier | quote }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_ingress_nginx_limit_connections }}
+    nginx.ingress.kubernetes.io/limit-connections: {{ $.Values.advanced_settings.network_ingress_nginx_limit_connections | quote }}
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_ingress_nginx_custom_http_errors }}
+    nginx.ingress.kubernetes.io/custom-http-errors: {{ (toJson $.Values.advanced_settings.network_ingress_nginx_custom_http_errors) }}
+    {{- end }}
+    # GRPC SPECIFIC
+    # https://kubernetes.github.io/ingress-nginx/examples/grpc/
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      {{- if $.Values.nginx_ingress_controller_server_snippet }}
+      {{ (include "qovery.indentAfterFirst" (list $.Values.nginx_ingress_controller_server_snippet 6)) }}
+      {{- end }}
+      grpc_socket_keepalive on;
+      keepalive_time "{{ $.Values.advanced_settings.network_ingress_keepalive_time_seconds }}s";
+      keepalive_timeout "{{ $.Values.advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
+      grpc_read_timeout "{{ $.Values.advanced_settings.network_ingress_grpc_read_timeout_seconds }}s";
+      grpc_send_timeout "{{ $.Values.advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
+      client_body_timeout "{{ $.Values.advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
+
+    {{- if (or $.Values.advanced_settings.network_ingress_add_headers $.Values.advanced_settings.network_ingress_proxy_set_headers) }}
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      set $qovery_com_environment_id {{ $.Values.environment_long_id | quote }};
+      set $qovery_com_associated_service_id {{ $.Values.associated_service_long_id | quote }};
+      {{- if $.Values.nginx_ingress_controller_configuration_snippet }}
+      {{ (include "qovery.indentAfterFirst" (list $.Values.nginx_ingress_controller_configuration_snippet 6)) }}
+      {{- end }}
+
+      {{- range $key, $value := $.Values.advanced_settings.network_ingress_add_headers }}
+      {{- $safe_header_name := (include "qovery.nginxHeaderName" $key) }}
+      {{- if $safe_header_name }}
+      add_header {{ $safe_header_name }} "{{ (include "qovery.nginxHeaderValue" $value) }}";
+      {{- end }}
+      {{- end }}
+
+      {{- range $key, $value := $.Values.advanced_settings.network_ingress_proxy_set_headers }}
+      {{- $safe_header_name := (include "qovery.nginxHeaderName" $key) }}
+      {{- if $safe_header_name }}
+      proxy_set_header {{ $safe_header_name }} "{{ (include "qovery.nginxHeaderValue" $value) }}";
+      {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- range $key, $value := $.Values.annotations_group.ingress }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+
+spec:
+  tls:
+    {{- if (gt (int (len $.Values.certificate_alternative_names)) 0) }}
+    - secretName: "router-tls-{{ $.Values.id }}"
+      hosts:
+        {{- range $index6, $domain := $.Values.certificate_alternative_names }}
+        - {{ (toJson $domain.domain) }}
+        {{- end }}
+    {{- end }}
+  # We dont use secret name as we want to rely on default tls certificate from ingress controller
+  # which has our wildcard certificate https://cert-manager.io/next-docs/faq/kubed/
+  ingressClassName: "nginx-qovery"
+  rules:
+    {{- range $index7, $host := $grpc_hosts }}
+    - host: {{ (toJson $host.domain_name) }}
+      http:
+        paths:
+        - path: {{ (toJson $host.path) }}
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: {{ $host.service_name | quote }}
+              port:
+                number: {{ $host.service_port }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
