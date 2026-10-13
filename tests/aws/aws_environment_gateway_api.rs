@@ -1156,7 +1156,7 @@ fn deploy_application_with_both_whitelist_and_denylist_on_aws_eks() {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
 
-                // When both whitelist and denylist are set, defaultAction should be Deny (whitelist takes precedence)
+                // A configured whitelist denies clients that match neither rule.
                 assert_eq!(
                     default_action, "Deny",
                     "Default action should be Deny when both whitelist and denylist are configured"
@@ -1165,10 +1165,10 @@ fn deploy_application_with_both_whitelist_and_denylist_on_aws_eks() {
                 if let Some(rules) = authorization.get("rules").and_then(|v| v.as_array()) {
                     assert_eq!(rules.len(), 2, "Should have 2 authorization rules");
 
-                    // First rule should be Allow (whitelist)
-                    let allow_rule = &rules[0];
+                    // Second rule should be Allow (whitelist)
+                    let allow_rule = &rules[1];
                     let allow_action = allow_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(allow_action, "Allow", "First rule action should be Allow");
+                    assert_eq!(allow_action, "Allow", "Second rule action should be Allow");
 
                     if let Some(principal) = allow_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -1183,10 +1183,10 @@ fn deploy_application_with_both_whitelist_and_denylist_on_aws_eks() {
                         panic!("Allow rule should have principal");
                     }
 
-                    // Second rule should be Deny (denylist)
-                    let deny_rule = &rules[1];
+                    // First rule should be Deny (denylist)
+                    let deny_rule = &rules[0];
                     let deny_action = deny_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(deny_action, "Deny", "Second rule action should be Deny");
+                    assert_eq!(deny_action, "Deny", "First rule action should be Deny");
 
                     if let Some(principal) = deny_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -2461,10 +2461,10 @@ fn deploy_application_with_both_whitelist_and_denylist_on_aws_eks_grpc() {
                 if let Some(rules) = authorization.get("rules").and_then(|v| v.as_array()) {
                     assert_eq!(rules.len(), 2, "Should have 2 authorization rules");
 
-                    // First rule should be Allow (whitelist)
-                    let allow_rule = &rules[0];
+                    // Second rule should be Allow (whitelist)
+                    let allow_rule = &rules[1];
                     let allow_action = allow_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(allow_action, "Allow", "First rule action should be Allow");
+                    assert_eq!(allow_action, "Allow", "Second rule action should be Allow");
 
                     if let Some(principal) = allow_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -2479,10 +2479,10 @@ fn deploy_application_with_both_whitelist_and_denylist_on_aws_eks_grpc() {
                         panic!("Allow rule should have principal");
                     }
 
-                    // Second rule should be Deny (denylist)
-                    let deny_rule = &rules[1];
+                    // First rule should be Deny (denylist)
+                    let deny_rule = &rules[0];
                     let deny_action = deny_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(deny_action, "Deny", "Second rule action should be Deny");
+                    assert_eq!(deny_action, "Deny", "First rule action should be Deny");
 
                     if let Some(principal) = deny_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -4463,10 +4463,10 @@ fn deploy_container_with_both_whitelist_and_denylist_on_aws_eks() {
                 if let Some(rules) = authorization.get("rules").and_then(|v| v.as_array()) {
                     assert_eq!(rules.len(), 2, "Should have 2 authorization rules");
 
-                    // First rule should be Allow (whitelist)
-                    let allow_rule = &rules[0];
+                    // Second rule should be Allow (whitelist)
+                    let allow_rule = &rules[1];
                     let allow_action = allow_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(allow_action, "Allow", "First rule action should be Allow");
+                    assert_eq!(allow_action, "Allow", "Second rule action should be Allow");
 
                     if let Some(principal) = allow_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -4481,10 +4481,10 @@ fn deploy_container_with_both_whitelist_and_denylist_on_aws_eks() {
                         panic!("Allow rule should have principal");
                     }
 
-                    // Second rule should be Deny (denylist)
-                    let deny_rule = &rules[1];
+                    // First rule should be Deny (denylist)
+                    let deny_rule = &rules[0];
                     let deny_action = deny_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(deny_action, "Deny", "Second rule action should be Deny");
+                    assert_eq!(deny_action, "Deny", "First rule action should be Deny");
 
                     if let Some(principal) = deny_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -6014,10 +6014,10 @@ fn deploy_container_with_both_whitelist_and_denylist_on_aws_eks_grpc() {
                 if let Some(rules) = authorization.get("rules").and_then(|v| v.as_array()) {
                     assert_eq!(rules.len(), 2, "Should have 2 authorization rules");
 
-                    // First rule should be Allow (whitelist)
-                    let allow_rule = &rules[0];
+                    // Second rule should be Allow (whitelist)
+                    let allow_rule = &rules[1];
                     let allow_action = allow_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(allow_action, "Allow", "First rule action should be Allow");
+                    assert_eq!(allow_action, "Allow", "Second rule action should be Allow");
 
                     if let Some(principal) = allow_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {
@@ -6032,10 +6032,10 @@ fn deploy_container_with_both_whitelist_and_denylist_on_aws_eks_grpc() {
                         panic!("Allow rule should have principal");
                     }
 
-                    // Second rule should be Deny (denylist)
-                    let deny_rule = &rules[1];
+                    // First rule should be Deny (denylist)
+                    let deny_rule = &rules[0];
                     let deny_action = deny_rule.get("action").and_then(|v| v.as_str()).unwrap_or("");
-                    assert_eq!(deny_action, "Deny", "Second rule action should be Deny");
+                    assert_eq!(deny_action, "Deny", "First rule action should be Deny");
 
                     if let Some(principal) = deny_rule.get("principal") {
                         if let Some(client_cidrs) = principal.get("clientCIDRs").and_then(|v| v.as_array()) {

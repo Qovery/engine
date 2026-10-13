@@ -599,6 +599,12 @@ fn escaping_preserves_q_ingress_tls_manifests() {
         ),
     ];
     let both: Vec<(&str, Json)> = nginx.iter().chain(gateway.iter()).cloned().collect();
+    // Combined allow/deny ordering intentionally differs from the frozen fixtures;
+    // gateway_api_authorization_templates covers deny precedence. Compare each list alone here.
+    let mut whitelist_only = both.clone();
+    whitelist_only.push(("advanced_settings.network_gateway_api_denylist_source_range", json!("")));
+    let mut denylist_only = both.clone();
+    denylist_only.push(("advanced_settings.network_gateway_api_whitelist_source_range", json!("")));
     let compression_enabled = [("cluster_envoy_enable_compression", json!(true))];
     let both_with_compression: Vec<(&str, Json)> = both.iter().chain(compression_enabled.iter()).cloned().collect();
     let mut shared_certificate_policy = both.clone();
@@ -626,8 +632,10 @@ fn escaping_preserves_q_ingress_tls_manifests() {
             ("gateway-http-route-filter", ctx(&both)),
             ("gateway-http-route-envoy-backend-traffic-policy", ctx(&both_with_compression)),
             ("gateway-grpc-route-envoy-backend-traffic-policy", ctx(&both_with_compression)),
-            ("gateway-http-route-envoy-security-policy", ctx(&both)),
-            ("gateway-grpc-route-envoy-security-policy", ctx(&both)),
+            ("gateway-http-route-envoy-security-policy", ctx(&whitelist_only)),
+            ("gateway-grpc-route-envoy-security-policy", ctx(&whitelist_only)),
+            ("gateway-http-route-envoy-security-policy", ctx(&denylist_only)),
+            ("gateway-grpc-route-envoy-security-policy", ctx(&denylist_only)),
             ("gateway-http-route-envoy-error-pages-configmap", ctx(&both)),
             ("gateway-client-traffic-policy", ctx(&shared_certificate_policy)),
             ("listenerset", ctx(&both)),
