@@ -4,8 +4,12 @@ use crate::cmd::kubectl::{
 };
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
+use crate::environment::models::environment::Environment;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::port::Port;
+use crate::environment::models::router_listener_set::{
+    HostnameListenerSet, listener_set_names_by_namespace, plan_hostname_listener_sets,
+};
 use crate::environment::models::types::CloudProvider;
 use crate::environment::models::types::ToTeraContext;
 use crate::errors::EngineError;
@@ -17,6 +21,7 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service, Se
 use crate::infrastructure::models::kubernetes::Kind;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
+use crate::io_models::environment::EnvironmentRoutingMode;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
     CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, HostPathType, Route,
@@ -524,6 +529,13 @@ impl<T: CloudProvider> Router<T> {
         context.insert("annotations_group", &self.annotations_group);
         context.insert("labels_group", &self.labels_group);
 
+        // Only the `q-ingress-tls-per-hostname` chart reads these names, the legacy chart ignores them.
+        let hostname_listener_sets = self.hostname_listener_sets(target)?;
+        context.insert(
+            "hostname_listener_set_names",
+            &listener_set_names_by_namespace(&hostname_listener_sets),
+        );
+
         let lets_encrypt_url = match target.is_test_cluster {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
             false => "https://acme-v02.api.letsencrypt.org/directory",
@@ -675,16 +687,166 @@ impl<T: CloudProvider> Router<T> {
         Ok(context)
     }
 
+    /// ListenerSets of this router in `PER_HOSTNAME_LISTENER_SET` mode, empty in the legacy mode.
+    ///
+    /// Only the router's own custom hostnames are used. The names depend on the hostname only, see `router_listener_set`.
+    pub(crate) fn hostname_listener_sets(
+        &self,
+        target: &DeploymentTarget,
+    ) -> Result<Vec<HostnameListenerSet>, Box<EngineError>> {
+        let environment = target.environment;
+        match environment.routing_mode {
+            EnvironmentRoutingMode::PerRouterListenerSet => return Ok(vec![]),
+            EnvironmentRoutingMode::PerHostnameListenerSet => {}
+        }
+        if !target
+            .kubernetes
+            .advanced_settings()
+            .k8s_deploy_api_gateway
+            .unwrap_or(false)
+        {
+            return Ok(vec![]);
+        }
+
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
+        let service_id = self
+            .routes
+            .first()
+            .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?
+            .service_long_id;
+        let ports = associated_service_public_ports(environment, &service_id)
+            .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
+        let cluster_domain = target.dns_provider.domain().to_string();
+        plan_router_hostname_listener_sets(
+            &self.kube_name,
+            &ports,
+            &self.default_domain,
+            &self.custom_domains,
+            &cluster_domain,
+            environment.namespace(),
+        )
+        .map_err(|error| Box::new(EngineError::new_invalid_engine_payload(event_details, &error.to_string(), None)))
+    }
+
+    pub(crate) fn uses_hostname_listener_sets(&self, target: &DeploymentTarget) -> bool {
+        match target.environment.routing_mode {
+            EnvironmentRoutingMode::PerRouterListenerSet => false,
+            EnvironmentRoutingMode::PerHostnameListenerSet => true,
+        }
+    }
+
+    pub(crate) fn hostname_listener_set_chart_dir(&self) -> String {
+        format!("{}/common/charts/q-hostname-listenerset", self.lib_root_directory)
+    }
+
+    /// Same runtime check as the legacy ListenerSet gate in `default_tera_context`.
+    pub(crate) fn listenerset_is_deployable(target: &DeploymentTarget) -> bool {
+        target
+            .kubernetes
+            .advanced_settings()
+            .k8s_deploy_api_gateway
+            .unwrap_or(false)
+            && kubectl_check_gateway_api_crds_available(&target.kube.client())
+            && kubectl_should_deploy_listenerset(&target.kube.client())
+    }
+
     pub fn helm_release_name(&self) -> String {
         crate::string::cut(format!("router-{}", self.id), 50)
     }
 
-    pub fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/q-ingress-tls", self.lib_root_directory,)
+    /// The routing mode picks the chart, so a mode only ever renders its own templates.
+    /// Both charts are applied under the same release name, Helm prunes what the new chart no longer renders.
+    pub fn helm_chart_dir(&self, target: &DeploymentTarget) -> String {
+        format!(
+            "{}/common/charts/{}",
+            self.lib_root_directory,
+            ingress_chart_name(target.environment.routing_mode)
+        )
     }
 }
 
 const MAX_GATEWAY_HTTP_ROUTE_HOSTNAMES_PER_RESOURCE: usize = 16;
+
+/// Chart of the router release for a routing mode. The release name is the same for both charts.
+fn ingress_chart_name(routing_mode: EnvironmentRoutingMode) -> &'static str {
+    match routing_mode {
+        EnvironmentRoutingMode::PerRouterListenerSet => "q-ingress-tls",
+        EnvironmentRoutingMode::PerHostnameListenerSet => "q-ingress-tls-per-hostname",
+    }
+}
+
+/// Derives the hostnames served by the routes of a router, then plans their ListenerSets.
+fn plan_router_hostname_listener_sets(
+    service_name: &str,
+    ports: &[&Port],
+    default_domain: &str,
+    custom_domains: &[CustomDomain],
+    cluster_domain: &str,
+    environment_namespace: &str,
+) -> Result<Vec<HostnameListenerSet>, RouterError> {
+    let http_ports: Vec<&Port> = ports
+        .iter()
+        .filter(|port| port.protocol.protocol() == Protocol::HTTP)
+        .cloned()
+        .collect();
+    let grpc_ports: Vec<&Port> = ports
+        .iter()
+        .filter(|port| port.protocol.protocol() == Protocol::GRPC)
+        .cloned()
+        .collect();
+
+    // Only the hostnames are read from the templates, the backend service name is irrelevant here.
+    let http_hosts = to_gateway_host_data_template(
+        service_name,
+        &http_ports,
+        default_domain,
+        custom_domains,
+        cluster_domain,
+        environment_namespace,
+    );
+    let grpc_hosts = to_gateway_host_data_template(
+        service_name,
+        &grpc_ports,
+        default_domain,
+        &deduplicate_custom_domains(custom_domains),
+        cluster_domain,
+        environment_namespace,
+    );
+    let port_names: Vec<&str> = ports.iter().map(|port| port.name.as_str()).collect();
+
+    plan_hostname_listener_sets(
+        http_hosts
+            .iter()
+            .chain(grpc_hosts.iter())
+            .flat_map(|(namespace, hosts)| {
+                hosts
+                    .iter()
+                    .map(move |host| (namespace.as_str(), host.domain_name.as_str()))
+            }),
+        &port_names,
+        custom_domains,
+        default_domain,
+        cluster_domain,
+    )
+}
+
+fn associated_service_public_ports<'a>(environment: &'a Environment, service_id: &Uuid) -> Option<Vec<&'a Port>> {
+    if let Some(application) = environment.applications.iter().find(|app| app.long_id() == service_id) {
+        return Some(application.public_ports());
+    }
+    if let Some(container) = environment
+        .containers
+        .iter()
+        .find(|container| container.long_id() == service_id)
+    {
+        return Some(container.public_ports());
+    }
+    environment
+        .helm_charts
+        .iter()
+        .find(|helm_chart| helm_chart.long_id() == service_id)
+        .map(|helm_chart| helm_chart.public_ports())
+}
 
 fn to_gateway_http_route_headers_signature(
     response_headers: &BTreeMap<String, String>,
@@ -1190,15 +1352,38 @@ where
 mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{
-        ORGA_9C983A44, generate_certificate_alternative_names, router_policy_http2_enabled,
-        to_gateway_host_data_template, to_gateway_http_route_headers_signature, to_gateway_http_routes_data_template,
-        to_host_data_template,
+        ORGA_9C983A44, generate_certificate_alternative_names, plan_router_hostname_listener_sets,
+        router_policy_http2_enabled, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
+        to_gateway_http_routes_data_template, to_host_data_template,
     };
 
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
     use maplit::hashset;
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use uuid::Uuid;
+
+    #[test]
+    fn routing_mode_selects_its_own_ingress_chart() {
+        use crate::environment::models::router::ingress_chart_name;
+        use crate::io_models::environment::EnvironmentRoutingMode;
+
+        let charts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts");
+        for (mode, expected) in [
+            (EnvironmentRoutingMode::PerRouterListenerSet, "q-ingress-tls"),
+            (EnvironmentRoutingMode::PerHostnameListenerSet, "q-ingress-tls-per-hostname"),
+        ] {
+            assert_eq!(ingress_chart_name(mode), expected);
+            assert!(
+                charts.join(expected).join("Chart.yaml").is_file(),
+                "the {expected} chart must exist"
+            );
+        }
+        assert_eq!(
+            EnvironmentRoutingMode::default(),
+            EnvironmentRoutingMode::PerRouterListenerSet,
+            "the legacy chart stays the default"
+        );
+    }
 
     #[test]
     fn router_policy_http2_is_enabled_only_for_orga_9c983a44() {
@@ -2348,5 +2533,44 @@ mod tests {
             path_type: HostPathType::PathPrefix,
             weight: 1,
         }));
+    }
+
+    #[test]
+    fn hostname_listener_sets_cover_the_primary_and_port_hostnames_of_a_single_public_port() {
+        let port = Port {
+            long_id: Default::default(),
+            name: "p8000".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 8000,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+        let custom_domains = vec![CustomDomain {
+            domain: "test.example.com".to_string(),
+            target_domain: "".to_string(),
+            generate_certificate: true,
+            use_cdn: false,
+        }];
+
+        let listener_sets = plan_router_hostname_listener_sets(
+            "my-app",
+            &[&port],
+            "zrouter01.abc.rustrocks.me",
+            &custom_domains,
+            "abc.rustrocks.me",
+            "zenv-app",
+        )
+        .unwrap();
+
+        // The legacy certificate names skip the port hostname when there is a single public port.
+        let hostnames: Vec<&str> = listener_sets.iter().map(|set| set.hostname.as_str()).collect();
+        assert_eq!(hostnames, vec!["p8000.test.example.com", "test.example.com"]);
+        assert!(listener_sets.iter().all(|set| set.namespaces.contains("zenv-app")));
     }
 }

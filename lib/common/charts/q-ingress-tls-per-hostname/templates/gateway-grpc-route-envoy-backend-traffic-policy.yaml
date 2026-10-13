@@ -1,0 +1,183 @@
+{{- if (eq $.Values.k8s_deploy_api_gateway true) }}
+{{- range $namespace_key, $grpc_hosts := $.Values.grpc_hosts_per_namespace_gateway }}
+{{- if (ge (int (len $grpc_hosts)) 1) }}
+{{/*
+  Create one BackendTrafficPolicy per GRPCRoute part.
+  See gateway-grpc-route.yaml for details on why routes are split.
+*/}}
+{{- $max_hosts_per_route := 1 }}
+{{- $total_hosts := (len $grpc_hosts) }}
+{{- $num_routes := (int (ceil (divf $total_hosts $max_hosts_per_route))) }}
+{{- range $index2, $route_index := (until (int $num_routes)) }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: {{ $.Values.sanitized_name }}-grpc-traffic-policy{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  namespace: {{ $namespace_key }}
+  labels:
+    qovery.com/service-id: {{ $.Values.long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ $.Values.sanitized_name }}
+    qovery.com/associated-service-id: {{ $.Values.associated_service_long_id }}
+    qovery.com/associated-service-type: {{ $.Values.associated_service_type }}
+    qovery.com/environment-id: {{ $.Values.environment_long_id }}
+    qovery.com/project-id: {{ $.Values.project_long_id }}
+    {{- range $key, $value := $.Values.labels_group.common }}
+    {{ (toJson $key) }}: {{ (toJson $value) }}
+    {{- end }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: GRPCRoute
+      name: {{ $.Values.sanitized_name }}-grpc{{ if (gt (int $num_routes) 1) }}-{{ (add $route_index 1) }}{{ end }}
+  # Custom HTTP error pages intentionally apply only to HTTPRoutes: gRPC clients consume status trailers, not HTML response bodies.
+  {{- if (eq $.Values.advanced_settings.network_gateway_api_sticky_session_enable true) }}
+  loadBalancer:
+    type: ConsistentHash
+    consistentHash:
+      {{- if (and (kindIs "map" $.Values.advanced_settings.network_gateway_api_sticky_session_type) (hasKey $.Values.advanced_settings.network_gateway_api_sticky_session_type "Header")) }}
+      # Header-based affinity — use this when clients cannot persist cookies
+      # across requests (e.g. MCP SDK clients keying off Mcp-Session-Id).
+      type: Header
+      header:
+        name: {{ (toJson $.Values.advanced_settings.network_gateway_api_sticky_session_type.Header.name) }}
+      {{- else if (eq (toString $.Values.advanced_settings.network_gateway_api_sticky_session_type) "SourceIP") }}
+      type: SourceIP
+      {{- else }}
+      type: Cookie
+      cookie:
+        name: INGRESSCOOKIE_QOVERY
+        ttl: 85400s # 1 day
+        attributes:
+          secure: "true"
+          samesite: Lax
+      {{- end }}
+  {{- end }}
+  {{- if (or $.Values.advanced_settings.network_gateway_api_route_limit_rpm $.Values.advanced_settings.network_gateway_api_route_limit_rps) }}
+  rateLimit:
+    type: Local
+    local:
+      rules:
+      {{- if $.Values.advanced_settings.network_gateway_api_route_limit_rpm }}
+      # RPM limit
+      - limit:
+          requests: {{ $.Values.advanced_settings.network_gateway_api_route_limit_rpm }}
+          unit: Minute
+        clientSelectors:
+        {{- if $.Values.advanced_settings.network_gateway_api_route_limit_source_cidrs }}
+        {{- range $index4, $h := (splitList "," $.Values.advanced_settings.network_gateway_api_route_limit_source_cidrs) }}
+        - sourceCIDR:
+            value: {{ (toJson (trim $h)) }}
+            type: Distinct
+        {{- end }}
+        {{- else }}
+        - sourceCIDR:
+            value: "0.0.0.0/0"
+            type: Distinct
+        {{- end }}
+        {{- if $.Values.advanced_settings.network_gateway_api_route_limit_headers }}
+        - headers:
+          {{- range $index5, $h := (splitList "," $.Values.advanced_settings.network_gateway_api_route_limit_headers) }}
+          - name: {{ (toJson (trim $h)) }}
+            type: Distinct
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      {{- if $.Values.advanced_settings.network_gateway_api_route_limit_rps }}
+      # RPS limit
+      - limit:
+          requests: {{ $.Values.advanced_settings.network_gateway_api_route_limit_rps }}
+          unit: Second
+        clientSelectors:
+        {{- if $.Values.advanced_settings.network_gateway_api_route_limit_source_cidrs }}
+        {{- range $index6, $h := (splitList "," $.Values.advanced_settings.network_gateway_api_route_limit_source_cidrs) }}
+        - sourceCIDR:
+            value: {{ (toJson (trim $h)) }}
+            type: Distinct
+        {{- end }}
+        {{- else }}
+        - sourceCIDR:
+            value: "0.0.0.0/0"
+            type: Distinct
+        {{- end }}
+        {{- if $.Values.advanced_settings.network_gateway_api_route_limit_headers }}
+        - headers:
+          {{- range $index7, $h := (splitList "," $.Values.advanced_settings.network_gateway_api_route_limit_headers) }}
+          - name: {{ (toJson (trim $h)) }}
+            type: Distinct
+          {{- end }}
+        {{- end }}
+      {{- end }}
+  {{- end }}
+  {{- if (or $.Values.resolved_gateway_api_retry_num_retries (and (ne $.Values.resolved_gateway_api_retry_num_retries nil) (eq (int $.Values.resolved_gateway_api_retry_num_retries) 0))) }}
+  retry:
+    numRetries: {{ $.Values.resolved_gateway_api_retry_num_retries }}
+    {{- if (or $.Values.resolved_gateway_api_retry_per_try_timeout_seconds (and (ne $.Values.resolved_gateway_api_retry_per_try_timeout_seconds nil) (eq (int $.Values.resolved_gateway_api_retry_per_try_timeout_seconds) 0))) }}
+    perRetry:
+      timeout: {{ $.Values.resolved_gateway_api_retry_per_try_timeout_seconds }}s
+    {{- end }}
+    {{- if (or (gt (int (len $.Values.resolved_gateway_api_retry_retry_on_triggers)) 0) (gt (int (len $.Values.resolved_gateway_api_retry_http_status_codes)) 0)) }}
+    retryOn:
+      {{- if (gt (int (len $.Values.resolved_gateway_api_retry_retry_on_triggers)) 0) }}
+      triggers:
+        {{- range $index8, $trigger := $.Values.resolved_gateway_api_retry_retry_on_triggers }}
+        - {{ $trigger }}
+        {{- end }}
+      {{- end }}
+      {{- if (gt (int (len $.Values.resolved_gateway_api_retry_http_status_codes)) 0) }}
+      httpStatusCodes:
+        {{- range $index9, $status_code := $.Values.resolved_gateway_api_retry_http_status_codes }}
+        - {{ $status_code }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- $service_request_timeout := $.Values.advanced_settings.network_gateway_api_http_request_timeout_seconds }}
+  {{- $service_idle_timeout := $.Values.advanced_settings.network_gateway_api_http_connection_idle_timeout_seconds }}
+  {{- $service_max_stream_duration := $.Values.advanced_settings.network_gateway_api_http_max_stream_duration_seconds }}
+  {{- $cluster_request_timeout := $.Values.cluster_envoy_gateway_api_http_request_timeout_seconds }}
+  {{- $cluster_idle_timeout := $.Values.cluster_envoy_gateway_api_http_connection_idle_timeout_seconds }}
+  {{- $cluster_max_stream_duration := $.Values.cluster_envoy_gateway_api_http_max_stream_duration_seconds }}
+  {{- if (or $service_request_timeout $service_idle_timeout $service_max_stream_duration $cluster_request_timeout $cluster_idle_timeout $cluster_max_stream_duration) }}
+  timeout:
+    http:
+      {{- if $service_request_timeout }}
+      requestTimeout: {{ $service_request_timeout }}s
+      {{- else if $cluster_request_timeout }}
+      requestTimeout: {{ $cluster_request_timeout }}s
+      {{- end }}
+      {{- if $service_idle_timeout }}
+      connectionIdleTimeout: {{ $service_idle_timeout }}s
+      {{- else if $cluster_idle_timeout }}
+      connectionIdleTimeout: {{ $cluster_idle_timeout }}s
+      {{- end }}
+      {{- if $service_max_stream_duration }}
+      maxStreamDuration: {{ $service_max_stream_duration }}s
+      {{- else if $cluster_max_stream_duration }}
+      maxStreamDuration: {{ $cluster_max_stream_duration }}s
+      {{- end }}
+  {{- end }}
+  {{- if $.Values.cluster_envoy_enable_compression }}
+  compressor:
+    - type: Brotli
+      brotli: {}
+    - type: Zstd
+      zstd: {}
+    - type: Gzip
+      gzip: {}
+  {{- end }}
+  {{- if (or $.Values.advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds $.Values.advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds) }}
+  tcpKeepalive:
+    {{- if $.Values.advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds }}
+    idleTime: {{ $.Values.advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds }}s
+    {{- end }}
+    {{- if $.Values.advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds }}
+    interval: {{ $.Values.advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds }}s
+    {{- end }}
+    probes: 3
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

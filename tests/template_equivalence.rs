@@ -31,7 +31,7 @@ fn fixture(family: &str, name: &str) -> String {
 }
 
 /// Production chart preparation serializes context into values, then Helm renders the templates.
-fn render_current(family: &str, name: &str, context: &Context) -> Result<String, tera::Error> {
+fn prepare_chart(family: &str, context: &Context) -> tempfile::TempDir {
     let chart = tempfile::tempdir().expect("temporary chart");
     let event_details = EventDetails::new(
         None,
@@ -53,6 +53,11 @@ fn render_current(family: &str, name: &str, context: &Context) -> Result<String,
     )
     .prepare_helm_chart()
     .expect("prepare native Helm chart");
+    chart
+}
+
+fn render_current(family: &str, name: &str, context: &Context) -> Result<String, tera::Error> {
+    let chart = prepare_chart(family, context);
     let output = Command::new("helm")
         .args([
             "template",
@@ -67,6 +72,25 @@ fn render_current(family: &str, name: &str, context: &Context) -> Result<String,
         return Err(tera::Error::msg(String::from_utf8_lossy(&output.stderr)));
     }
     Ok(String::from_utf8(output.stdout).expect("Helm output should be UTF-8"))
+}
+
+/// Renders every template of a chart, the way a router release does.
+fn render_whole_chart(family: &str, context: &Context) -> Vec<Json> {
+    let chart = prepare_chart(family, context);
+    let output = Command::new("helm")
+        .args(["template", "test", chart.path().to_str().expect("chart path")])
+        .output()
+        .expect("helm must be installed to test chart rendering");
+    assert!(
+        output.status.success(),
+        "{family} failed to render: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_yaml::Deserializer::from_str(&String::from_utf8(output.stdout).expect("Helm output should be UTF-8"))
+        .map(|document| serde_yaml::Value::deserialize(document).expect("rendered manifest must parse as YAML"))
+        .filter(|document| !document.is_null())
+        .map(|document| serde_json::to_value(document).expect("YAML maps to JSON"))
+        .collect()
 }
 
 /// Normalize runtime-only Helm actions in the legacy fixtures before comparing parsed objects.
@@ -672,4 +696,170 @@ fn service_charts_are_native_helm() {
         }
     }
     assert!(template_count > 0, "no chart templates were checked");
+}
+
+fn resource_id(resource: &Json) -> (String, String, String) {
+    let text = |pointer: &str| {
+        resource
+            .pointer(pointer)
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    (text("/kind"), text("/metadata/namespace"), text("/metadata/name"))
+}
+
+/// A context that makes every resource of the router charts render, for both nginx and the Gateway API.
+fn router_chart_context() -> Context {
+    let nginx = [
+        ("k8s_remove_nginx", json!(false)),
+        ("http_hosts_per_namespace_nginx", json!({ "app-ns": [http_host()] })),
+        ("grpc_hosts_per_namespace_nginx", json!({ "app-ns": [http_host()] })),
+    ];
+    let gateway = [
+        ("http_hosts_per_namespace_gateway", json!({ "app-ns": [http_host()] })),
+        ("grpc_hosts_per_namespace_gateway", json!({ "app-ns": [http_host()] })),
+        (
+            "gateway_http_routes_per_namespace",
+            json!({ "app-ns": [{ "hostnames": ["app.example.com"],
+                                 "rules": [{ "path": "/", "path_rewrite": "/", "path_type": "PathPrefix",
+                                             "service_name": "app", "service_port": 8080, "weight": 100 }] }] }),
+        ),
+        (
+            "certificate_alternative_names",
+            json!([{ "domain": "app.example.com" }, { "domain": "alias.example.com" }]),
+        ),
+        ("cluster_envoy_enable_compression", json!(true)),
+        (
+            "hostname_listener_set_names",
+            json!({ "app-ns": { "app.example.com": "listenerset-z1234567-aaaaaaaaaaaaaaaa" } }),
+        ),
+        ("advanced_settings.network_ingress_basic_auth_env_var", json!("BASIC_AUTH")),
+    ];
+    let overrides: Vec<(&str, Json)> = nginx.iter().chain(gateway.iter()).cloned().collect();
+    let mut value = base();
+    for (path, replacement) in &overrides {
+        // `hostname_listener_set_names` is not part of the base context, the other keys may be nested.
+        if path.contains('.') || value.get(*path).is_some() {
+            set(&mut value, path, replacement.clone());
+        } else {
+            value[*path] = replacement.clone();
+        }
+    }
+    Context::from_value(value).expect("context must be a JSON object")
+}
+
+#[test]
+fn per_hostname_ingress_chart_renders_every_resource_of_the_legacy_chart_but_the_router_wide_listener_set() {
+    let context = router_chart_context();
+    let legacy = render_whole_chart("q-ingress-tls", &context);
+    let per_hostname = render_whole_chart("q-ingress-tls-per-hostname", &context);
+
+    let legacy_only = ["ListenerSet", "ClientTrafficPolicy"];
+    let route_kinds = ["HTTPRoute", "GRPCRoute"];
+    let ids = |resources: &[Json], excluded: &[&str]| -> Vec<(String, String, String)> {
+        let mut ids: Vec<_> = resources
+            .iter()
+            .map(resource_id)
+            .filter(|(kind, _, _)| !excluded.contains(&kind.as_str()))
+            .collect();
+        ids.sort();
+        ids
+    };
+
+    // Helm prunes whatever the new chart no longer renders under the same release, so names must match exactly.
+    assert_eq!(
+        ids(&legacy, &legacy_only),
+        ids(&per_hostname, &[]),
+        "both charts must render the same resources, apart from the router-wide ListenerSet and ClientTrafficPolicy"
+    );
+    for kind in legacy_only {
+        assert!(
+            legacy.iter().any(|resource| resource["kind"] == kind),
+            "the legacy chart renders a {kind} in this context, otherwise the comparison proves nothing"
+        );
+        assert!(
+            per_hostname.iter().all(|resource| resource["kind"] != kind),
+            "the per hostname chart must not render a {kind}"
+        );
+    }
+    // The comparison must cover the resources this test is about.
+    let shared_kinds: Vec<String> = ids(&per_hostname, &[]).into_iter().map(|(kind, _, _)| kind).collect();
+    for kind in [
+        "Ingress",
+        "Secret",
+        "HTTPRoute",
+        "GRPCRoute",
+        "HTTPRouteFilter",
+        "BackendTrafficPolicy",
+        "SecurityPolicy",
+        "ConfigMap",
+    ] {
+        assert!(shared_kinds.iter().any(|shared| shared == kind), "no {kind} was rendered");
+    }
+
+    // The resources that are not routes must be identical, not only named the same.
+    let non_route = |resources: Vec<Json>| -> Vec<Json> {
+        let mut resources: Vec<Json> = resources
+            .into_iter()
+            .filter(|resource| {
+                let kind = resource["kind"].as_str().unwrap_or_default();
+                !legacy_only.contains(&kind) && !route_kinds.contains(&kind)
+            })
+            .collect();
+        resources.sort_by_key(resource_id);
+        resources
+    };
+    assert_eq!(non_route(legacy), non_route(per_hostname));
+}
+
+#[test]
+fn per_hostname_ingress_chart_keeps_the_shared_templates_of_the_legacy_chart() {
+    let charts = Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/common/charts");
+    let template_files = |chart: &str| -> std::collections::BTreeSet<String> {
+        std::fs::read_dir(charts.join(chart).join("templates"))
+            .expect("chart templates")
+            .map(|entry| entry.expect("template").file_name().to_string_lossy().into_owned())
+            .collect()
+    };
+    let legacy = template_files("q-ingress-tls");
+    let per_hostname = template_files("q-ingress-tls-per-hostname");
+
+    let mut expected = legacy.clone();
+    for file in ["listenerset.yaml", "gateway-client-traffic-policy.yaml"] {
+        assert!(expected.remove(file), "{file} is expected in the legacy chart");
+    }
+    expected.insert("_per_hostname_helpers.tpl".to_string());
+    assert_eq!(
+        per_hostname, expected,
+        "a template added to one chart must be added to the other, apart from the router-wide ListenerSet resources"
+    );
+
+    // Routes differ on purpose, every other template is a copy.
+    for file in legacy.iter().filter(|file| {
+        !matches!(
+            file.as_str(),
+            "listenerset.yaml"
+                | "gateway-client-traffic-policy.yaml"
+                | "gateway-http-route.yaml"
+                | "gateway-grpc-route.yaml"
+        )
+    }) {
+        let read = |chart: &str| std::fs::read_to_string(charts.join(chart).join("templates").join(file)).expect(file);
+        assert_eq!(
+            read("q-ingress-tls"),
+            read("q-ingress-tls-per-hostname"),
+            "{file} drifted between the two q-ingress-tls charts"
+        );
+    }
+
+    let chart_name = |chart: &str| -> String {
+        let metadata = std::fs::read_to_string(charts.join(chart).join("Chart.yaml")).expect("Chart.yaml");
+        serde_yaml::from_str::<Json>(&metadata).expect("Chart.yaml")["name"]
+            .as_str()
+            .expect("chart name")
+            .to_string()
+    };
+    assert_eq!(chart_name("q-ingress-tls"), "q-ingress-tls");
+    assert_eq!(chart_name("q-ingress-tls-per-hostname"), "q-ingress-tls-per-hostname");
 }

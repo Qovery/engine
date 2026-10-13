@@ -64,6 +64,9 @@ pub struct EnvironmentRequest {
 
 /// How the Gateway API listeners of the environment's routers are grouped.
 /// Core sends these exact names, so each variant name is pinned instead of derived.
+///
+/// `PerHostnameListenerSet` renders one ListenerSet per custom hostname, named after the hostname only.
+/// Core guarantees that a hostname is served by a single router, the engine fails the deployment if it is not.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum EnvironmentRoutingMode {
     #[default]
@@ -386,6 +389,7 @@ impl EnvironmentRequest {
             context,
             self.max_parallel_build,
             self.max_parallel_deploy,
+            self.routing_mode,
             applications,
             containers,
             routers,

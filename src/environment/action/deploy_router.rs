@@ -1,12 +1,19 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
+use crate::environment::action::router_listener_set_ownership::{
+    claim_hostname_release, delete_claim, installed_release, list_claims, list_legacy_release_owners,
+};
 use crate::environment::models::router::Router;
+use crate::environment::models::router_listener_set::HostnameListenerSet;
+use crate::environment::models::router_listener_set_ownership::{
+    ClaimError, release_stale_claim, remove_if_owned, stale_claims, stale_legacy_releases, unclaimed_hostname_releases,
+};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::router::reporter::RouterDeploymentReporter;
 use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, Stage};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
@@ -30,7 +37,9 @@ use kube::Api as TypedApi;
 use kube::api::{Api, ApiResource, DeleteParams, Patch, PatchParams};
 use kube::core::GroupVersionKind;
 use serde_json::{Value, json};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
+use tera::Context as TeraContext;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
 where
@@ -50,10 +59,13 @@ where
             let helm = HelmDeployment::new(
                 event_details.clone(),
                 self.to_tera_context(target)?,
-                PathBuf::from(self.helm_chart_dir()),
+                PathBuf::from(self.helm_chart_dir(target)),
                 HelmChartValues::SerializedContext,
                 chart,
             );
+
+            // The routes below attach to these ListenerSets, so they are applied first.
+            deploy_hostname_listener_sets(self, target, logger)?;
 
             helm.on_create(target)?;
 
@@ -109,12 +121,15 @@ where
                 let helm = HelmDeployment::new(
                     self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
                     self.to_tera_context(target)?,
-                    PathBuf::from(self.helm_chart_dir().as_str()),
+                    PathBuf::from(self.helm_chart_dir(target).as_str()),
                     HelmChartValues::SerializedContext,
                     chart,
                 );
 
-                let result = helm.on_delete(target);
+                let result = helm.on_delete(target).and_then(|()| {
+                    // These releases belong to this router alone, nothing else uses them.
+                    uninstall_hostname_listener_sets(self, target, &BTreeSet::new(), EnvironmentStep::Delete, logger)
+                });
 
                 if result.is_ok()
                     && let Err(error) = maybe_remove_gateway_fallback_resources_for_custom_domains(self, target, logger)
@@ -138,11 +153,271 @@ where
     }
 }
 
+/// Applies one Helm release per hostname of the router in `PER_HOSTNAME_LISTENER_SET` mode.
+///
+/// A release only depends on the hostname, so applying it again changes nothing.
+/// A release already owned by another router is never taken over, the deployment fails instead.
+/// Releases of hostnames the router no longer serves are removed. In the legacy mode nothing is applied and the
+/// releases left by a previous `PER_HOSTNAME_LISTENER_SET` mode are removed before the router chart is applied.
+fn deploy_hostname_listener_sets<T: CloudProvider>(
+    router: &Router<T>,
+    target: &DeploymentTarget,
+    logger: &EnvProgressLogger,
+) -> Result<(), Box<EngineError>>
+where
+    Router<T>: ToTeraContext,
+{
+    let event_details = router.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+    let listener_sets = router.hostname_listener_sets(target)?;
+
+    if !listener_sets.is_empty() && !Router::<T>::listenerset_is_deployable(target) {
+        return Err(Box::new(EngineError::new_invalid_engine_payload(
+            event_details,
+            "PER_HOSTNAME_LISTENER_SET needs the Gateway API and ListenerSet CRDs on the cluster, \
+             there is no fallback to another listener",
+            None,
+        )));
+    }
+
+    // Every claim is taken before the first release is applied, so a hostname held by another router
+    // fails the deployment before anything changed.
+    let router_long_id = router.long_id.to_string();
+    for listener_set in &listener_sets {
+        claim_hostname_release(target, &router_long_id, &listener_set.name, &listener_set.hostname)
+            .map_err(|error| claim_error(&event_details, listener_set, error))?;
+    }
+    for listener_set in &listener_sets {
+        logger.info(format!(
+            "Applying ListenerSet release `{}` for hostname `{}`",
+            listener_set.name, listener_set.hostname
+        ));
+        let workspace_directory = router
+            .workspace_directory
+            .with_file_name(format!("{}-listenersets", router.long_id))
+            .join(&listener_set.name);
+        std::fs::create_dir_all(&workspace_directory).map_err(|error| {
+            Box::new(EngineError::new_cannot_create_file(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!(
+                    "cannot create `{}`: {error}",
+                    workspace_directory.display()
+                )),
+            ))
+        })?;
+
+        let helm = HelmDeployment::new(
+            event_details.clone(),
+            hostname_listener_set_chart_values(router, target, listener_set),
+            PathBuf::from(router.hostname_listener_set_chart_dir()),
+            HelmChartValues::SerializedContext,
+            ChartInfo {
+                name: listener_set.name.clone(),
+                path: workspace_directory.to_string_lossy().to_string(),
+                namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+                ..Default::default()
+            },
+        );
+        helm.on_create(target)?;
+    }
+
+    let wanted: BTreeSet<&str> = listener_sets
+        .iter()
+        .map(|listener_set| listener_set.name.as_str())
+        .collect();
+    uninstall_hostname_listener_sets(router, target, &wanted, EnvironmentStep::Deploy, logger)
+}
+
+fn ownership_store_error(event_details: EventDetails, error: CommandError) -> Box<EngineError> {
+    Box::new(EngineError::new_unknown(
+        event_details,
+        "Cannot read or write the ownership of the ListenerSet releases".to_string(),
+        Some(error),
+        None,
+        None,
+    ))
+}
+
+fn claim_error(
+    event_details: &EventDetails,
+    listener_set: &HostnameListenerSet,
+    error: ClaimError<CommandError>,
+) -> Box<EngineError> {
+    let message = match error {
+        ClaimError::Foreign { owner } => format!(
+            "ListenerSet release `{}` for hostname `{}` is owned by router `{owner}`. \
+             A hostname must be served by a single router, the release is not taken over",
+            listener_set.name, listener_set.hostname
+        ),
+        ClaimError::Unverifiable { reason } => format!(
+            "ListenerSet release `{}` for hostname `{}` is not applied: {reason}",
+            listener_set.name, listener_set.hostname
+        ),
+        ClaimError::Store(error) => return ownership_store_error(event_details.clone(), error),
+    };
+    Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), &message, None))
+}
+
+fn hostname_listener_set_chart_values<T: CloudProvider>(
+    router: &Router<T>,
+    target: &DeploymentTarget,
+    listener_set: &HostnameListenerSet,
+) -> TeraContext {
+    let mut context = TeraContext::new();
+    context.insert("name", &listener_set.name);
+    context.insert("hostname", &listener_set.hostname);
+    context.insert("tls_secret_name", &listener_set.tls_secret_name);
+    context.insert("namespaces", &listener_set.namespaces);
+    context.insert("router_long_id", &router.long_id);
+    context.insert("router_name", &router.kube_name);
+    context.insert("environment_long_id", &target.environment.long_id);
+    context.insert("project_long_id", &target.environment.project_long_id);
+    context
+}
+
+/// Uninstalls the hostname releases of the router that are not in `wanted`, then releases their claims.
+///
+/// In `PER_HOSTNAME_LISTENER_SET` mode a failure fails the deployment. In the legacy mode these releases only
+/// exist after a switch back, so a failure is a warning and never blocks a legacy deployment.
+/// Only the claims held by this router and its own releases of the previous naming scheme are removed.
+/// `step` is the environment step of the caller, so a failure is reported as a deploy or a delete error.
+fn uninstall_hostname_listener_sets<T: CloudProvider>(
+    router: &Router<T>,
+    target: &DeploymentTarget,
+    wanted: &BTreeSet<&str>,
+    step: EnvironmentStep,
+    logger: &EnvProgressLogger,
+) -> Result<(), Box<EngineError>>
+where
+    Router<T>: ToTeraContext,
+{
+    let strict = router.uses_hostname_listener_sets(target);
+    if !strict
+        && !target
+            .kubernetes
+            .advanced_settings()
+            .k8s_deploy_api_gateway
+            .unwrap_or(false)
+    {
+        // Without the Gateway API this mode never created anything.
+        return Ok(());
+    }
+
+    let event_details = router.get_event_details(Stage::Environment(step));
+    let namespace = target.environment.namespace();
+    let releases = match target.helm.list_release(Some(namespace), &[]) {
+        Ok(releases) => releases,
+        Err(error) if strict => return Err(Box::new(EngineError::new_helm_error(event_details, error))),
+        Err(error) => {
+            logger.warning(format!("Cannot list the ListenerSet releases of the router: {error}"));
+            return Ok(());
+        }
+    };
+
+    let router_long_id = router.long_id.to_string();
+    let installed: BTreeSet<&str> = releases.iter().map(|release| release.name.as_str()).collect();
+    let (claims, legacy_owners) = match (list_claims(target), list_legacy_release_owners(target)) {
+        (Ok(claims), Ok(legacy_owners)) => (claims, legacy_owners),
+        (Err(error), _) | (_, Err(error)) if strict => return Err(ownership_store_error(event_details, error)),
+        (Err(error), _) | (_, Err(error)) => {
+            logger.warning(format!("Cannot read the ownership of the ListenerSet releases: {error}"));
+            return Ok(());
+        }
+    };
+
+    let store_error = |error: CommandError| ownership_store_error(event_details.clone(), error);
+
+    // The release goes first and its claim last: until the release is gone, no other router can claim it.
+    // Whether the release is the router's is read from its Helm manifest right before it is uninstalled.
+    // A failure keeps the claim, the next deployment removes what is left.
+    for claim in stale_claims(&router_long_id, &claims, wanted) {
+        let result = release_stale_claim(
+            &router_long_id,
+            claim,
+            || installed_release(target, &claim.release).map_err(store_error),
+            || uninstall_release(router, target, &event_details, &claim.release, logger),
+            || delete_claim(target, claim).map_err(store_error),
+        );
+        match result {
+            Ok(()) => {}
+            Err(ClaimError::Store(error)) if strict => return Err(error),
+            Err(error) => logger.warning(format!(
+                "Cannot remove ListenerSet release `{}`: {}",
+                claim.release,
+                describe_cleanup_error(error)
+            )),
+        }
+    }
+
+    // Releases applied before claims existed have a hostname name and no claim, they are not left behind either.
+    for release_name in unclaimed_hostname_releases(installed.iter().copied(), &claims, wanted) {
+        let result = remove_if_owned(
+            &router_long_id,
+            || installed_release(target, release_name).map_err(store_error),
+            || uninstall_release(router, target, &event_details, release_name, logger),
+        );
+        match result {
+            Ok(_) => {}
+            Err(error) if strict => return Err(error),
+            Err(error) => logger.warning(format!("Cannot remove ListenerSet release `{release_name}`: {error}")),
+        }
+    }
+
+    // Releases of the previous naming scheme, `listenerset-<router id>-<hash>`, are never wanted.
+    for release_name in stale_legacy_releases(&router.id, &router_long_id, &legacy_owners, installed.iter().copied()) {
+        match uninstall_release(router, target, &event_details, &release_name, logger) {
+            Ok(()) => {}
+            Err(error) if strict => return Err(error),
+            Err(error) => logger.warning(format!("Cannot remove ListenerSet release `{release_name}`: {error}")),
+        }
+    }
+    Ok(())
+}
+
+fn describe_cleanup_error(error: ClaimError<Box<EngineError>>) -> String {
+    match error {
+        ClaimError::Foreign { owner } => format!("the claim belongs to router `{owner}`"),
+        ClaimError::Unverifiable { reason } => reason.to_string(),
+        ClaimError::Store(error) => error.to_string(),
+    }
+}
+
+/// Uninstalls a release of the environment namespace.
+fn uninstall_release<T: CloudProvider>(
+    router: &Router<T>,
+    target: &DeploymentTarget,
+    event_details: &EventDetails,
+    release_name: &str,
+    logger: &EnvProgressLogger,
+) -> Result<(), Box<EngineError>>
+where
+    Router<T>: ToTeraContext,
+{
+    logger.info(format!("Removing ListenerSet release `{release_name}`"));
+    let helm = HelmDeployment::new(
+        event_details.clone(),
+        TeraContext::new(),
+        PathBuf::from(router.hostname_listener_set_chart_dir()),
+        HelmChartValues::SerializedContext,
+        ChartInfo {
+            name: release_name.to_string(),
+            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+            action: HelmAction::Destroy,
+            ..Default::default()
+        },
+    );
+    helm.on_delete(target)
+}
+
 fn maybe_patch_gateway_cert_refs_for_custom_domains<T: CloudProvider>(
     router: &Router<T>,
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
 ) -> Result<(), Box<EngineError>> {
+    // This fallback references the legacy `router-tls-<id>` Secret, which this mode does not create.
+    if router.uses_hostname_listener_sets(target) {
+        return Ok(());
+    }
+
     let gateway_api_enabled = target
         .kubernetes
         .advanced_settings()
