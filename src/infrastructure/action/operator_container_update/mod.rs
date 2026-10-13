@@ -27,6 +27,7 @@ use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{PlatformUnitErrorCode, PlatformUnitResult};
 use crate::logger::Logger;
 use std::fmt::{Display, Formatter};
+use std::slice;
 use std::thread;
 use std::time::{Duration, Instant};
 use url::Url;
@@ -330,7 +331,7 @@ fn run_update<D: OperatorDocker>(
     let mut operator = check_supported_profile(operator, old_image.config).map_err(|unsupported| {
         UpdateFailure::new(UpdateFailureKind::UnsupportedConfiguration, unsupported.to_string())
     })?;
-    remove_leftovers(docker, logger, &mut operator, &plan.identity)?;
+    check_leftovers_and_remove_next(docker, logger, &mut operator, &plan.identity)?;
 
     logger.info(format!("⬇️ Pulling {}", plan.image));
     let pull_failure =
@@ -365,6 +366,9 @@ fn run_update<D: OperatorDocker>(
     let spec = operator.container_spec(&pinned_image, &plan.operator_version, plan.execution_id);
     let new_container = docker.create_container(&spec)?;
     logger.info(format!("🆕 Created `{}` from {pinned_image}", spec.name));
+    if let Err(failure) = remove_previous(docker, logger, operator.container(), &plan.identity) {
+        return Err(discard_new_container(docker, &new_container, &spec.name, failure));
+    }
 
     let cutover = Cutover {
         old: operator.container(),
@@ -402,7 +406,18 @@ fn refuse_leftover(container: &ContainerInspect) -> UpdateFailure {
     )
 }
 
-fn remove_leftovers<D: OperatorDocker>(
+fn check_previous(previous: &ContainerInspect, identity: &OperatorIdentity) -> Result<(), UpdateFailure> {
+    let is_stopped = matches!(
+        previous.state.status,
+        ContainerStatus::Created | ContainerStatus::Exited | ContainerStatus::Dead
+    );
+    if !is_stopped || !identity.matches(previous) {
+        return Err(refuse_leftover(previous));
+    }
+    Ok(())
+}
+
+fn check_leftovers_and_remove_next<D: OperatorDocker>(
     docker: &D,
     logger: &impl InfraLogger,
     operator: &mut SupportedOperator,
@@ -416,21 +431,48 @@ fn remove_leftovers<D: OperatorDocker>(
                 return Err(refuse_leftover(&leftover));
             }
             restore_interrupted_restart_policy(docker, logger, operator, &leftover)?;
+            docker.remove_container(&leftover.id)?;
+            logger.info(format!("🧹 Removed leftover `{}`", leftover.name));
         } else if leftover.name == leftover_names[1] {
-            let is_stopped = matches!(
-                leftover.state.status,
-                ContainerStatus::Created | ContainerStatus::Exited | ContainerStatus::Dead
-            );
-            if !is_stopped || !identity.matches(&leftover) {
-                return Err(refuse_leftover(&leftover));
-            }
-        } else {
-            continue;
+            check_previous(&leftover, identity)?;
         }
-        docker.remove_container(&leftover.id)?;
-        logger.info(format!("🧹 Removed leftover `{}`", leftover.name));
     }
     Ok(())
+}
+
+fn remove_previous<D: OperatorDocker>(
+    docker: &D,
+    logger: &impl InfraLogger,
+    operator: &ContainerInspect,
+    identity: &OperatorIdentity,
+) -> Result<(), UpdateFailure> {
+    let name = operator.name.previous();
+    let Some(previous) = docker
+        .find_containers_named(slice::from_ref(&name))?
+        .into_iter()
+        .find(|container| container.name == name)
+    else {
+        return Ok(());
+    };
+    check_previous(&previous, identity)?;
+    docker.remove_container(&previous.id)?;
+    logger.info(format!("🧹 Removed the former rollback point `{}`", previous.name));
+    Ok(())
+}
+
+fn discard_new_container<D: OperatorDocker>(
+    docker: &D,
+    new_container: &ContainerId,
+    name: &ContainerName,
+    failure: UpdateFailure,
+) -> UpdateFailure {
+    match docker.remove_container(new_container) {
+        Ok(()) => failure,
+        Err(leftover) => UpdateFailure::new(
+            failure.kind,
+            format!("{}; `{name}` could not be removed: {leftover}", failure.message),
+        ),
+    }
 }
 
 fn restore_interrupted_restart_policy<D: OperatorDocker>(
