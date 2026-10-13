@@ -14,7 +14,6 @@ use crate::infrastructure::models::build_platform;
 use crate::infrastructure::models::build_platform::{BuildError, BuildPlatform, layer_compression_for_registry};
 use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::Service;
-use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{InteractWithRegistry, RegistryTags, to_engine_error};
 use crate::io_models::Action;
 use crate::io_models::agentic_workflow::AgenticWorkflow;
@@ -144,13 +143,6 @@ impl EnvironmentTask {
 
         let max_build_in_parallel = max(min(max_build_in_parallel, services.len()), 1);
 
-        // To convert ContainerError to EngineError
-        let cr_registry = infra_ctx.container_registry();
-        let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
-            let event_details = cr_registry.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
-            to_engine_error(event_details, err)
-        };
-
         // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
         let abort_flag = AtomicAbortStatus::new(AbortStatus::None);
         let abort_status = || AbortStatus::merge(abort_flag.load(Ordering::Relaxed), abort.status());
@@ -185,7 +177,6 @@ impl EnvironmentTask {
                             project_id: Some(project_id.to_string()),
                             resource_ttl,
                         },
-                        cr_to_engine_error,
                         &mk_logger,
                         metrics_registry.clone(),
                         &abort_status,
@@ -210,7 +201,6 @@ impl EnvironmentTask {
         build_platform: &dyn BuildPlatform,
         image_retention_time_sec: u32,
         registry_tags: RegistryTags,
-        cr_to_engine_error: impl Fn(ContainerRegistryError) -> EngineError,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         metrics_registry: Arc<dyn MetricsRegistry>,
         abort: &dyn Abort,
@@ -261,7 +251,10 @@ impl EnvironmentTask {
         ) {
             Err(err) => {
                 provision_registry_record.stop(StepStatus::Error);
-                return Err(Box::new(cr_to_engine_error(err)));
+                let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+                let engine_error = to_engine_error(event_details, err);
+                logger.send_error(engine_error.clone());
+                return Err(Box::new(engine_error));
             }
             Ok((_repository, repository_info)) => provision_registry_record.stop(if repository_info.created {
                 StepStatus::Success
