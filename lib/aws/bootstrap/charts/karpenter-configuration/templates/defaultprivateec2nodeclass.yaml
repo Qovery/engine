@@ -21,6 +21,9 @@ spec:
     - alias: {{ .Values.amiSelectorTermsAlias }}
   {{- end }}
   role: "KarpenterNodeRole-{{ .Values.clusterName }}"
+  {{- with .Values.defaultPrivateNodePool.instanceStorePolicy }}
+  instanceStorePolicy: {{ . }}
+  {{- end }}
   # Nodes land on private subnets and keep egressing through the NAT gateways.
   # Selector tags are ANDed within a single term; each tag must be cluster-unique
   # because Karpenter tag discovery is account+region-wide.

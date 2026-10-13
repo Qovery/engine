@@ -24,6 +24,9 @@ use kube::Client;
 use std::collections::HashMap;
 use tracing::warn;
 
+// More than today's 200 GiB gp3 builder disk: drops the xlarge and smaller sizes (237 GB of NVMe or less).
+const MIN_LOCAL_NVME_GIB: u32 = 300;
+
 pub struct KarpenterConfigurationChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -138,6 +141,22 @@ impl KarpenterConfigurationChart {
             },
         });
 
+        requirements
+    }
+
+    /// RAID0 only helps on instance types with enough local NVMe: strictly more than `MIN_LOCAL_NVME_GIB`
+    /// (Karpenter `Gt`), which stays above the 200 GiB gp3 root disk it replaces.
+    fn with_local_nvme_requirement(
+        mut requirements: Vec<KarpenterNodePoolRequirement>,
+        local_nvme: Option<bool>,
+    ) -> Vec<KarpenterNodePoolRequirement> {
+        if local_nvme == Some(true) {
+            requirements.push(KarpenterNodePoolRequirement {
+                key: KarpenterNodePoolRequirementKey::InstanceLocalNvme,
+                operator: Some(KarpenterRequirementOperator::Gt),
+                values: vec![MIN_LOCAL_NVME_GIB.to_string()],
+            });
+        }
         requirements
     }
 
@@ -400,11 +419,27 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             .unwrap_or(self.karpenter_parameters.spot_enabled);
 
         // Default node pool requirements
-        let default_requirements = Self::enrich_karpenter_requirements(
-            default_spot,
-            &self.karpenter_parameters.qovery_node_pools.requirements,
+        let default_local_nvme = self
+            .karpenter_parameters
+            .qovery_node_pools
+            .default_override
+            .as_ref()
+            .and_then(|o| o.local_nvme);
+        let default_requirements = Self::with_local_nvme_requirement(
+            Self::enrich_karpenter_requirements(
+                default_spot,
+                &self.karpenter_parameters.qovery_node_pools.requirements,
+            ),
+            default_local_nvme,
         );
         Self::push_requirements_values(&mut values, "defaultNodePool", &default_requirements);
+        // The default node class is shared with the stable and cronjob pools: their nodes use their NVMe too, if any
+        if default_local_nvme == Some(true) {
+            values.push(ChartSetValue {
+                key: "instanceStorePolicy".to_string(),
+                value: "RAID0".to_string(),
+            });
+        }
 
         // Stable node pool requirements
         let stable_requirements =
@@ -559,9 +594,12 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 let public_spot = public_pool_override
                     .spot_enabled
                     .unwrap_or(self.karpenter_parameters.spot_enabled);
-                let public_requirements = Self::enrich_karpenter_requirements(
-                    public_spot,
-                    &self.karpenter_parameters.qovery_node_pools.requirements,
+                let public_requirements = Self::with_local_nvme_requirement(
+                    Self::enrich_karpenter_requirements(
+                        public_spot,
+                        &self.karpenter_parameters.qovery_node_pools.requirements,
+                    ),
+                    public_pool_override.local_nvme,
                 );
                 Self::push_requirements_values(&mut values, "defaultPublicNodePool", &public_requirements);
 
@@ -574,6 +612,13 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     values.push(ChartSetValue {
                         key: "defaultPublicNodePool.consolidateAfter".to_string(),
                         value: format!("{}s", consolidate_after_in_seconds),
+                    });
+                }
+
+                if public_pool_override.local_nvme == Some(true) {
+                    values.push(ChartSetValue {
+                        key: "defaultPublicNodePool.instanceStorePolicy".to_string(),
+                        value: "RAID0".to_string(),
                     });
                 }
             }
@@ -609,9 +654,12 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 let private_spot = private_pool_override
                     .spot_enabled
                     .unwrap_or(self.karpenter_parameters.spot_enabled);
-                let private_requirements = Self::enrich_karpenter_requirements(
-                    private_spot,
-                    &self.karpenter_parameters.qovery_node_pools.requirements,
+                let private_requirements = Self::with_local_nvme_requirement(
+                    Self::enrich_karpenter_requirements(
+                        private_spot,
+                        &self.karpenter_parameters.qovery_node_pools.requirements,
+                    ),
+                    private_pool_override.local_nvme,
                 );
                 Self::push_requirements_values(&mut values, "defaultPrivateNodePool", &private_requirements);
 
@@ -624,6 +672,13 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     values.push(ChartSetValue {
                         key: "defaultPrivateNodePool.consolidateAfter".to_string(),
                         value: format!("{}s", consolidate_after_in_seconds),
+                    });
+                }
+
+                if private_pool_override.local_nvme == Some(true) {
+                    values.push(ChartSetValue {
+                        key: "defaultPrivateNodePool.instanceStorePolicy".to_string(),
+                        value: "RAID0".to_string(),
                     });
                 }
             }
@@ -1049,6 +1104,7 @@ mod tests {
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
                         }),
                         consolidate_after_in_seconds: None,
+                        local_nvme: None,
                     }),
                     gpu_override: Some(KarpenterGpuNodePoolOverride {
                         spot_enabled: Some(true),
@@ -1267,6 +1323,7 @@ mod tests {
                     spot_enabled: Some(true),
                     limits: None,
                     consolidate_after_in_seconds: None,
+                    local_nvme: None,
                 }),
                 gpu_override: None,
                 cronjob_override: Some(KarpenterCronjobNodePoolOverride {
@@ -2144,6 +2201,7 @@ mod tests {
                         max_memory: KubernetesMemoryResourceUnit::GibiByte(32),
                     }),
                     consolidate_after_in_seconds: Some(120),
+                    local_nvme: None,
                 })
             } else {
                 None
@@ -2153,6 +2211,7 @@ mod tests {
                     spot_enabled: None,
                     limits: None,
                     consolidate_after_in_seconds: None,
+                    local_nvme: None,
                 })
             } else {
                 None
@@ -2326,6 +2385,106 @@ mod tests {
         assert_eq!(
             public_node_pool["spec"]["disruption"]["consolidateAfter"].as_str(),
             Some("120s")
+        );
+    }
+
+    #[test]
+    fn test_egress_node_pools_use_local_nvme_only_when_requested() {
+        let without_nvme = parse_documents(&generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            egress_node_pools(true, true),
+        ));
+
+        let mut node_pools = egress_node_pools(true, true);
+        if let Some(public_override) = node_pools.default_public_override.as_mut() {
+            public_override.local_nvme = Some(true);
+        }
+        if let Some(private_override) = node_pools.default_private_override.as_mut() {
+            private_override.local_nvme = Some(true);
+        }
+        let with_nvme = parse_documents(&generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            node_pools,
+        ));
+
+        for name in ["qovery-default-public", "qovery-default-private"] {
+            let node_class = find_resource(&without_nvme, "EC2NodeClass", name)
+                .unwrap_or_else(|| panic!("{name} EC2NodeClass expected"));
+            assert!(node_class["spec"].get("instanceStorePolicy").is_none());
+
+            let node_class = find_resource(&with_nvme, "EC2NodeClass", name)
+                .unwrap_or_else(|| panic!("{name} EC2NodeClass expected"));
+            assert_eq!(node_class["spec"]["instanceStorePolicy"].as_str(), Some("RAID0"));
+
+            let local_nvme_requirement = |documents: &[Value]| {
+                find_resource(documents, "NodePool", name)
+                    .and_then(|node_pool| node_pool["spec"]["template"]["spec"]["requirements"].as_sequence())
+                    .and_then(|requirements| {
+                        requirements
+                            .iter()
+                            .find(|requirement| {
+                                requirement["key"].as_str() == Some("karpenter.k8s.aws/instance-local-nvme")
+                            })
+                            .cloned()
+                    })
+            };
+            assert!(local_nvme_requirement(&without_nvme).is_none());
+            let requirement =
+                local_nvme_requirement(&with_nvme).unwrap_or_else(|| panic!("{name} NVMe requirement expected"));
+            assert_eq!(requirement["operator"].as_str(), Some("Gt"));
+            assert_eq!(requirement["values"][0].as_str(), Some("300"));
+        }
+    }
+
+    #[test]
+    fn test_default_node_pool_uses_local_nvme_only_when_requested() {
+        let without_nvme = parse_documents(&generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            egress_node_pools(false, false),
+        ));
+
+        let mut node_pools = egress_node_pools(false, false);
+        node_pools.default_override = Some(KarpenterDefaultNodePoolOverride {
+            spot_enabled: None,
+            limits: None,
+            consolidate_after_in_seconds: None,
+            local_nvme: Some(true),
+        });
+        let with_nvme = parse_documents(&generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            node_pools,
+        ));
+
+        let node_class =
+            find_resource(&without_nvme, "EC2NodeClass", "default").expect("default EC2NodeClass expected");
+        assert!(node_class["spec"].get("instanceStorePolicy").is_none());
+        let node_class = find_resource(&with_nvme, "EC2NodeClass", "default").expect("default EC2NodeClass expected");
+        assert_eq!(node_class["spec"]["instanceStorePolicy"].as_str(), Some("RAID0"));
+
+        let local_nvme_requirement = |documents: &[Value], pool: &str| {
+            find_resource(documents, "NodePool", pool)
+                .and_then(|node_pool| node_pool["spec"]["template"]["spec"]["requirements"].as_sequence())
+                .and_then(|requirements| {
+                    requirements
+                        .iter()
+                        .find(|requirement| {
+                            requirement["key"].as_str() == Some("karpenter.k8s.aws/instance-local-nvme")
+                        })
+                        .cloned()
+                })
+        };
+        assert!(local_nvme_requirement(&without_nvme, "default").is_none());
+        let requirement =
+            local_nvme_requirement(&with_nvme, "default").expect("default pool NVMe requirement expected");
+        assert_eq!(requirement["operator"].as_str(), Some("Gt"));
+        assert_eq!(requirement["values"][0].as_str(), Some("300"));
+        assert!(
+            local_nvme_requirement(&with_nvme, "stable").is_none(),
+            "only the default pool is limited to NVMe types"
         );
     }
 

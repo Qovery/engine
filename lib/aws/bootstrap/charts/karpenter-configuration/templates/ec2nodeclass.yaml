@@ -20,6 +20,9 @@ spec:
     - alias: {{ .Values.amiSelectorTermsAlias }}
   {{- end }}
   role: {{ .Values.nodeRoleName | default (printf "KarpenterNodeRole-%s" .Values.clusterName) | quote }}
+  {{- with .Values.instanceStorePolicy }}
+  instanceStorePolicy: {{ . }}
+  {{- end }}
   subnetSelectorTerms:
     {{- if .Values.explicitSubnetIds }}
     {{- range.Values.explicitSubnetIds }}
