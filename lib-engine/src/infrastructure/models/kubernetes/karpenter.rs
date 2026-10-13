@@ -82,6 +82,7 @@ pub enum KarpenterNodePoolRequirementKey {
     InstanceFamily,
     InstanceGeneration,
     InstanceSize,
+    InstanceLocalNvme,
 
     // Azure specifics
     // https://learn.microsoft.com/fr-fr/azure/aks/node-autoprovision?tabs=azure-cli
@@ -104,6 +105,7 @@ impl KarpenterNodePoolRequirementKey {
             KarpenterNodePoolRequirementKey::InstanceFamily => "karpenter.k8s.aws/instance-family".to_string(),
             KarpenterNodePoolRequirementKey::InstanceGeneration => "karpenter.k8s.aws/instance-generation".to_string(),
             KarpenterNodePoolRequirementKey::InstanceSize => "karpenter.k8s.aws/instance-size".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceLocalNvme => "karpenter.k8s.aws/instance-local-nvme".to_string(),
 
             // Azure specifics
             KarpenterNodePoolRequirementKey::SkuFamily => "karpenter.azure.com/sku-family".to_string(),
@@ -229,6 +231,8 @@ pub struct KarpenterDefaultNodePoolOverride {
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
     pub consolidate_after_in_seconds: Option<u64>,
+    #[serde(default)]
+    pub local_nvme: Option<bool>,
 }
 
 /// Overrides for the opt-in `qovery-default-public` node pool (nodes on public
@@ -242,6 +246,8 @@ pub struct KarpenterDefaultPublicNodePoolOverride {
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
     pub consolidate_after_in_seconds: Option<u64>,
+    #[serde(default)]
+    pub local_nvme: Option<bool>,
 }
 
 /// Overrides for the opt-in `qovery-default-private` node pool (nodes on private
@@ -255,6 +261,8 @@ pub struct KarpenterDefaultPrivateNodePoolOverride {
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
     pub consolidate_after_in_seconds: Option<u64>,
+    #[serde(default)]
+    pub local_nvme: Option<bool>,
 }
 
 #[serde_with::serde_as]
@@ -605,6 +613,7 @@ mod tests {
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
                 consolidate_after_in_seconds: None,
+                local_nvme: None,
             }
         )
     }
@@ -676,6 +685,7 @@ mod tests {
                 spot_enabled: None,
                 limits: None,
                 consolidate_after_in_seconds: None,
+                local_nvme: None,
             }
         )
     }
@@ -816,6 +826,7 @@ mod tests {
                 spot_enabled: Some(true),
                 limits: None,
                 consolidate_after_in_seconds: None,
+                local_nvme: None,
             }
         );
         assert_eq!(
@@ -891,6 +902,7 @@ mod tests {
                 spot_enabled: Some(false),
                 limits: None,
                 consolidate_after_in_seconds: None,
+                local_nvme: None,
             }
         );
         assert_eq!(

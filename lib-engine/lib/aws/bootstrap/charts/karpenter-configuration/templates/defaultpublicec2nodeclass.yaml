@@ -21,6 +21,9 @@ spec:
     - alias: {{ .Values.amiSelectorTermsAlias }}
   {{- end }}
   role: "KarpenterNodeRole-{{ .Values.clusterName }}"
+  {{- with .Values.defaultPublicNodePool.instanceStorePolicy }}
+  instanceStorePolicy: {{ . }}
+  {{- end }}
   # Nodes land on public subnets and egress through the IGW (no NAT processing).
   # Selector tags are ANDed within a single term; each tag must be cluster-unique
   # because Karpenter tag discovery is account+region-wide.

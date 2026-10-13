@@ -11,6 +11,8 @@ securityGroupId: ""
 diskSize: 0Gi
 diskIops: null
 diskThroughput: null
+# Default node class (default, stable and cronjob pools): RAID0 when the default pool runs on local NVMe
+instanceStorePolicy: ""
 storageClass: gp3
 
 capacity_type: []
@@ -82,6 +84,9 @@ cronjobNodePool:
 defaultPublicNodePool:
   enable: false
   consolidateAfter: 1m
+  # RAID0 (the only value Karpenter accepts) joins the local NVMe disks into one volume for kubelet
+  # and container storage. No redundancy: one failed disk loses the data, fine since builds keep none.
+  instanceStorePolicy: ""
   requirements: []
   limits:
     maxCpu: ""
@@ -89,6 +94,9 @@ defaultPublicNodePool:
 defaultPrivateNodePool:
   enable: false
   consolidateAfter: 1m
+  # RAID0 (the only value Karpenter accepts) joins the local NVMe disks into one volume for kubelet
+  # and container storage. No redundancy: one failed disk loses the data, fine since builds keep none.
+  instanceStorePolicy: ""
   requirements: []
   limits:
     maxCpu: ""
