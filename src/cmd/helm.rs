@@ -231,6 +231,15 @@ impl HelmListCache {
 // Global throttle for `helm list` during deploy-parallel cache fetches.
 static LIST_RELEASE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+fn storage_driver_from(common_envs: &[(String, String)], process_driver: Option<String>) -> Option<String> {
+    common_envs
+        .iter()
+        .rev()
+        .find(|(key, _)| key == "HELM_DRIVER")
+        .map(|(_, driver)| driver.clone())
+        .or(process_driver)
+}
+
 #[derive(Debug, Clone)]
 pub struct Helm {
     common_envs: Vec<(String, String)>,
@@ -285,6 +294,12 @@ impl Helm {
         all_envs.append(&mut envs.to_vec());
 
         all_envs
+    }
+
+    /// Release storage backend (`HELM_DRIVER`) the Helm subprocesses run with, `None` for Helm's default (Secrets).
+    /// The environment given to `Helm::new` wins over the one of the engine process, which Helm inherits.
+    pub(crate) fn storage_driver(&self) -> Option<String> {
+        storage_driver_from(&self.common_envs, std::env::var("HELM_DRIVER").ok())
     }
 
     pub fn new<P: AsRef<Path>>(kubernetes_config: Option<P>, common_envs: &[(&str, &str)]) -> Result<Helm, HelmError> {
@@ -2486,6 +2501,43 @@ mod unit_tests {
                         .message_safe()
                         .starts_with("Error while writing yaml content to file")
         ));
+    }
+}
+
+#[cfg(test)]
+mod storage_driver_tests {
+    use super::storage_driver_from;
+
+    fn envs(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn defaults_to_none_so_helm_uses_secrets() {
+        assert_eq!(storage_driver_from(&envs(&[("KUBECONFIG", "/kube")]), None), None);
+    }
+
+    #[test]
+    fn reads_the_driver_of_the_engine_process() {
+        assert_eq!(
+            storage_driver_from(&[], Some("configmap".to_string())),
+            Some("configmap".to_string())
+        );
+    }
+
+    #[test]
+    fn the_environment_of_the_helm_commands_wins_over_the_process_one() {
+        let common = envs(&[("HELM_DRIVER", "secret")]);
+        assert_eq!(
+            storage_driver_from(&common, Some("configmap".to_string())),
+            Some("secret".to_string())
+        );
+    }
+
+    #[test]
+    fn the_last_value_wins_like_it_does_for_the_command() {
+        let common = envs(&[("HELM_DRIVER", "configmap"), ("HELM_DRIVER", "secret")]);
+        assert_eq!(storage_driver_from(&common, None), Some("secret".to_string()));
     }
 }
 
