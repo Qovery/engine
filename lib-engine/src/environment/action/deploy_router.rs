@@ -1,6 +1,7 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
+use crate::environment::action::helm_release_inventory::installed_helm_releases;
 use crate::environment::action::router_listener_set_ownership::{
     claim_hostname_release, delete_claim, installed_release, list_claims, list_legacy_release_owners,
 };
@@ -227,6 +228,16 @@ where
     uninstall_hostname_listener_sets(router, target, &wanted, EnvironmentStep::Deploy, logger)
 }
 
+fn release_inventory_error(event_details: EventDetails, error: CommandError) -> Box<EngineError> {
+    Box::new(EngineError::new_unknown(
+        event_details,
+        "Cannot list the Helm releases of the environment".to_string(),
+        Some(error),
+        None,
+        None,
+    ))
+}
+
 fn ownership_store_error(event_details: EventDetails, error: CommandError) -> Box<EngineError> {
     Box::new(EngineError::new_unknown(
         event_details,
@@ -304,14 +315,16 @@ where
 
     let event_details = router.get_event_details(Stage::Environment(step));
     let namespace = target.environment.namespace();
-    let releases = match target.helm.list_release(Some(namespace), &[]) {
-        Ok(releases) => releases,
-        Err(error) if strict => return Err(Box::new(EngineError::new_helm_error(event_details, error))),
-        Err(error) => {
-            logger.warning(format!("Cannot list the ListenerSet releases of the router: {error}"));
-            return Ok(());
-        }
-    };
+    // Read from the Secret metadata: `helm list -a` loads every revision of every release, which can run out of memory.
+    let releases =
+        match installed_helm_releases(target.kube.client(), namespace, target.helm.storage_driver().as_deref()) {
+            Ok(releases) => releases,
+            Err(error) if strict => return Err(release_inventory_error(event_details, error)),
+            Err(error) => {
+                logger.warning(format!("Cannot list the ListenerSet releases of the router: {error}"));
+                return Ok(());
+            }
+        };
 
     let router_long_id = router.long_id.to_string();
     let installed: BTreeSet<&str> = releases.iter().map(|release| release.name.as_str()).collect();
