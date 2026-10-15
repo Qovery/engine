@@ -22,6 +22,9 @@ ARG PKL_VERSION=0.32.0
 ARG EKSCTL_VERSION=0.220.0
 ARG EKS_ANYWHERE_VERSION=0.25.0
 ARG GOVC_VERSION=0.52.0
+# Embeds the crate dependency tree in the release binaries so image scanners
+# (trivy, grype, `cargo audit bin`) can audit the engine like any other artifact.
+ARG CARGO_AUDITABLE_VERSION="0.7.7"
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.98.0-2026-08-25T15-59-29"
@@ -98,6 +101,7 @@ CMD ["/bin/sh"]
 FROM $RUST_IMAGE AS build
 
 ARG TERRAFORM_VERSION
+ARG CARGO_AUDITABLE_VERSION
 ARG CI_SCCACHE_REDIS_ENDPOINT
 ARG CI_SCCACHE_REDIS_PASSWORD
 ARG ENGINE_TAG_VERSION=""
@@ -111,6 +115,23 @@ ENV RUSTUP_AUTO_INSTALL=0
 
 
 WORKDIR /build
+
+# Prebuilt static cargo-auditable, verified against the checksum published with the release.
+RUN <<EOF
+  set -eu
+  arch=$(dpkg --print-architecture | sed 's/amd64/x86_64/; s/arm64/aarch64/')
+  asset="cargo-auditable-${arch}-unknown-linux-musl.tar.xz"
+  base="https://github.com/rust-secure-code/cargo-auditable/releases/download/v${CARGO_AUDITABLE_VERSION}"
+  tmp=$(mktemp -d)
+  cd "$tmp"
+  curl -fsSLO "${base}/${asset}"
+  curl -fsSLO "${base}/${asset}.sha256"
+  sha256sum -c "${asset}.sha256"
+  tar -xJf "$asset" --strip-components=1 -C /usr/local/bin "${asset%.tar.xz}/cargo-auditable"
+  cd /
+  rm -rf "$tmp"
+  cargo auditable --version
+EOF
 
 # Init terraform providers and DL deps for build
 COPY docker docker
@@ -167,7 +188,7 @@ RUN <<EOF
   echo "pub fn main() {}" > app/src/main_grpc.rs
   echo "pub fn main() {}" > app/src/main_post_renderer.rs
   echo "// dummy" > lib-engine/src/lib.rs
-  cargo build ${CARGO_FLAGS}
+  cargo auditable build ${CARGO_FLAGS}
   if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
     sccache --show-stats
   fi
@@ -204,7 +225,7 @@ RUN <<EOF
   touch app/src/main_grpc.rs
   touch app/src/main_post_renderer.rs
   touch lib-engine/src/lib.rs
-  cargo build ${CARGO_FLAGS}
+  cargo auditable build ${CARGO_FLAGS}
   if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
     sccache --show-stats
   fi
@@ -213,6 +234,11 @@ RUN <<EOF
   strip -s /build/target/release/engine_grpc_stripped
   cp /build/target/release/engine_post_renderer /build/target/release/engine_post_renderer_stripped
   strip -s /build/target/release/engine_post_renderer_stripped
+
+  # cargo-auditable must have embedded the dependency tree, and strip must have kept it.
+  for bin in engine_grpc engine_grpc_stripped engine_post_renderer engine_post_renderer_stripped; do
+    readelf -S "/build/target/release/${bin}" | grep -qF ".dep-v0" || { echo "missing .dep-v0 section in ${bin}" >&2; exit 1; }
+  done
 EOF
 
 
