@@ -345,16 +345,17 @@ fn get_patch_remove_node_selector(key: &str) -> (PatchParams, Patch<Value>) {
     (patch_params, Patch::Json(json_patch::Patch(patch_operations)))
 }
 
-// Evicted/completed pods stay listed (phase Failed/Succeeded) but are not running, they must not block scale-down
-fn count_active_pods(pods: &[Pod]) -> usize {
-    pods.iter()
-        .filter(|pod| {
-            !matches!(
-                pod.status.as_ref().and_then(|s| s.phase.as_deref()),
-                Some("Failed") | Some("Succeeded")
-            )
-        })
-        .count()
+/// Returns whether a pod phase must block pause completion.
+///
+/// Pods in the `Failed` and `Succeeded` phases are terminal and can remain
+/// listed after their workload has scaled down. Every other phase, including a
+/// missing phase, is active because Kubernetes has not confirmed termination.
+pub fn is_active_pod_phase(phase: Option<&str>) -> bool {
+    !matches!(phase, Some("Failed") | Some("Succeeded"))
+}
+
+fn is_active_pod(pod: &Pod) -> bool {
+    is_active_pod_phase(pod.status.as_ref().and_then(|status| status.phase.as_deref()))
 }
 
 async fn wait_for_pods_to_be_in_correct_state(
@@ -372,7 +373,7 @@ async fn wait_for_pods_to_be_in_correct_state(
         Api::namespaced(kube.clone(), namespace)
     };
     while let Ok(pod) = pods.list(list_params).await {
-        if count_active_pods(&pod.items) == desired_size {
+        if pod.items.iter().filter(|pod| is_active_pod(pod)).count() == desired_size {
             break;
         }
 
@@ -537,8 +538,8 @@ impl DeploymentAction for PauseServiceAction {
 }
 
 #[cfg(test)]
-mod count_active_pods_tests {
-    use super::count_active_pods;
+mod is_active_pod_tests {
+    use super::is_active_pod;
     use k8s_openapi::api::core::v1::{Pod, PodStatus};
 
     fn pod_with_phase(phase: &str) -> Pod {
@@ -552,15 +553,17 @@ mod count_active_pods_tests {
     }
 
     #[test]
-    fn test_count_active_pods_ignores_failed_and_succeeded() {
-        let pods = vec![
-            pod_with_phase("Running"),
-            pod_with_phase("Pending"),
-            pod_with_phase("Failed"),
-            pod_with_phase("Succeeded"),
-            Pod::default(),
-        ];
-        assert_eq!(count_active_pods(&pods), 3);
+    fn terminal_pods_do_not_block_pause_completion() {
+        let pods = [pod_with_phase("Failed"), pod_with_phase("Succeeded")];
+
+        assert!(pods.iter().all(|pod| !is_active_pod(pod)));
+    }
+
+    #[test]
+    fn pending_running_and_unknown_pods_block_pause_completion() {
+        let pods = [pod_with_phase("Pending"), pod_with_phase("Running"), Pod::default()];
+
+        assert!(pods.iter().all(is_active_pod));
     }
 }
 

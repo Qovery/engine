@@ -26,6 +26,7 @@ mod router_listener_set_ownership;
 pub mod test_utils;
 mod utils;
 
+pub use pause_service::is_active_pod_phase;
 pub use utils::{log_job_output_error, update_pvcs};
 
 pub trait DeploymentAction: Send + Sync {
