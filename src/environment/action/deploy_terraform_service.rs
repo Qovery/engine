@@ -7,13 +7,14 @@ use crate::environment::action::deploy_external_secrets::{
 };
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_job::job::JobRunError;
+use crate::environment::action::managed_db_engine_version::pinned_engine_version_or_error;
 use crate::environment::action::managed_db_start::{
     AwsManagedDb, DEFAULT_POLL_INTERVAL, StartFailure, StartPolicy, SystemClock, start_until_available,
 };
 use crate::environment::action::{DeploymentAction, log_job_output_error};
 use crate::environment::models::abort::AbortStatus;
 use crate::environment::models::terraform_service::{
-    TerraformAction, TerraformService, TerraformServiceTrait, is_terraform_noop,
+    ENGINE_VERSION_TF_VAR, TerraformAction, TerraformService, TerraformServiceTrait, add_tf_var, is_terraform_noop,
 };
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -37,8 +38,11 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-#[derive(Debug)]
-pub struct TaskContext {}
+#[derive(Debug, Default)]
+pub struct TaskContext {
+    /// Exact `engine_version` the catalog database module must declare, read from the live instance.
+    engine_version: Option<String>,
+}
 pub(super) type TerraformPreRun<'a> = Box<dyn FnMut(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a>;
 pub(super) type TerraformPostRun<'a> = Box<dyn FnMut(&EnvSuccessLogger, TaskContext) + 'a>;
 pub(super) type TerraformRun<'a> =
@@ -99,7 +103,7 @@ where
             Box::new(move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
                 // A stopped instance rejects the modifications a destroy needs (final snapshot).
                 ensure_adopted_managed_db_available(self, target, &pre_run_event_details, logger)?;
-                Ok(TaskContext {})
+                Ok(TaskContext::default())
             });
         let mut post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {
             // Delete external secrets helm release if exists
@@ -180,7 +184,7 @@ where
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
 
         // Prepare HelmDeployment to uninstall
-        let helm = self.helm_deployment(target, event_details)?;
+        let helm = self.helm_deployment(target, event_details, None)?;
 
         // Cleanup backend config secret
         let _backend_config_secret_cleanup = scopeguard::guard(&self.backend.kube_secret_name, |secret_name| {
@@ -219,7 +223,7 @@ where
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
 
-        let helm = self.helm_deployment(target, event_details)?;
+        let helm = self.helm_deployment(target, event_details, state.engine_version.as_deref())?;
 
         // create job
         helm.on_create(target)?;
@@ -359,11 +363,16 @@ where
         &self,
         target: &DeploymentTarget,
         event_details: &EventDetails,
+        engine_version: Option<&str>,
     ) -> Result<HelmDeployment, Box<EngineError>> {
         let chart = self.build_chart(target);
+        let mut context = self.to_tera_context(target)?;
+        if let Some(version) = engine_version {
+            add_tf_var(&mut context, ENGINE_VERSION_TF_VAR, version);
+        }
         Ok(HelmDeployment::new(
             event_details.clone(),
-            self.to_tera_context(target)?,
+            context,
             PathBuf::from(self.helm_chart_dir()),
             HelmChartValues::SerializedContext,
             chart,
@@ -430,7 +439,8 @@ pub(super) fn mk_deploy_pre_run<'a, T: CloudProvider>(
         // Before the apply: terraform cannot modify a stopped instance, so an apply that touches one
         // fails before any start is issued.
         ensure_adopted_managed_db_available(terraform, target, &event_details, logger)?;
-        Ok(TaskContext {})
+        let engine_version = pin_adopted_managed_db_engine_version(terraform, target, &event_details, logger)?;
+        Ok(TaskContext { engine_version })
     })
 }
 
@@ -472,7 +482,7 @@ fn report_action<T: CloudProvider>(
 where
     TerraformService<T>: ToTeraContext,
 {
-    let mut pre_run: TerraformPreRun = Box::new(|_| Ok(TaskContext {}));
+    let mut pre_run: TerraformPreRun = Box::new(|_| Ok(TaskContext::default()));
     let mut run: TerraformRun = Box::new(|logger, state| {
         body(logger)?;
         Ok(state)
@@ -490,10 +500,10 @@ where
 }
 
 /// An adopted instance this engine may stop and start, with the region it actually lives in.
-struct AdoptedInstance {
-    id: String,
-    db_type: service::DatabaseType,
-    region: String,
+pub(super) struct AdoptedInstance {
+    pub id: String,
+    pub db_type: service::DatabaseType,
+    pub region: String,
 }
 
 /// The instance this service adopted, if it can be driven at all.
@@ -508,7 +518,7 @@ fn get_adopted_managed_db<T: CloudProvider>(
     drivable_instance(terraform.pausable_instance.as_ref()?)
 }
 
-fn drivable_instance(instance: &PausableInstance) -> Option<AdoptedInstance> {
+pub(super) fn drivable_instance(instance: &PausableInstance) -> Option<AdoptedInstance> {
     let id = instance.instance_identifier.trim().to_string();
     let db_type = match instance.database_kind {
         AdoptedDatabaseKind::Postgresql => service::DatabaseType::PostgreSQL,
@@ -535,9 +545,13 @@ fn drivable_instance(instance: &PausableInstance) -> Option<AdoptedInstance> {
 }
 
 fn aws_credentials<'a>(target: &'a DeploymentTarget, instance: &'a AdoptedInstance) -> Vec<(&'a str, &'a str)> {
-    let mut credentials = target.cloud_provider.credentials_environment_variables();
+    with_region(target.cloud_provider.credentials_environment_variables(), &instance.region)
+}
+
+/// The cluster's AWS credentials, pointed at the region the instance lives in.
+pub(super) fn with_region<'a>(mut credentials: Vec<(&'a str, &'a str)>, region: &'a str) -> Vec<(&'a str, &'a str)> {
     credentials.retain(|(key, _)| *key != AWS_DEFAULT_REGION);
-    credentials.push((AWS_DEFAULT_REGION, instance.region.as_str()));
+    credentials.push((AWS_DEFAULT_REGION, region));
     credentials
 }
 
@@ -676,6 +690,33 @@ fn ensure_adopted_managed_db_available<T: CloudProvider>(
             )),
         ))
     })
+}
+
+/// Picks the exact version Terraform should target: the version already running when the blueprint keeps the same
+/// major, or the newest version RDS allows when the blueprint moves to a newer major (Terraform then upgrades).
+/// Only needed when a new plan is made; applying a saved plan, destroying or touching state skips it.
+fn pin_adopted_managed_db_engine_version<T: CloudProvider>(
+    terraform: &TerraformService<T>,
+    target: &DeploymentTarget,
+    event_details: &EventDetails,
+    logger: &EnvProgressLogger,
+) -> Result<Option<String>, Box<EngineError>> {
+    let plans = matches!(
+        terraform.terraform_action,
+        TerraformAction::TerraformPlanAndApply | TerraformAction::TerraformPlanOnly { .. }
+    );
+    if !plans || target.is_dry_run_deploy || target.cloud_provider.kind() != cloud_provider::Kind::Aws {
+        return Ok(None);
+    }
+    let Some(instance) = terraform.pausable_instance.as_ref() else {
+        return Ok(None);
+    };
+    pinned_engine_version_or_error(
+        instance,
+        &target.cloud_provider.credentials_environment_variables(),
+        event_details,
+        &mut |line| logger.info(line),
+    )
 }
 
 /// Whether this run changes infrastructure. Plan-only, init, unlock and noop are reads and must not
@@ -819,6 +860,7 @@ mod tests {
             instance_identifier: identifier.to_string(),
             database_kind: kind,
             target_hostname: hostname.to_string(),
+            catalog_engine_major: None,
         }
     }
 
@@ -882,6 +924,22 @@ mod tests {
         assert_eq!(resolved.id, "orders-db");
         assert_eq!(resolved.db_type, service::DatabaseType::MySQL);
         assert_eq!(resolved.region, "eu-west-1");
+        // Sent by a core that predates engine version pinning: nothing to pin.
+        assert_eq!(instance.catalog_engine_major, None);
+    }
+
+    #[test]
+    fn parses_the_catalog_major_a_blueprint_database_is_deployed_from() {
+        let json = r#"{
+            "instance_identifier": "orders-db",
+            "database_kind": "POSTGRESQL",
+            "target_hostname": "orders-db.ab12cd34ef56.eu-west-3.rds.amazonaws.com",
+            "catalog_engine_major": 18
+        }"#;
+
+        let instance: PausableInstance = serde_json::from_str(json).expect("must parse");
+
+        assert_eq!(instance.catalog_engine_major, Some(18));
     }
 
     #[test]

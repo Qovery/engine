@@ -18,6 +18,7 @@ mod deploy_terraform;
 mod deploy_terraform_service;
 mod helm_release_custom_resources;
 mod helm_release_inventory;
+pub(crate) mod managed_db_engine_version;
 mod managed_db_start;
 mod pause_service;
 mod restart_service;

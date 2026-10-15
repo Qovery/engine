@@ -434,6 +434,22 @@ fn add_cloud_provider_credentials_if_necessary(
     existing_vars
 }
 
+/// Exact `engine_version` of a catalog database module. Undeclared `TF_VAR_*` are ignored, so modules without it are safe.
+pub(crate) const ENGINE_VERSION_TF_VAR: &str = "TF_VAR_engine_version";
+
+/// Adds a `TF_VAR_*` known only at deploy time to a rendered context, replacing any variable of the same name.
+pub(crate) fn add_tf_var(context: &mut tera::Context, key: &str, value: &str) {
+    let mut variables = match context.get("environment_variables") {
+        Some(serde_json::Value::Array(items)) => items.clone(),
+        _ => vec![],
+    };
+    variables.retain(|variable| variable.get("key").and_then(serde_json::Value::as_str) != Some(key));
+    let variable = qovery_tf_var(key, value);
+    variables
+        .push(serde_json::json!({ "key": variable.key, "value": variable.value, "is_secret": variable.is_secret }));
+    context.insert("environment_variables", &variables);
+}
+
 /// One base64-encoded `TF_VAR_*` env var (values land in a Secret `data:` block, hence base64; not secret).
 fn qovery_tf_var(key: &str, value: &str) -> EnvironmentVariable {
     EnvironmentVariable {
@@ -741,6 +757,41 @@ pub(crate) fn is_terraform_noop(action: &TerraformAction) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn adds_a_deploy_time_tf_var_and_replaces_an_existing_one() {
+        let mut context = tera::Context::new();
+        context.insert(
+            "environment_variables",
+            &vec![
+                qovery_tf_var("TF_VAR_region", "eu-west-3"),
+                qovery_tf_var(ENGINE_VERSION_TF_VAR, "14"),
+            ],
+        );
+
+        add_tf_var(&mut context, ENGINE_VERSION_TF_VAR, "18.6");
+
+        assert_eq!(
+            context.get("environment_variables").cloned(),
+            serde_json::to_value(vec![
+                qovery_tf_var("TF_VAR_region", "eu-west-3"),
+                qovery_tf_var(ENGINE_VERSION_TF_VAR, "18.6"),
+            ])
+            .ok()
+        );
+    }
+
+    #[test]
+    fn adds_a_deploy_time_tf_var_to_a_context_without_variables() {
+        let mut context = tera::Context::new();
+
+        add_tf_var(&mut context, ENGINE_VERSION_TF_VAR, "18.6");
+
+        assert_eq!(
+            context.get("environment_variables").cloned(),
+            serde_json::to_value(vec![qovery_tf_var(ENGINE_VERSION_TF_VAR, "18.6")]).ok()
+        );
+    }
+
     use super::*;
     use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;

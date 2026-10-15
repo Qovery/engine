@@ -11,12 +11,14 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::action::deploy_external_secrets::{
     ExternalSecretReadError, read_service_external_secret_values,
 };
+use crate::environment::action::managed_db_engine_version::pinned_engine_version_or_error;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::cloud_provider::Kind;
 use crate::io_models::Action;
 use crate::io_models::aws_apn_id::AwsApnId;
 use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
@@ -150,6 +152,26 @@ impl BlueprintTask {
             CloudProviderOptions::Azure { client_secret, .. } => vec![client_secret.to_string()],
             CloudProviderOptions::OnPremise { .. } => vec![],
         }
+    }
+
+    /// Exact `engine_version` the previewed catalog module will be deployed with, read from the live instance.
+    fn pinned_engine_version(
+        &self,
+        request: &BlueprintRequest,
+        infra_ctx: &InfrastructureContext,
+        cloud_envs: &[(&str, &str)],
+        event_details: &EventDetails,
+    ) -> Result<Option<String>, Box<EngineError>> {
+        let Some(instance) = request.managed_instance.as_ref() else {
+            return Ok(None);
+        };
+        if infra_ctx.cloud_provider().kind() != Kind::Aws {
+            return Ok(None);
+        }
+        pinned_engine_version_or_error(instance, cloud_envs, event_details, &mut |line| {
+            self.logger
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new(line, None)))
+        })
     }
 
     /// The request with its external secret references replaced by the values ESO synced for the deployed
@@ -494,6 +516,8 @@ impl Task for BlueprintTask {
                         ),
                     ));
                     let cloud_envs = infra_context.cloud_provider().credentials_environment_variables();
+                    let engine_version =
+                        self.pinned_engine_version(&target_env, &infra_context, &cloud_envs, &event_details)?;
                     let kubeconfig_path = infra_context.kubernetes().kubeconfig_local_file_path();
                     let external_secrets =
                         self.resolve_external_secret_references(&target_env, &infra_context, &event_details)?;
@@ -522,6 +546,7 @@ impl Task for BlueprintTask {
                         &kubeconfig_path,
                         tf_spec.timeout_sec,
                         tf_spec.flavor.clone(),
+                        engine_version.as_deref(),
                         &event_details,
                         diff_logger.as_ref(),
                     )
