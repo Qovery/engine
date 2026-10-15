@@ -13,7 +13,7 @@ use crate::infrastructure::models::external_secrets::aws_secrets_manager_authent
 };
 use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpAuthenticationMode;
 use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
-use crate::runtime::block_on;
+use crate::services::kube_retry::{KubeOperation, retry_on_transient_kube_error};
 use itertools::Itertools;
 use kube::Client;
 use kube::api::{Api, ListParams};
@@ -287,7 +287,10 @@ pub(crate) fn check_stores_not_in_use(
 ) -> Result<(), CommandError> {
     let cluster_secret_store_api_resource = cluster_secret_store_api_resource();
     let stores_api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &cluster_secret_store_api_resource);
-    let stores = match block_on(stores_api.list(&ListParams::default())) {
+    let list_params = ListParams::default();
+    let stores_result =
+        retry_on_transient_kube_error(KubeOperation::ListClusterSecretStores, || stores_api.list(&list_params));
+    let stores = match stores_result {
         Ok(list) => list,
         // CRDs are not installed: this means ESO is not installed
         // We can safely return as no check is needed
@@ -324,9 +327,10 @@ pub(crate) fn check_stores_not_in_use(
             continue;
         }
 
-        let external_secrets = match block_on(
-            es_api.list(&ListParams::default().labels(format!("qovery.com/store-name={store_name}").as_str())),
-        ) {
+        let external_secrets_params = ListParams::default().labels(&format!("qovery.com/store-name={store_name}"));
+        let external_secrets_result =
+            retry_on_transient_kube_error(KubeOperation::ListExternalSecrets, || es_api.list(&external_secrets_params));
+        let external_secrets = match external_secrets_result {
             Ok(list) => list,
             // This shouldn't happen as a check is done above on ClusterSecretStore, but just in case
             // We can safely return as no check is needed
@@ -363,7 +367,10 @@ mod tests {
         AwsConnection, AwsSecretsManagerSource,
     };
     use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpConnection;
+    use crate::services::kube_retry::test_support::{empty_list_body, scripted_kube_client, status_body};
+    use serde_json::json;
     use std::env;
+    use std::sync::atomic::Ordering;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -1040,5 +1047,41 @@ mod tests {
         let values = &common_chart.chart_info.values;
         // No authentication values should be generated
         assert!(values.is_empty());
+    }
+
+    #[test]
+    fn check_stores_not_in_use_retries_transient_list_error() {
+        let (client, requests) =
+            scripted_kube_client(vec![(429, status_body(429, "TooManyRequests")), (200, empty_list_body())]);
+
+        assert!(check_stores_not_in_use(&client, &[]).is_ok());
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn check_stores_not_in_use_retries_transient_external_secret_list_error() {
+        let removed_store = json!({
+            "kind": "List", "apiVersion": "v1", "metadata": {},
+            "items": [{
+                "apiVersion": "external-secrets.io/v1", "kind": "ClusterSecretStore",
+                "metadata": {"name": "removed-store", "labels": {"qovery.com/secret-manager-access-id": "removed-id"}}
+            }]
+        });
+        let (client, requests) = scripted_kube_client(vec![
+            (200, removed_store),
+            (429, status_body(429, "TooManyRequests")),
+            (200, empty_list_body()),
+        ]);
+
+        assert!(check_stores_not_in_use(&client, &[]).is_ok());
+        assert_eq!(requests.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn check_stores_not_in_use_skips_check_when_eso_is_not_installed() {
+        let (client, requests) = scripted_kube_client(vec![(404, status_body(404, "NotFound"))]);
+
+        assert!(check_stores_not_in_use(&client, &[]).is_ok());
+        assert_eq!(requests.load(Ordering::SeqCst), 1);
     }
 }
