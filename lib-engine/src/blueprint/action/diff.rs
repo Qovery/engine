@@ -21,6 +21,7 @@ use crate::cmd::terraform::{
     terraform_init_validate_lock_free_bounded, terraform_plan_internal_bounded,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
+use crate::environment::models::terraform_service::ENGINE_VERSION_TF_VAR;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::io_models::blueprint::BlueprintRequest;
@@ -70,6 +71,7 @@ pub fn diff_underlying_terraform(
     kubeconfig_path: &Path,
     timeout_sec: u64,
     flavor: TerraformFlavor,
+    engine_version: Option<&str>,
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<String, Box<EngineError>> {
@@ -159,6 +161,10 @@ pub fn diff_underlying_terraform(
     let kubeconfig_str = kubeconfig_path.to_string_lossy().into_owned();
     let mut envs: Vec<(&str, &str)> = cloud_envs.to_vec();
     envs.push(("KUBE_CONFIG_PATH", &kubeconfig_str));
+    // Same value the deploy pins, so the preview shows the database upgrade the deploy will run.
+    if let Some(version) = engine_version {
+        envs.push((ENGINE_VERSION_TF_VAR, version));
+    }
 
     let dir = workspace.path().to_string_lossy();
 
@@ -576,6 +582,7 @@ mod tests {
             env_kube_name: "env-ns".into(),
             backend_type: None,
             external_secret_references: vec![],
+            managed_instance: None,
         }
     }
 

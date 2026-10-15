@@ -72,6 +72,11 @@ pub struct BlueprintRequest {
     /// deployed service's ESO Secrets: the real deploy expands them in the terraform job, the preview cannot.
     #[serde(default)]
     pub external_secret_references: Vec<String>,
+
+    /// Database instance the deployed service runs on, so DIFF plans the same `engine_version` the deploy will pin.
+    /// `catalog_engine_major` is the major of the previewed tag.
+    #[serde(default)]
+    pub managed_instance: Option<crate::io_models::terraform::PausableInstance>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
@@ -140,6 +145,41 @@ mod tests {
         assert_eq!(req.max_parallel_deploy, 1);
         assert_eq!(req.qovery_api_token, "test-token-xxx");
         assert_eq!(req.environment_id, "env-uuid-xxx");
+        assert!(req.managed_instance.is_none());
+    }
+
+    #[test]
+    fn deserialize_the_managed_instance_a_preview_pins_the_engine_version_of() {
+        let json = r#"{
+            "execution_id": "exec-7",
+            "long_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "name": "orders",
+            "kube_name": "orders",
+            "project_long_id": "11111111-2222-3333-4444-555555555555",
+            "organization_long_id": "22222222-3333-4444-5555-666666666666",
+            "variables": [],
+            "git_url": "https://github.com/Qovery/service-catalog.git",
+            "tag": "AWS/postgres/18/1.3.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx",
+            "managed_instance": {
+                "instance_identifier": "orders",
+                "database_kind": "POSTGRESQL",
+                "target_hostname": "orders.ab12cd34ef56.eu-west-3.rds.amazonaws.com",
+                "catalog_engine_major": 18
+            }
+        }"#;
+        let req: BlueprintRequest = serde_json::from_str(json).unwrap();
+        let expected = crate::io_models::terraform::PausableInstance {
+            instance_identifier: "orders".to_string(),
+            database_kind: crate::io_models::terraform::AdoptedDatabaseKind::Postgresql,
+            target_hostname: "orders.ab12cd34ef56.eu-west-3.rds.amazonaws.com".to_string(),
+            catalog_engine_major: Some(18),
+        };
+        assert_eq!(req.managed_instance.as_ref(), Some(&expected));
+
+        let round_trip: BlueprintRequest = serde_json::from_str(&serde_json::to_string(&req).unwrap()).unwrap();
+        assert_eq!(round_trip.managed_instance, Some(expected));
     }
 
     #[test]

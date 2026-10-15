@@ -237,6 +237,7 @@ mod tests {
             env_kube_name: "env-test-ns".into(),
             backend_type: None,
             external_secret_references: vec![],
+            managed_instance: None,
         }
     }
 

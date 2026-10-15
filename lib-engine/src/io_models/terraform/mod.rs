@@ -232,6 +232,9 @@ pub struct PausableInstance {
     pub instance_identifier: String,
     pub database_kind: AdoptedDatabaseKind,
     pub target_hostname: String,
+    /// Major of the catalog module the blueprint deploys; the engine pins the module's `engine_version` from it.
+    #[serde(default)]
+    pub catalog_engine_major: Option<u32>,
 }
 
 /// Set only for a blueprint that adopted a managed database, so its terraform service owns the

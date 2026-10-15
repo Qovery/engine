@@ -5,6 +5,7 @@ use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
 use crate::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use crate::environment::action::deploy_terraform::TerraformDeployment;
+use crate::environment::action::managed_db_engine_version::EngineVersions;
 use crate::environment::action::managed_db_start::{
     AwsManagedDb, DEFAULT_POLL_INTERVAL, StartFailure, StartPolicy, SystemClock, start_until_available,
 };
@@ -68,6 +69,16 @@ struct CacheClustersResponse {
 struct DbInstance {
     #[serde(alias = "DBInstanceStatus")]
     pub db_instance_status: String,
+    #[serde(alias = "EngineVersion", default)]
+    pub engine_version: String,
+    #[serde(alias = "PendingModifiedValues", default)]
+    pub pending_modified_values: DbPendingValues,
+}
+
+#[derive(Deserialize, Default)]
+struct DbPendingValues {
+    #[serde(alias = "EngineVersion", default)]
+    pub engine_version: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -261,6 +272,113 @@ pub(super) fn start_stop_managed_database(
     } else {
         Ok(())
     }
+}
+
+/// Status, running version and pending version of an RDS instance.
+pub(super) fn get_rds_engine_versions(
+    db_id: &str,
+    credentials: &[(&str, &str)],
+) -> Result<EngineVersions, (cmd::command::CommandError, String)> {
+    let mut cmd = QoveryCommand::new(
+        "aws",
+        &[
+            "rds",
+            "describe-db-instances",
+            "--db-instance-identifier",
+            db_id,
+            "--output",
+            "json",
+        ],
+        credentials,
+    );
+    let mut output_stdout: Vec<String> = vec![];
+    let mut output_stderr: Vec<String> = vec![];
+    if let Err(cmd_error) =
+        cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
+    {
+        output_stdout.extend(output_stderr);
+        return Err((cmd_error, output_stdout.join("\n").trim().to_string()));
+    }
+
+    let raw = output_stdout.join("");
+    let payload: DbInstancesResponse = serde_json::from_str(&raw).map_err(|err| {
+        (
+            cmd::command::CommandError::ExecutionError(std::io::Error::other(err.to_string())),
+            format!("unreadable describe-db-instances answer: {err}"),
+        )
+    })?;
+    let instance = payload.db_instances.into_iter().next().unwrap_or_default();
+    Ok(EngineVersions {
+        status: instance.db_instance_status,
+        current: instance.engine_version,
+        pending: instance.pending_modified_values.engine_version,
+    })
+}
+
+#[derive(Deserialize, Default)]
+struct DbEngineVersionsResponse {
+    #[serde(alias = "DBEngineVersions", default)]
+    pub db_engine_versions: Vec<DbEngineVersion>,
+}
+
+#[derive(Deserialize, Default)]
+struct DbEngineVersion {
+    #[serde(alias = "ValidUpgradeTarget", default)]
+    pub valid_upgrade_target: Vec<DbUpgradeTarget>,
+}
+
+#[derive(Deserialize, Default)]
+struct DbUpgradeTarget {
+    #[serde(alias = "EngineVersion", default)]
+    pub engine_version: String,
+}
+
+fn parse_valid_upgrade_targets(raw: &str) -> Result<Vec<String>, serde_json::Error> {
+    let payload: DbEngineVersionsResponse = serde_json::from_str(raw)?;
+    Ok(payload
+        .db_engine_versions
+        .into_iter()
+        .flat_map(|version| version.valid_upgrade_target)
+        .map(|target| target.engine_version)
+        .filter(|version| !version.is_empty())
+        .collect())
+}
+
+/// Versions RDS accepts as an upgrade from `version` (minor and major alike). `engine` is `postgres` or `mysql`.
+pub(super) fn get_rds_valid_upgrade_targets(
+    engine: &str,
+    version: &str,
+    credentials: &[(&str, &str)],
+) -> Result<Vec<String>, (cmd::command::CommandError, String)> {
+    let mut cmd = QoveryCommand::new(
+        "aws",
+        &[
+            "rds",
+            "describe-db-engine-versions",
+            "--engine",
+            engine,
+            "--engine-version",
+            version,
+            "--output",
+            "json",
+        ],
+        credentials,
+    );
+    let mut output_stdout: Vec<String> = vec![];
+    let mut output_stderr: Vec<String> = vec![];
+    if let Err(cmd_error) =
+        cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
+    {
+        output_stdout.extend(output_stderr);
+        return Err((cmd_error, output_stdout.join("\n").trim().to_string()));
+    }
+
+    parse_valid_upgrade_targets(&output_stdout.join("")).map_err(|err| {
+        (
+            cmd::command::CommandError::ExecutionError(std::io::Error::other(err.to_string())),
+            format!("unreadable describe-db-engine-versions answer: {err}"),
+        )
+    })
 }
 
 pub(super) fn await_db_state(
@@ -1015,5 +1133,57 @@ mod tests {
             managed_db_instance_id(&DatabaseProvisioningMode::BLUEPRINT, "fqdn-abc", None),
             None
         );
+    }
+
+    #[test]
+    fn reads_the_upgrade_targets_rds_offers() {
+        let payload = r#"{"DBEngineVersions":[{"Engine":"postgres","EngineVersion":"14.24","ValidUpgradeTarget":[{"EngineVersion":"15.19","IsMajorVersionUpgrade":true},{"EngineVersion":"18.6","IsMajorVersionUpgrade":true}]}]}"#;
+
+        assert_eq!(
+            parse_valid_upgrade_targets(payload).ok(),
+            Some(vec!["15.19".to_string(), "18.6".to_string()])
+        );
+    }
+
+    #[test]
+    fn reads_a_version_with_no_upgrade_target() {
+        let payload = r#"{"DBEngineVersions":[{"Engine":"postgres","EngineVersion":"18.6","ValidUpgradeTarget":[]}]}"#;
+
+        assert_eq!(parse_valid_upgrade_targets(payload).ok(), Some(vec![]));
+    }
+
+    #[test]
+    fn refuses_an_unreadable_engine_versions_answer() {
+        assert!(parse_valid_upgrade_targets("not json").is_err());
+    }
+
+    #[test]
+    fn reads_the_running_and_pending_engine_versions_rds_reports() {
+        let payload = r#"{"DBInstances":[{"DBInstanceStatus":"available","EngineVersion":"14.22","PendingModifiedValues":{"EngineVersion":"18.3"}}]}"#;
+        let instance = serde_json::from_str::<DbInstancesResponse>(payload)
+            .unwrap_or_default()
+            .db_instances
+            .into_iter()
+            .next()
+            .unwrap_or_default();
+
+        assert_eq!(instance.db_instance_status, "available");
+        assert_eq!(instance.engine_version, "14.22");
+        assert_eq!(instance.pending_modified_values.engine_version.as_deref(), Some("18.3"));
+    }
+
+    #[test]
+    fn reads_an_instance_with_no_pending_change() {
+        let payload =
+            r#"{"DBInstances":[{"DBInstanceStatus":"available","EngineVersion":"18.6","PendingModifiedValues":{}}]}"#;
+        let instance = serde_json::from_str::<DbInstancesResponse>(payload)
+            .unwrap_or_default()
+            .db_instances
+            .into_iter()
+            .next()
+            .unwrap_or_default();
+
+        assert_eq!(instance.engine_version, "18.6");
+        assert_eq!(instance.pending_modified_values.engine_version, None);
     }
 }

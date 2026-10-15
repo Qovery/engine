@@ -855,6 +855,8 @@ pub enum Tag {
     CannotDetermineK8sKubeProxyVersion,
     /// CannotPauseManagedDatabase: as the title says
     CannotPauseManagedDatabase,
+    /// CannotResolveManagedDatabaseVersion: the exact engine version to deploy a managed database with cannot be read from RDS.
+    CannotResolveManagedDatabaseVersion,
     /// CannotConnectK8sCluster: represents an error when trying to connect to the kubernetes cluster
     CannotConnectK8sCluster,
     /// EksAccessEntryMissing: represents an error when the AWS identity has no access entry on the EKS cluster
@@ -2213,6 +2215,17 @@ impl EngineError {
             Tag::CannotPauseManagedDatabase,
             message,
             Some(command_error),
+            None,
+            None,
+        )
+    }
+
+    pub fn new_cannot_resolve_managed_database_version(event_details: EventDetails, message: String) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CannotResolveManagedDatabaseVersion,
+            message,
+            None,
             None,
             None,
         )
