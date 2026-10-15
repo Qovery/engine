@@ -504,6 +504,37 @@ fn escaping_preserves_q_container_manifests() {
 }
 
 #[test]
+fn q_container_with_storage_sets_pod_fs_group() {
+    let pod_spec = |overrides: &[(&str, Json)]| {
+        let manifests = render_whole_chart("q-container", &ctx(overrides));
+        let deployment = manifests
+            .into_iter()
+            .find(|doc| doc["kind"] == "Deployment")
+            .expect("deployment");
+        deployment["spec"]["template"]["spec"].clone()
+    };
+    let storage = json!([{
+        "id": "zstorage1",
+        "long_id": "9f89df90-cb15-42b0-9a7a-b7e358e3e0d5",
+        "mount_point": "/data",
+        "storage_type": "fast-ssd",
+        "size_in_gib": 20,
+    }]);
+    let fs_group = json!({ "fsGroup": 1000, "fsGroupChangePolicy": "OnRootMismatch" });
+
+    for legacy in [false, true] {
+        let spec = pod_spec(&[
+            ("service.storages", storage.clone()),
+            ("service.legacy_volumeclaim_template", json!(legacy)),
+        ]);
+        assert_eq!(spec["securityContext"], fs_group, "legacy_volumeclaim_template: {legacy}");
+        assert_eq!(spec["dnsConfig"]["options"][0]["value"], "5");
+        assert_eq!(spec["imagePullSecrets"][0]["name"], "registry-secret");
+    }
+    assert_eq!(pod_spec(&[])["securityContext"], Json::Null);
+}
+
+#[test]
 fn native_q_container_preserves_structured_keda_values_and_literal_templates() {
     let literal = r#"{{ fail "values must not be evaluated" }}"#;
     let spec = json!({"secretTargetRef": [{"parameter": "token", "name": "s", "key": "k"}]});
