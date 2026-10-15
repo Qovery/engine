@@ -102,11 +102,9 @@ FROM $RUST_IMAGE AS build
 
 ARG TERRAFORM_VERSION
 ARG CARGO_AUDITABLE_VERSION
+# sccache is used when this is set; the Redis password comes in as the `sccache_redis_password` build secret.
 ARG CI_SCCACHE_REDIS_ENDPOINT
-ARG CI_SCCACHE_REDIS_PASSWORD
 ARG ENGINE_TAG_VERSION=""
-ENV CI_SCCACHE_REDIS_URL=$CI_SCCACHE_REDIS_ENDPOINT
-ENV CI_SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
 ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc --bin engine_post_renderer"
@@ -166,19 +164,23 @@ COPY app/Cargo.toml app/
 COPY app/build.rs app/
 COPY app/proto app/proto
 
-# If sscache is set we set rustc wrapper
-RUN <<EOF
+# If sccache is set we set rustc wrapper
+RUN --mount=type=secret,id=sccache_redis_password <<EOF
   if [ -z "${CI_SCCACHE_REDIS_ENDPOINT}" ];
   then
       echo "!!! WARNING: sccache is not used !!!"
   else
-      echo "USING SSCACHE"
-      export RUSTC_WRAPPER=/usr/bin/sccache
       export SCCACHE_REDIS_ENDPOINT=$CI_SCCACHE_REDIS_ENDPOINT
       export SCCACHE_REDIS_USERNAME=default
-      export SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
+      export SCCACHE_REDIS_PASSWORD="$(cat /run/secrets/sccache_redis_password)"
       sccache --version
-      sccache --show-stats
+      # Server startup is what reaches Redis: build without sccache rather than fail when it is unreachable.
+      if sccache --start-server; then
+          echo "USING SCCACHE"
+          export RUSTC_WRAPPER=/usr/bin/sccache
+      else
+          echo "!!! WARNING: sccache server failed to start, building without it !!!"
+      fi
   fi
 
   set -e
@@ -189,7 +191,7 @@ RUN <<EOF
   echo "pub fn main() {}" > app/src/main_post_renderer.rs
   echo "// dummy" > lib-engine/src/lib.rs
   cargo auditable build ${CARGO_FLAGS}
-  if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
+  if [ -n "${RUSTC_WRAPPER:-}" ]; then
     sccache --show-stats
   fi
   rm app/src/main.rs
@@ -205,28 +207,32 @@ COPY . .
 
 ARG CI_COMMIT_SHORT_SHA
 ENV CI_COMMIT_SHORT_SHA=$CI_COMMIT_SHORT_SHA
-RUN <<EOF
+RUN --mount=type=secret,id=sccache_redis_password <<EOF
   if [ -z "${CI_SCCACHE_REDIS_ENDPOINT}" ];
   then
       echo "!!! WARNING: sccache is not used !!!"
   else
-      echo "USING SSCACHE"
-      export RUSTC_WRAPPER=/usr/bin/sccache
       export SCCACHE_REDIS_ENDPOINT=$CI_SCCACHE_REDIS_ENDPOINT
       export SCCACHE_REDIS_USERNAME=default
-      export SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
+      export SCCACHE_REDIS_PASSWORD="$(cat /run/secrets/sccache_redis_password)"
       sccache --version
-      sccache --show-stats
+      # Server startup is what reaches Redis: build without sccache rather than fail when it is unreachable.
+      if sccache --start-server; then
+          echo "USING SCCACHE"
+          export RUSTC_WRAPPER=/usr/bin/sccache
+      else
+          echo "!!! WARNING: sccache server failed to start, building without it !!!"
+      fi
   fi
 
   set -e
-  
+
   touch app/src/main.rs
   touch app/src/main_grpc.rs
   touch app/src/main_post_renderer.rs
   touch lib-engine/src/lib.rs
   cargo auditable build ${CARGO_FLAGS}
-  if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
+  if [ -n "${RUSTC_WRAPPER:-}" ]; then
     sccache --show-stats
   fi
 

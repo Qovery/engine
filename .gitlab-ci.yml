@@ -78,6 +78,9 @@ default:
     - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 40 50 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
+    # BuildKit pods run in the `gitlab` namespace, where the short `redis-sccache` Service name of
+    # CI_SCCACHE_REDIS_ENDPOINT does not resolve: qualify it with the runner namespace that hosts it.
+    - export BUILDKIT_SCCACHE_REDIS_ENDPOINT="redis://redis-sccache.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local:6379"
   after_script:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
 
@@ -394,6 +397,8 @@ release-image:
       --target=run
       --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}
       --build-arg ENGINE_TAG_VERSION="${CI_COMMIT_TAG:-}"
+      --build-arg CI_SCCACHE_REDIS_ENDPOINT=${BUILDKIT_SCCACHE_REDIS_ENDPOINT}
+      --secret id=sccache_redis_password,env=CI_SCCACHE_REDIS_PASSWORD
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-${IMAGE_ARCH}
       --push .
   parallel:
@@ -420,6 +425,8 @@ release-image-slim:
       --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-${IMAGE_ARCH}"
       --target=run-slim
       --build-arg ENGINE_TAG_VERSION="${CI_COMMIT_TAG:-}"
+      --build-arg CI_SCCACHE_REDIS_ENDPOINT=${BUILDKIT_SCCACHE_REDIS_ENDPOINT}
+      --secret id=sccache_redis_password,env=CI_SCCACHE_REDIS_PASSWORD
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-${IMAGE_ARCH}
       --push .
   parallel:
@@ -446,6 +453,8 @@ release-image-eksanywhere:
       --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksanywhere-${IMAGE_ARCH}"
       --target=run-eksanywhere
       --build-arg ENGINE_TAG_VERSION="${CI_COMMIT_TAG:-}"
+      --build-arg CI_SCCACHE_REDIS_ENDPOINT=${BUILDKIT_SCCACHE_REDIS_ENDPOINT}
+      --secret id=sccache_redis_password,env=CI_SCCACHE_REDIS_PASSWORD
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksanywhere-${IMAGE_ARCH}
       --push .
   parallel:
