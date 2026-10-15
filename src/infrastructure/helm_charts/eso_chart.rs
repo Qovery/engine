@@ -7,8 +7,9 @@ use crate::infrastructure::helm_charts::{
 };
 use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::AwsAuthenticationMode;
 use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
-use crate::runtime::block_on;
+use crate::services::kube_retry::{KubeOperation, retry_on_transient_kube_error};
 use kube::Client;
+use kube::Error as KubeError;
 use kube::api::{Api, ApiResource, ListParams};
 use kube::core::DynamicObject;
 use retry::delay::Fixed;
@@ -231,6 +232,16 @@ pub fn external_secret_api_resource() -> ApiResource {
     }
 }
 
+fn list_error_outcome(error: KubeError) -> OperationResult<(), CommandError> {
+    let is_api_error = matches!(error, KubeError::Api(_));
+    let command_error = CommandError::new_from_safe_message(format!("Failed to list ClusterSecretStores: {error}"));
+    if is_api_error {
+        OperationResult::Err(command_error)
+    } else {
+        OperationResult::Retry(command_error)
+    }
+}
+
 #[derive(Clone)]
 pub struct EsoChartChecker {}
 
@@ -248,20 +259,16 @@ impl Default for EsoChartChecker {
 
 impl ChartInstallationChecker for EsoChartChecker {
     fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
-        let kube_client = kube_client.clone();
-        let api_resource = cluster_secret_store_api_resource();
+        let stores_api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &cluster_secret_store_api_resource());
+        let list_params = ListParams::default();
 
-        // Retry: 12 attempts x 10 seconds = 2 minutes max
+        // Wait for the stores to become Ready/Valid: 12 attempts x 10 seconds = 2 minutes max
         let result = retry(Fixed::from_millis(10_000).take(12), || {
-            let stores_api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &api_resource);
-
-            let stores = match block_on(stores_api.list(&ListParams::default())) {
+            let stores_result =
+                retry_on_transient_kube_error(KubeOperation::ListClusterSecretStores, || stores_api.list(&list_params));
+            let stores = match stores_result {
                 Ok(list) => list,
-                Err(e) => {
-                    return OperationResult::Retry(CommandError::new_from_safe_message(format!(
-                        "Failed to list ClusterSecretStores: {e}"
-                    )));
-                }
+                Err(e) => return list_error_outcome(e),
             };
 
             if stores.items.is_empty() {
@@ -306,7 +313,11 @@ impl ChartInstallationChecker for EsoChartChecker {
 mod tests {
     use super::*;
     use crate::infrastructure::helm_charts::{HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name};
+    use crate::services::kube_retry::test_support::{scripted_kube_client, status_body};
+    use kube::core::Status;
     use std::env;
+    use std::io::{self, ErrorKind};
+    use std::sync::atomic::Ordering;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -371,5 +382,22 @@ mod tests {
 
         // verify:
         assert!(values_file.is_ok(), "Values file should exist: `{values_path}`");
+    }
+
+    #[test]
+    fn list_error_outcome_retries_transport_errors_only() {
+        let transport_error = KubeError::Service(Box::new(io::Error::new(ErrorKind::ConnectionRefused, "refused")));
+        assert!(matches!(list_error_outcome(transport_error), OperationResult::Retry(_)));
+
+        let api_error = KubeError::Api(Status::failure("forbidden", "Forbidden").with_code(403).boxed());
+        assert!(matches!(list_error_outcome(api_error), OperationResult::Err(_)));
+    }
+
+    #[test]
+    fn verify_installation_fails_fast_on_permanent_list_error() {
+        let (client, requests) = scripted_kube_client(vec![(403, status_body(403, "Forbidden"))]);
+
+        assert!(EsoChartChecker::new().verify_installation(&client).is_err());
+        assert_eq!(requests.load(Ordering::SeqCst), 1);
     }
 }
