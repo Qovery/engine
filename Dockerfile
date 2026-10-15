@@ -235,6 +235,11 @@ RUN <<EOF
   cp /build/target/release/engine_post_renderer /build/target/release/engine_post_renderer_stripped
   strip -s /build/target/release/engine_post_renderer_stripped
 
+  # The full image keeps symbols for readable backtraces but drops debug info: with it, engine_grpc
+  # exceeds the per-file size limits of Amazon Inspector (200 MiB) and `cargo audit bin` (100 MiB).
+  strip --strip-debug /build/target/release/engine_grpc
+  strip --strip-debug /build/target/release/engine_post_renderer
+
   # cargo-auditable must have embedded the dependency tree, and strip must have kept it.
   for bin in engine_grpc engine_grpc_stripped engine_post_renderer engine_post_renderer_stripped; do
     readelf -S "/build/target/release/${bin}" | grep -qF ".dep-v0" || { echo "missing .dep-v0 section in ${bin}" >&2; exit 1; }
