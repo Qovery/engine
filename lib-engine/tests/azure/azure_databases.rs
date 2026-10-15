@@ -3,6 +3,8 @@ use crate::helpers::utilities::{
     is_pod_restarted_env, logger, metrics_registry,
 };
 use ::function_name::named;
+#[cfg(feature = "test-azure-self-hosted")]
+use qovery_engine::environment::action::is_active_pod_phase;
 use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use std::str::FromStr;
@@ -169,10 +171,16 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let result = environment.pause_environment(&env_action, &infra_ctx);
         assert!(result.is_ok());
 
-        // Check that we have actually 0 pods running for this db
-        let ret = get_pods(&infra_ctx, ProviderKind::Azure, &environment, &environment.databases[0].long_id);
-        assert!(ret.is_ok());
-        assert!(ret.unwrap().items.is_empty());
+        // Pause completes only when no active database pods remain. Terminal pods can still be listed.
+        let pods = get_pods(&infra_ctx, ProviderKind::Azure, &environment, &environment.databases[0].long_id)
+            .expect("database pods should be listable after pause");
+        assert!(
+            !pods
+                .items
+                .iter()
+                .any(|pod| is_active_pod_phase(Some(&pod.status.phase.to_string()))),
+            "database still has active pods after pause"
+        );
 
         let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(result.is_ok());
