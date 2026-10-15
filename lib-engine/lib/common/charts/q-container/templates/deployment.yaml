@@ -142,6 +142,12 @@ spec:
       serviceAccountName: {{ $.Values.service.advanced_settings.security_service_account_name | toJson }}
       {{- end }}
       terminationGracePeriodSeconds: {{ $.Values.service.advanced_settings.deployment_termination_grace_period_seconds }}
+      {{- if gt (len $.Values.service.storages) 0 }}
+      {{- /* non-root images write to the volume through group 1000; existing volumes are already group 1000 */}}
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+      {{- end }}
       {{- if $.Values.service.advanced_settings.network_dns_ndots }}
       dnsConfig:
         options:
