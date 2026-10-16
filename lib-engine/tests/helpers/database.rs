@@ -584,6 +584,7 @@ pub fn environment_3_apps_3_databases(
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     }
 }
 
@@ -654,6 +655,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     }
 }
 
@@ -724,6 +726,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     }
 }
 

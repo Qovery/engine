@@ -1,18 +1,65 @@
 //! One ListenerSet per hostname, used by the `PER_HOSTNAME_LISTENER_SET` routing mode.
 //!
 //! The identity of a ListenerSet and of its Helm release is derived from the normalized hostname only.
-//! Core refuses to attach the same hostname to two routers, so a hostname has a single router at a time.
-//! The engine does not trust that silently: a release owned by another router is never taken over,
-//! see `router_listener_set_ownership`.
+//! The request's hostname mapping authorizes routers to share a release. Within a deployment,
+//! the release is applied once before any of those routers attaches its routes.
 //!
 //! The ListenerSet does not issue anything. The chart renders an explicit cert-manager `Certificate` next to it,
 //! and that Certificate owns the TLS Secret and its renewals.
 
 use crate::environment::models::router::RouterError;
+use crate::errors::EngineError;
+use crate::io_models::environment::HostnameMapping;
 use crate::io_models::models::CustomDomain;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, Mutex, OnceLock};
+use uuid::Uuid;
+
+/// Resolves a planned hostname's mapping, inheriting only for a generated port hostname.
+pub(crate) fn mapped_hostname_routers(
+    mapping: &HostnameMapping,
+    hostname: &str,
+    custom_domains: &[CustomDomain],
+) -> Option<BTreeSet<Uuid>> {
+    let hostname = normalize_hostname(hostname);
+    mapping
+        .routers_for_hostname(&hostname)
+        .or_else(|| {
+            if custom_domains
+                .iter()
+                .any(|domain| normalize_hostname(&domain.domain) == hostname)
+            {
+                return None;
+            }
+            let (_, parent) = hostname.split_once('.')?;
+            custom_domains
+                .iter()
+                .find(|domain| normalize_hostname(&domain.domain) == parent)?;
+            mapping.routers_for_hostname(parent)
+        })
+        .cloned()
+}
+
+type DeploymentResult = Result<(), Box<EngineError>>;
+type HostnameDeployment = Arc<OnceLock<DeploymentResult>>;
+
+/// Coordinates parallel routers for the lifetime of one deployment target, including failures.
+#[derive(Default)]
+pub(crate) struct HostnameListenerSetDeployments {
+    deployments: Mutex<BTreeMap<String, HostnameDeployment>>,
+}
+
+impl HostnameListenerSetDeployments {
+    pub(crate) fn deploy_once(&self, release: &str, deploy: impl FnOnce() -> DeploymentResult) -> DeploymentResult {
+        let deployment = {
+            let mut deployments = self.deployments.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            Arc::clone(deployments.entry(release.to_string()).or_default())
+        };
+        deployment.get_or_init(deploy).clone()
+    }
+}
 
 /// Prefix of every Helm release and ListenerSet created by this mode.
 const RELEASE_PREFIX: &str = "listenerset";
@@ -30,6 +77,18 @@ pub(crate) struct HostnameListenerSet {
     pub tls_secret_name: String,
     /// Namespaces where the routes using this hostname live. A ListenerSet only accepts routes of its own namespace.
     pub namespaces: BTreeSet<String>,
+}
+
+impl HostnameListenerSet {
+    pub(crate) fn new(hostname: String, namespaces: BTreeSet<String>) -> Self {
+        let name = listener_set_name(&hostname);
+        Self {
+            tls_secret_name: format!("{name}-tls"),
+            name,
+            hostname,
+            namespaces,
+        }
+    }
 }
 
 /// Lowercases the hostname and removes the trailing dot of a fully qualified name.
@@ -143,18 +202,15 @@ pub(crate) fn plan_hostname_listener_sets<'a>(
     let mut hostname_by_name: BTreeMap<String, String> = BTreeMap::new();
     let mut listener_sets = Vec::with_capacity(namespaces_by_hostname.len());
     for (hostname, namespaces) in namespaces_by_hostname {
-        let name = listener_set_name(&hostname);
-        if let Some(other_hostname) = hostname_by_name.insert(name.clone(), hostname.clone()) {
+        let listener_set = HostnameListenerSet::new(hostname, namespaces);
+        if let Some(other_hostname) = hostname_by_name.insert(listener_set.name.clone(), listener_set.hostname.clone())
+        {
             return Err(RouterError::InvalidConfig(format!(
-                "hostnames `{other_hostname}` and `{hostname}` resolve to the same ListenerSet release `{name}`"
+                "hostnames `{other_hostname}` and `{}` resolve to the same ListenerSet release `{}`",
+                listener_set.hostname, listener_set.name
             )));
         }
-        listener_sets.push(HostnameListenerSet {
-            tls_secret_name: format!("{name}-tls"),
-            hostname,
-            name,
-            namespaces,
-        });
+        listener_sets.push(listener_set);
     }
     Ok(listener_sets)
 }
@@ -178,11 +234,106 @@ pub(crate) fn listener_set_names_by_namespace(
 #[cfg(test)]
 mod tests {
     use super::{
-        HostnameListenerSet, is_hostname_release_name, listener_set_name, listener_set_names_by_namespace,
-        normalize_hostname, plan_hostname_listener_sets,
+        HostnameListenerSet, HostnameListenerSetDeployments, is_hostname_release_name, listener_set_name,
+        listener_set_names_by_namespace, mapped_hostname_routers, normalize_hostname, plan_hostname_listener_sets,
     };
+    use crate::io_models::environment::HostnameMapping;
     use crate::io_models::models::CustomDomain;
     use std::collections::BTreeSet;
+    use std::sync::Barrier;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn only_generated_port_hostnames_inherit_the_declared_domain_mapping() {
+        let mapping: HostnameMapping = serde_json::from_value(serde_json::json!({
+            "example.com": ["44444444-4444-4444-4444-444444444444"]
+        }))
+        .unwrap();
+        let domains = [
+            custom_domain("example.com", true),
+            custom_domain("api.example.com", true),
+        ];
+        assert!(mapped_hostname_routers(&mapping, "api.example.com", &domains).is_none());
+        assert!(mapped_hostname_routers(&mapping, "p8000.api.example.com", &domains).is_none());
+        assert_eq!(
+            mapped_hostname_routers(&mapping, "p8000.example.com", &domains),
+            Some(BTreeSet::from([uuid::uuid!("44444444-4444-4444-4444-444444444444")]))
+        );
+    }
+
+    #[test]
+    fn parallel_routers_deploy_a_shared_listener_set_once_and_wait_for_it() {
+        let deployments = HostnameListenerSetDeployments::default();
+        let starts = Barrier::new(8);
+        let applies = AtomicUsize::new(0);
+        let applied = AtomicBool::new(false);
+
+        thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| {
+                    starts.wait();
+                    deployments
+                        .deploy_once("listenerset-d0c43d3885064d9a", || {
+                            applies.fetch_add(1, Ordering::SeqCst);
+                            thread::sleep(Duration::from_millis(20));
+                            applied.store(true, Ordering::SeqCst);
+                            Ok(())
+                        })
+                        .unwrap();
+                    assert!(applied.load(Ordering::SeqCst), "routes must wait for the ListenerSet");
+                });
+            }
+        });
+
+        assert_eq!(applies.load(Ordering::SeqCst), 1);
+        deployments
+            .deploy_once("listenerset-aaaaaaaaaaaaaaaa", || {
+                applies.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(applies.load(Ordering::SeqCst), 2, "different hostnames need separate releases");
+        HostnameListenerSetDeployments::default()
+            .deploy_once("listenerset-d0c43d3885064d9a", || {
+                applies.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            applies.load(Ordering::SeqCst),
+            3,
+            "a new deployment must apply the release again"
+        );
+    }
+
+    #[test]
+    fn a_failed_listener_set_deployment_is_reported_to_every_router() {
+        use crate::errors::EngineError;
+        use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+        use crate::io_models::QoveryIdentifier;
+        use uuid::Uuid;
+
+        let deployments = HostnameListenerSetDeployments::default();
+        let error = Box::new(EngineError::new_invalid_engine_payload(
+            EventDetails::new(
+                None,
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                "execution".to_string(),
+                Stage::Environment(EnvironmentStep::Deploy),
+                Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
+            ),
+            "ListenerSet apply failed",
+            None,
+        ));
+        assert_eq!(deployments.deploy_once("shared", || Err(error.clone())), Err(error.clone()));
+        assert_eq!(
+            deployments.deploy_once("shared", || panic!("a peer must receive the same failure")),
+            Err(error)
+        );
+    }
 
     const CLUSTER_DOMAIN: &str = "abc.rustrocks.me";
     const DEFAULT_DOMAIN: &str = "zrouter01.abc.rustrocks.me";

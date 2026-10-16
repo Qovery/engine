@@ -7,7 +7,8 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::HelmError;
 use crate::cmd::kubectl::kubectl_get_listenerset_served_version;
 use crate::environment::models::router_listener_set_ownership::{
-    Claim, ClaimCreation, ClaimError, InstalledRelease, SERVICE_ID_LABEL, claim_release, release_owner_from_manifest,
+    Claim, ClaimCreation, ClaimError, InstalledRelease, SERVICE_ID_LABEL, claim_shared_release,
+    release_owner_from_manifest,
 };
 use crate::errors::CommandError;
 use crate::helm::{ChartInfo, HelmChartNamespaces};
@@ -16,7 +17,8 @@ use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::api::{Api, ApiResource, DeleteParams, ListParams, ObjectMeta, PostParams, Preconditions};
 use kube::core::{DynamicObject, GroupVersionKind};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use uuid::Uuid;
 
 const SCOPE_LABEL: &str = "qovery.com/listenerset-scope";
 /// Scope of the claim ConfigMaps.
@@ -107,20 +109,20 @@ fn create_claim(
     }
 }
 
-/// Takes the claim of `release` for the router, or fails without taking over a release of another router.
+/// Takes the claim for a mapped router, retaining an existing mapped owner when present.
 /// Must succeed before the release is applied.
 pub(super) fn claim_hostname_release(
     target: &DeploymentTarget,
-    router_long_id: &str,
+    authorized_routers: &BTreeSet<Uuid>,
     release: &str,
     hostname: &str,
-) -> Result<(), ClaimError<CommandError>> {
+) -> Result<String, ClaimError<CommandError>> {
     let api = claims_api(target);
-    claim_release(
-        router_long_id,
+    claim_shared_release(
+        &authorized_routers.iter().map(Uuid::to_string).collect(),
         || read_claim_owner(&api, release),
         || installed_release(target, release),
-        || create_claim(target, &api, release, hostname, router_long_id),
+        |owner| create_claim(target, &api, release, hostname, owner),
     )
 }
 

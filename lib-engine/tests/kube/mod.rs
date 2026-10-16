@@ -82,6 +82,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     };
 
     match options {
