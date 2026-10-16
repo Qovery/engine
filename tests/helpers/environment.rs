@@ -140,6 +140,7 @@ pub fn working_environment(
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     };
 
     if with_router {
@@ -521,6 +522,7 @@ pub fn environment_2_app_2_routers_1_psql(
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     }
 }
 
@@ -654,6 +656,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     }
 }
 
@@ -772,6 +775,7 @@ pub fn environment_only_http_server(
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
         routing_mode: Default::default(),
+        hostname_mapping: Default::default(),
     };
 
     if with_router {

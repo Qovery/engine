@@ -1,14 +1,14 @@
 //! Ownership of the hostname ListenerSet releases of the `PER_HOSTNAME_LISTENER_SET` routing mode.
 //!
 //! A release is named after its hostname only, so the name says nothing about the router that applies it.
-//! Core refuses a hostname on two routers, the engine enforces it where breaking it would do damage:
+//! The request can authorize multiple routers for a hostname. One of them holds the release's claim:
 //!
 //! - Every release has a claim, a ConfigMap created atomically (the API server refuses a second create).
-//!   Of two routers that deploy the same hostname at the same time, exactly one gets the claim.
-//!   The claim is created before the release is applied and deleted after it is uninstalled,
-//!   so a release is never applied nor uninstalled by a router that does not hold its claim.
-//! - A release that exists without a claim is only adopted when its persisted Helm manifest names the router
-//!   as owner. The live ListenerSets are not trusted for this, they can be deleted or have drifted.
+//!   Mapped routers retain an existing mapped owner or select the same owner for a new release.
+//!   The claim is created before the release is applied and deleted after it is uninstalled.
+//!   Unmapped routers cannot apply or uninstall the release.
+//! - A release that exists without a claim is only adopted when its persisted Helm manifest names an authorized
+//!   owner. The live ListenerSets are not trusted for this, they can be deleted or have drifted.
 //!   A release whose owner cannot be established is rejected.
 //!
 //! The releases of the previous naming scheme, `listenerset-<router id>-<hash>`, are only discovered to be removed.
@@ -101,6 +101,31 @@ pub(crate) fn claim_release<E>(
             }),
         },
     }
+}
+
+/// Reuses a mapped router's existing ownership, or chooses a stable owner for a new shared release.
+pub(crate) fn claim_shared_release<E>(
+    authorized_routers: &BTreeSet<String>,
+    read_claim: impl Fn() -> Result<Option<String>, E>,
+    installed_release: impl Fn() -> Result<InstalledRelease, E>,
+    create_claim: impl Fn(&str) -> Result<ClaimCreation, E>,
+) -> Result<String, ClaimError<E>> {
+    let installed = installed_release().map_err(ClaimError::Store)?;
+    let owner = read_claim()
+        .map_err(ClaimError::Store)?
+        .or_else(|| match &installed {
+            InstalledRelease::Owner(owner) => Some(owner.clone()),
+            InstalledRelease::NotInstalled | InstalledRelease::Unknown => None,
+        })
+        .or_else(|| authorized_routers.first().cloned())
+        .ok_or(ClaimError::Unverifiable {
+            reason: "hostname_mapping contains no router for this hostname",
+        })?;
+    if !authorized_routers.contains(&owner) {
+        return Err(ClaimError::Foreign { owner });
+    }
+    claim_release(&owner, read_claim, installed_release, || create_claim(&owner))?;
+    Ok(owner)
 }
 
 /// Router named by the `qovery.com/service-id` label of the objects of a rendered Helm manifest.
@@ -252,8 +277,9 @@ pub(crate) fn stale_legacy_releases<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        Claim, ClaimCreation, ClaimError, InstalledRelease, Removal, claim_release, release_owner_from_manifest,
-        release_stale_claim, remove_if_owned, stale_claims, stale_legacy_releases, unclaimed_hostname_releases,
+        Claim, ClaimCreation, ClaimError, InstalledRelease, Removal, claim_release, claim_shared_release,
+        release_owner_from_manifest, release_stale_claim, remove_if_owned, stale_claims, stale_legacy_releases,
+        unclaimed_hostname_releases,
     };
     use std::cell::RefCell;
     use std::collections::{BTreeMap, BTreeSet};
@@ -269,6 +295,29 @@ mod tests {
     }
 
     impl Cluster {
+        fn claim_shared(&self, routers: &[&str]) -> Result<String, ClaimError<TestError>> {
+            claim_shared_release(
+                &routers.iter().map(|router| (*router).to_string()).collect(),
+                || Ok(self.claims.borrow().get(RELEASE).cloned()),
+                || {
+                    Ok(self
+                        .installed
+                        .borrow()
+                        .get(RELEASE)
+                        .cloned()
+                        .unwrap_or(InstalledRelease::NotInstalled))
+                },
+                |owner| {
+                    let mut claims = self.claims.borrow_mut();
+                    if claims.contains_key(RELEASE) {
+                        return Ok(ClaimCreation::AlreadyExists);
+                    }
+                    claims.insert(RELEASE.to_string(), owner.to_string());
+                    Ok(ClaimCreation::Created)
+                },
+            )
+        }
+
         fn claim(&self, release: &str, router: &str) -> Outcome {
             self.claim_with_hook(release, router, || {})
         }
@@ -305,6 +354,101 @@ mod tests {
     }
 
     const RELEASE: &str = "listenerset-0123456789abcdef";
+
+    #[test]
+    fn hostname_mapping_selects_one_owner_regardless_of_router_order() {
+        for routers in [["router-b", "router-a"], ["router-a", "router-b"]] {
+            let cluster = Cluster::default();
+            assert_eq!(cluster.claim_shared(&routers), Ok("router-a".to_string()));
+            assert_eq!(cluster.claim_owner(RELEASE).as_deref(), Some("router-a"));
+            assert_eq!(cluster.claim_shared(&routers), Ok("router-a".to_string()));
+        }
+    }
+
+    #[test]
+    fn hostname_mapping_preserves_an_existing_mapped_owner() {
+        let cluster = Cluster::default();
+        cluster.claim(RELEASE, "router-b").unwrap();
+        cluster
+            .installed
+            .borrow_mut()
+            .insert(RELEASE.to_string(), InstalledRelease::Owner("router-b".to_string()));
+
+        assert_eq!(cluster.claim_shared(&["router-a", "router-b"]), Ok("router-b".to_string()));
+        assert_eq!(cluster.claim_owner(RELEASE).as_deref(), Some("router-b"));
+    }
+
+    #[test]
+    fn hostname_mapping_adopts_an_installed_mapped_release_without_a_claim() {
+        let cluster = Cluster::default();
+        cluster
+            .installed
+            .borrow_mut()
+            .insert(RELEASE.to_string(), InstalledRelease::Owner("router-b".to_string()));
+
+        assert_eq!(cluster.claim_shared(&["router-a", "router-b"]), Ok("router-b".to_string()));
+        assert_eq!(cluster.claim_owner(RELEASE).as_deref(), Some("router-b"));
+    }
+
+    #[test]
+    fn shared_claim_rechecks_a_release_applied_during_owner_selection() {
+        let cluster = Cluster::default();
+        let result: Result<String, ClaimError<TestError>> = claim_shared_release(
+            &BTreeSet::from(["router-a".to_string(), "router-b".to_string()]),
+            || {
+                cluster
+                    .installed
+                    .borrow_mut()
+                    .insert(RELEASE.to_string(), InstalledRelease::Owner("router-b".to_string()));
+                Ok(cluster.claims.borrow().get(RELEASE).cloned())
+            },
+            || {
+                Ok(cluster
+                    .installed
+                    .borrow()
+                    .get(RELEASE)
+                    .cloned()
+                    .unwrap_or(InstalledRelease::NotInstalled))
+            },
+            |owner| {
+                cluster
+                    .claims
+                    .borrow_mut()
+                    .insert(RELEASE.to_string(), owner.to_string());
+                Ok(ClaimCreation::Created)
+            },
+        );
+
+        assert_eq!(
+            result,
+            Err(ClaimError::Foreign {
+                owner: "router-b".to_string()
+            })
+        );
+        assert!(cluster.claim_owner(RELEASE).is_none());
+    }
+
+    #[test]
+    fn hostname_mapping_rejects_foreign_owners_and_empty_router_lists() {
+        let cluster = Cluster::default();
+        cluster.claim(RELEASE, "foreign-router").unwrap();
+        assert_eq!(
+            cluster.claim_shared(&["router-a", "router-b"]),
+            Err(ClaimError::Foreign {
+                owner: "foreign-router".to_string()
+            })
+        );
+        assert_eq!(cluster.claim_owner(RELEASE).as_deref(), Some("foreign-router"));
+        assert!(Cluster::default().claim_shared(&[]).is_err());
+
+        let installed = Cluster::default();
+        installed
+            .installed
+            .borrow_mut()
+            .insert(RELEASE.to_string(), InstalledRelease::Unknown);
+        assert!(installed.claim_shared(&["router-a", "router-b"]).is_err());
+        assert!(installed.claim_owner(RELEASE).is_none());
+    }
 
     fn foreign(owner: &str) -> Outcome {
         Err(ClaimError::Foreign {

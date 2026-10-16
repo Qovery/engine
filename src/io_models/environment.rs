@@ -6,6 +6,7 @@ use crate::environment::models::environment::Environment;
 use crate::environment::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::environment::models::job::{JobError, JobService};
 use crate::environment::models::router::{RouterAdvancedSettings, RouterError};
+use crate::environment::models::router_listener_set::normalize_hostname;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::container_registry::InteractWithRegistry;
@@ -60,13 +61,57 @@ pub struct EnvironmentRequest {
     // Requests sent before core knew about routing modes have no field and keep the legacy behavior.
     #[serde(default)]
     pub routing_mode: EnvironmentRoutingMode,
+    #[serde(default)]
+    pub hostname_mapping: HostnameMapping,
+}
+
+/// Routers sharing each custom hostname, serialized as `{ "hostname": ["router UUID", ...] }`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, Eq, PartialEq, Hash)]
+#[serde(
+    from = "BTreeMap<String, BTreeSet<Uuid>>",
+    into = "BTreeMap<String, BTreeSet<Uuid>>"
+)]
+pub struct HostnameMapping(BTreeMap<String, BTreeSet<Uuid>>);
+
+/// Keys are normalized once here, so a lookup is a plain `get`. Spellings of the same hostname are merged.
+impl From<BTreeMap<String, BTreeSet<Uuid>>> for HostnameMapping {
+    fn from(entries: BTreeMap<String, BTreeSet<Uuid>>) -> Self {
+        let mut mapping: BTreeMap<String, BTreeSet<Uuid>> = BTreeMap::new();
+        for (hostname, routers) in entries {
+            mapping
+                .entry(normalize_hostname(&hostname))
+                .or_default()
+                .extend(routers);
+        }
+        Self(mapping)
+    }
+}
+
+impl From<HostnameMapping> for BTreeMap<String, BTreeSet<Uuid>> {
+    fn from(mapping: HostnameMapping) -> Self {
+        mapping.0
+    }
+}
+
+impl HostnameMapping {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(crate) fn contains_router(&self, router_id: &Uuid) -> bool {
+        self.0.values().any(|routers| routers.contains(router_id))
+    }
+
+    pub(crate) fn routers_for_hostname(&self, hostname: &str) -> Option<&BTreeSet<Uuid>> {
+        self.0.get(&normalize_hostname(hostname))
+    }
 }
 
 /// How the Gateway API listeners of the environment's routers are grouped.
 /// Core sends these exact names, so each variant name is pinned instead of derived.
 ///
 /// `PerHostnameListenerSet` renders one ListenerSet per custom hostname, named after the hostname only.
-/// Core guarantees that a hostname is served by a single router, the engine fails the deployment if it is not.
+/// `hostname_mapping` identifies the routers that can share each hostname's ListenerSet.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum EnvironmentRoutingMode {
     #[default]
@@ -390,6 +435,7 @@ impl EnvironmentRequest {
             self.max_parallel_build,
             self.max_parallel_deploy,
             self.routing_mode,
+            self.hostname_mapping.clone(),
             applications,
             containers,
             routers,
@@ -404,13 +450,13 @@ impl EnvironmentRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::{EnvironmentRequest, EnvironmentRoutingMode, resolve_basic_auth_secret};
+    use super::{EnvironmentRequest, EnvironmentRoutingMode, HostnameMapping, resolve_basic_auth_secret};
     use crate::environment::models::router::RouterError;
     use crate::io_models::environment::DomainError;
     use crate::io_models::variable_utils::VariableInfo;
     use base64::Engine;
     use base64::engine::general_purpose::STANDARD;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     fn var(value: String) -> VariableInfo {
         VariableInfo { value, is_secret: true }
@@ -522,6 +568,65 @@ mod tests {
         assert_eq!(request.routing_mode, EnvironmentRoutingMode::PerHostnameListenerSet);
         let serialized = serde_json::to_value(&request).expect("request should serialize");
         assert_eq!(serialized["routing_mode"], "PER_HOSTNAME_LISTENER_SET");
+    }
+
+    #[test]
+    fn environment_request_preserves_hostname_mapping_sent_by_core() {
+        let mut json = environment_request_json(Some("PER_HOSTNAME_LISTENER_SET"));
+        let mapping = serde_json::json!({
+            "api.example.com": [
+                "44444444-4444-4444-4444-444444444444",
+                "55555555-5555-5555-5555-555555555555"
+            ],
+            "www.example.com": ["44444444-4444-4444-4444-444444444444"]
+        });
+        json["hostname_mapping"] = mapping.clone();
+
+        let request: EnvironmentRequest = serde_json::from_value(json).expect("request should parse");
+        let serialized = serde_json::to_value(request).expect("request should serialize");
+
+        assert_eq!(serialized["hostname_mapping"], mapping);
+    }
+
+    #[test]
+    fn hostname_mapping_normalizes_domains_and_combines_duplicate_entries() {
+        let mapping: HostnameMapping = serde_json::from_value(serde_json::json!({
+            " API.Example.com. ": ["44444444-4444-4444-4444-444444444444"],
+            "api.example.com": ["55555555-5555-5555-5555-555555555555"]
+        }))
+        .unwrap();
+
+        let routers = mapping.routers_for_hostname("Api.Example.COM.").unwrap();
+        assert_eq!(routers.len(), 2);
+        assert!(routers.contains(&uuid::uuid!("44444444-4444-4444-4444-444444444444")));
+        assert!(routers.contains(&uuid::uuid!("55555555-5555-5555-5555-555555555555")));
+        assert!(mapping.routers_for_hostname("p8000.api.example.com").is_none());
+        assert!(mapping.routers_for_hostname("other.example.com").is_none());
+    }
+
+    #[test]
+    fn hostname_mapping_prefers_an_explicit_hostname_over_its_parent() {
+        let mapping: HostnameMapping = serde_json::from_value(serde_json::json!({
+            "example.com": ["44444444-4444-4444-4444-444444444444"],
+            "api.example.com": ["55555555-5555-5555-5555-555555555555"]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            mapping.routers_for_hostname("api.example.com"),
+            Some(&BTreeSet::from([uuid::uuid!("55555555-5555-5555-5555-555555555555")]))
+        );
+    }
+
+    #[test]
+    fn environment_request_defaults_missing_hostname_mapping_and_rejects_invalid_router_ids() {
+        let json = environment_request_json(None);
+        let request: EnvironmentRequest = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(request.hostname_mapping, HostnameMapping::default());
+
+        let mut invalid = json;
+        invalid["hostname_mapping"] = serde_json::json!({ "api.example.com": ["not-a-router-uuid"] });
+        assert!(serde_json::from_value::<EnvironmentRequest>(invalid).is_err());
     }
 
     #[test]

@@ -2,18 +2,24 @@ use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_namespace::NamespaceDeployment;
 use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
-use crate::environment::models::router::RouterService;
-use crate::errors::{EngineError, ErrorMessageVerbosity};
+use crate::environment::models::router::{HostnameListenerSetPlan, RouterService};
+use crate::environment::models::router_listener_set::mapped_hostname_routers;
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::Action;
+use crate::io_models::environment::{EnvironmentRoutingMode, HostnameMapping};
+use crate::io_models::models::CustomDomain;
 use crate::logger::Logger;
 use crate::metrics_registry::{StepLabel, StepName, StepStatus};
+use crate::runtime::block_on;
 use crate::services::aws::load_balancers::clean_up_deleted_k8s_nlb;
 use itertools::Itertools;
+use k8s_openapi::api::core::v1::Namespace;
+use kube::Api;
 use std::cmp::{max, min};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -142,6 +148,44 @@ impl<'a> EnvironmentDeployment<'a> {
 
         let services_to_deploy = Self::services_without_routers_iter(target.environment);
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
+        let deferred_routers = if target.environment.routing_mode == EnvironmentRoutingMode::PerHostnameListenerSet
+            && !target.environment.hostname_mapping.is_empty()
+        {
+            let plans = target
+                .environment
+                .routers
+                .iter()
+                .filter(|router| target.environment.hostname_mapping.contains_router(router.long_id()))
+                .map(|router| {
+                    Ok((
+                        *router.long_id(),
+                        router.custom_domains(),
+                        router.hostname_listener_set_plan(target)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, Box<EngineError>>>()?;
+            let namespaces: Api<Namespace> = Api::all(target.kube.client());
+            routers_waiting_for_namespaces(
+                &plans,
+                &target.environment.hostname_mapping,
+                target.environment.namespace(),
+                |namespace| {
+                    block_on(namespaces.get_opt(namespace))
+                        .map(|namespace| namespace.is_some())
+                        .map_err(|error| {
+                            Box::new(EngineError::new_unknown(
+                                event_details.clone(),
+                                format!("Cannot check namespace `{namespace}` before creating shared ListenerSets"),
+                                Some(CommandError::new_from_safe_message(error.to_string())),
+                                None,
+                                None,
+                            ))
+                        })
+                },
+            )?
+        } else {
+            HashSet::new()
+        };
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
@@ -149,7 +193,20 @@ impl<'a> EnvironmentDeployment<'a> {
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
-        deployment_threads_pool.run(
+        let router_tasks = Self::services_without_routers_iter(target.environment)
+            .filter_map(|(service_id, _, _)| {
+                Self::get_associated_router(&target.environment.routers, service_id)
+                    .filter(|router| deferred_routers.contains(router.long_id()))
+            })
+            .map(|router| {
+                let deployed_services = self.deployed_services.clone();
+                move || {
+                    deployed_services.lock().unwrap().insert(*router.long_id());
+                    router.exec_action(target, *router.action())
+                }
+            })
+            .collect_vec();
+        deployment_threads_pool.run_in_phases(
             services_to_deploy
                 .into_iter()
                 .map(|(service_id, service, service_action)| {
@@ -157,6 +214,7 @@ impl<'a> EnvironmentDeployment<'a> {
                         metrics_registry.start_record(service_id, StepLabel::Service, StepName::DeploymentQueueing);
                     let deployed_services = self.deployed_services.clone();
                     let opt_router = Self::get_associated_router(&target.environment.routers, service_id);
+                    let deferred_routers = &deferred_routers;
                     move || {
                         queueing_record.stop(StepStatus::Success);
 
@@ -165,7 +223,7 @@ impl<'a> EnvironmentDeployment<'a> {
                         service.exec_action(target, service_action)?;
 
                         // then routers
-                        if let Some(router) = opt_router {
+                        if let Some(router) = opt_router.filter(|router| !deferred_routers.contains(router.long_id())) {
                             deployed_services.lock().unwrap().insert(*router.long_id());
                             return router.exec_action(target, *router.action());
                         }
@@ -173,6 +231,7 @@ impl<'a> EnvironmentDeployment<'a> {
                     }
                 })
                 .collect_vec(),
+            router_tasks,
             || should_abort().is_err(),
             NonZeroUsize::new(parallel_deploys)
                 .unwrap_or(NonZeroUsize::new(1).expect("error trying to instantiate NonZeroUsize")),
@@ -373,11 +432,80 @@ impl<'a> EnvironmentDeployment<'a> {
     }
 }
 
+fn router_shares_hostname_listener_set(
+    router_id: &Uuid,
+    hostname: &str,
+    mapped_routers: &BTreeSet<Uuid>,
+    plans: &[(Uuid, &[CustomDomain], HostnameListenerSetPlan)],
+) -> bool {
+    mapped_routers.len() >= 2
+        && mapped_routers.contains(router_id)
+        && plans
+            .iter()
+            .any(|(id, _, plan)| mapped_routers.contains(id) && plan.certificate_hostnames.contains(hostname))
+}
+
+// A shared release may need namespaces created by a peer's Helm service. Defer only that hostname's
+// routers, preserving inline service/router deployment when the namespaces already exist.
+fn routers_waiting_for_namespaces<E>(
+    plans: &[(Uuid, &[CustomDomain], HostnameListenerSetPlan)],
+    mapping: &HostnameMapping,
+    environment_namespace: &str,
+    mut namespace_exists: impl FnMut(&str) -> Result<bool, E>,
+) -> Result<HashSet<Uuid>, E> {
+    let mut deferred = HashSet::new();
+    let mut existing = BTreeMap::new();
+    for (router_id, domains, plan) in plans {
+        for (hostname, namespaces) in &plan.namespaces {
+            let Some(routers) = mapped_hostname_routers(mapping, hostname, domains) else {
+                continue;
+            };
+            if !router_shares_hostname_listener_set(router_id, hostname, &routers, plans) {
+                continue;
+            }
+            for namespace in namespaces
+                .iter()
+                .filter(|namespace| namespace.as_str() != environment_namespace)
+            {
+                let exists = match existing.get(namespace) {
+                    Some(exists) => *exists,
+                    None => {
+                        let exists = namespace_exists(namespace)?;
+                        existing.insert(namespace, exists);
+                        exists
+                    }
+                };
+                if !exists {
+                    deferred.extend(&routers);
+                    break;
+                }
+            }
+        }
+    }
+    Ok(deferred)
+}
+
 struct DeploymentThreadsPool {}
 
 impl DeploymentThreadsPool {
     pub fn new() -> Self {
         Self {}
+    }
+
+    fn run_in_phases<Err, FirstTask, SecondTask>(
+        &self,
+        first_tasks: Vec<FirstTask>,
+        second_tasks: Vec<SecondTask>,
+        should_abort: impl Fn() -> bool + Send + Sync,
+        max_parallelism: NonZeroUsize,
+    ) -> Result<(), Err>
+    where
+        Err: Send + Clone,
+        FirstTask: FnMut() -> Result<(), Err> + Send,
+        SecondTask: FnMut() -> Result<(), Err> + Send,
+    {
+        self.run(first_tasks, &should_abort, max_parallelism)?;
+        self.run(second_tasks, should_abort, max_parallelism)
     }
 
     pub fn run<Err, Task>(
@@ -471,9 +599,102 @@ impl DeploymentThreadsPool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::collections::BTreeSet;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
+
+    #[test]
+    fn only_shared_routers_with_missing_peer_namespaces_are_deferred() {
+        let router_a = uuid::uuid!("44444444-4444-4444-4444-444444444444");
+        let router_b = uuid::uuid!("55555555-5555-5555-5555-555555555555");
+        let outsider = uuid::uuid!("66666666-6666-6666-6666-666666666666");
+        let mapping: HostnameMapping = serde_json::from_value(serde_json::json!({
+            "api.example.com": [router_a, router_b], "other.example.com": [outsider]
+        }))
+        .unwrap();
+        let domains = [CustomDomain {
+            domain: "api.example.com".to_string(),
+            target_domain: String::new(),
+            generate_certificate: true,
+            use_cdn: false,
+        }];
+        let plan = |hostname: &str, namespace: &str| HostnameListenerSetPlan {
+            namespaces: BTreeMap::from([(hostname.to_string(), BTreeSet::from([namespace.to_string()]))]),
+            certificate_hostnames: BTreeSet::from([hostname.to_string()]),
+        };
+        let mut plans = vec![
+            (router_a, domains.as_slice(), plan("api.example.com", "env-ns")),
+            (router_b, domains.as_slice(), plan("api.example.com", "env-ns")),
+            (outsider, domains.as_slice(), plan("other.example.com", "unrelated-ns")),
+        ];
+        let deferred = routers_waiting_for_namespaces::<()>(&plans, &mapping, "env-ns", |_| {
+            panic!("environment namespace exists")
+        });
+        assert!(
+            deferred.unwrap().is_empty(),
+            "ordinary service/router ordering must be preserved"
+        );
+        plans[1].2 = plan("api.example.com", "peer-ns");
+        for exists in [true, false] {
+            let deferred = routers_waiting_for_namespaces(&plans, &mapping, "env-ns", |namespace| {
+                assert_eq!(namespace, "peer-ns", "unrelated namespaces must not delay inline routers");
+                Ok::<_, ()>(exists)
+            })
+            .unwrap();
+            assert_eq!(
+                deferred,
+                if exists {
+                    HashSet::new()
+                } else {
+                    HashSet::from([router_a, router_b])
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn shared_hostname_routers_wait_for_all_services_even_with_one_deployment_worker() {
+        for parallelism in [1, 3] {
+            let services_ready = AtomicUsize::new(0);
+            let router_count = AtomicUsize::new(0);
+            let services = (0..3)
+                .map(|_| {
+                    || {
+                        services_ready.fetch_add(1, Ordering::SeqCst);
+                        Ok::<_, ()>(())
+                    }
+                })
+                .collect();
+            let routers = (0..3)
+                .map(|_| {
+                    || {
+                        assert_eq!(
+                            services_ready.load(Ordering::SeqCst),
+                            3,
+                            "peer namespaces must exist before ListenerSet apply"
+                        );
+                        router_count.fetch_add(1, Ordering::SeqCst);
+                        Ok::<_, ()>(())
+                    }
+                })
+                .collect();
+            DeploymentThreadsPool::new()
+                .run_in_phases(services, routers, || false, NonZeroUsize::new(parallelism).unwrap())
+                .unwrap();
+            assert_eq!(router_count.load(Ordering::SeqCst), 3);
+        }
+    }
+
+    #[test]
+    fn failed_service_prevents_shared_hostname_router_deployments() {
+        let services = vec![|| Err("service failed")];
+        let routers = vec![|| -> Result<(), &str> { panic!("routers must not run after a service failure") }];
+        assert_eq!(
+            DeploymentThreadsPool::new().run_in_phases(services, routers, || false, NonZeroUsize::new(1).unwrap()),
+            Err("service failed")
+        );
+    }
 
     #[test]
     fn test_deployment_thread_pool_parallelism() {

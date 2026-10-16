@@ -325,6 +325,50 @@ fn http_route_attaches_to_the_listener_set_name_it_is_given() {
 }
 
 #[test]
+fn routers_sharing_a_hostname_attach_to_one_listener_set_and_keep_their_own_backends() {
+    let names = json!({ "app-ns": { "api.example.com": LISTENER_SET_NAME } });
+    let mut routes = Vec::new();
+    for (router, backend, path) in [
+        ("rails-router", "rails-svc", "/"),
+        ("cable-router", "cable-svc", "/cable"),
+    ] {
+        let mut context = route_context(names.clone());
+        context.insert("sanitized_name", &router);
+        context.insert(
+            "gateway_http_routes_per_namespace",
+            &json!({
+                "app-ns": [{
+                    "hostnames": ["api.example.com"],
+                    "rules": [{
+                        "service_name": backend,
+                        "service_port": 8080,
+                        "weight": 1,
+                        "path_type": "PathPrefix",
+                        "path": path,
+                        "path_rewrite": null
+                    }]
+                }]
+            }),
+        );
+        let rendered = render_per_hostname_router_template(PER_HOSTNAME_HTTP_ROUTE_TEMPLATE, &context)
+            .expect("shared hostname route should render");
+        routes.extend(manifests(&rendered));
+    }
+
+    assert_eq!(routes.len(), 2);
+    for (route, (router, backend, path)) in routes.iter().zip([
+        ("rails-router", "rails-svc", "/"),
+        ("cable-router", "cable-svc", "/cable"),
+    ]) {
+        assert_eq!(route["metadata"]["name"].as_str(), Some(router));
+        assert_eq!(listener_set_parent_names(route), vec![LISTENER_SET_NAME]);
+        assert_eq!(route["spec"]["hostnames"][0].as_str(), Some("api.example.com"));
+        assert_eq!(route["spec"]["rules"][0]["backendRefs"][0]["name"].as_str(), Some(backend));
+        assert_eq!(route["spec"]["rules"][0]["matches"][0]["path"]["value"].as_str(), Some(path));
+    }
+}
+
+#[test]
 fn grpc_route_attaches_to_the_listener_set_of_its_custom_hostname() {
     let context = route_context(hostname_listener_set_names());
     let rendered = render_per_hostname_router_template(PER_HOSTNAME_GRPC_ROUTE_TEMPLATE, &context)

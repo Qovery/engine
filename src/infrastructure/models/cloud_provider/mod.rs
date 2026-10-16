@@ -7,6 +7,7 @@ use crate::cmd::docker::Docker;
 use crate::cmd::helm::{Helm, to_engine_error};
 use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
+use crate::environment::models::router_listener_set::HostnameListenerSetDeployments;
 use crate::environment::report::logger::EnvLogger;
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep};
@@ -148,6 +149,7 @@ impl TerraformStateCredentials {
 }
 
 pub struct DeploymentTarget<'a> {
+    pub(crate) hostname_listener_set_deployments: HostnameListenerSetDeployments,
     pub kubernetes: &'a dyn Kubernetes,
     pub container_registry: &'a dyn InteractWithRegistry,
     pub cloud_provider: &'a dyn CloudProvider,
@@ -203,6 +205,7 @@ impl<'a> DeploymentTarget<'a> {
                 }
             });
         Ok(DeploymentTarget {
+            hostname_listener_set_deployments: HostnameListenerSetDeployments::default(),
             kubernetes,
             container_registry: infra_ctx.container_registry(),
             cloud_provider: infra_ctx.cloud_provider(),

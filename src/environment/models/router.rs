@@ -8,7 +8,7 @@ use crate::environment::models::environment::Environment;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::port::Port;
 use crate::environment::models::router_listener_set::{
-    HostnameListenerSet, listener_set_names_by_namespace, plan_hostname_listener_sets,
+    HostnameListenerSet, listener_set_names_by_namespace, mapped_hostname_routers, plan_hostname_listener_sets,
 };
 use crate::environment::models::types::CloudProvider;
 use crate::environment::models::types::ToTeraContext;
@@ -21,7 +21,7 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service, Se
 use crate::infrastructure::models::kubernetes::Kind;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
-use crate::io_models::environment::EnvironmentRoutingMode;
+use crate::io_models::environment::{EnvironmentRoutingMode, HostnameMapping};
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
     CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, HostPathType, Route,
@@ -689,14 +689,51 @@ impl<T: CloudProvider> Router<T> {
 
     /// ListenerSets of this router in `PER_HOSTNAME_LISTENER_SET` mode, empty in the legacy mode.
     ///
-    /// Only the router's own custom hostnames are used. The names depend on the hostname only, see `router_listener_set`.
+    /// Includes every mapped router's route namespaces so a shared release is independent of deployment order.
     pub(crate) fn hostname_listener_sets(
         &self,
         target: &DeploymentTarget,
     ) -> Result<Vec<HostnameListenerSet>, Box<EngineError>> {
+        let own_plan = self.own_hostname_listener_set_plan(target)?;
+        let peer_ids: BTreeSet<Uuid> = own_plan
+            .namespaces
+            .keys()
+            .filter_map(|hostname| {
+                mapped_hostname_routers(&target.environment.hostname_mapping, hostname, &self.custom_domains)
+            })
+            .flatten()
+            .filter(|id| id != &self.long_id)
+            .collect();
+        let peers = target
+            .environment
+            .routers
+            .iter()
+            .filter(|router| peer_ids.contains(router.long_id()))
+            .map(|router| Ok((*router.long_id(), router.hostname_listener_set_plan(target)?)))
+            .collect::<Result<BTreeMap<_, _>, Box<EngineError>>>()?;
+        share_hostname_listener_sets(
+            self.long_id,
+            &self.custom_domains,
+            &target.environment.hostname_mapping,
+            own_plan,
+            &peers,
+        )
+        .map_err(|error| {
+            Box::new(EngineError::new_invalid_engine_payload(
+                self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+                &error.to_string(),
+                None,
+            ))
+        })
+    }
+
+    fn own_hostname_listener_set_plan(
+        &self,
+        target: &DeploymentTarget,
+    ) -> Result<HostnameListenerSetPlan, Box<EngineError>> {
         let environment = target.environment;
         match environment.routing_mode {
-            EnvironmentRoutingMode::PerRouterListenerSet => return Ok(vec![]),
+            EnvironmentRoutingMode::PerRouterListenerSet => return Ok(HostnameListenerSetPlan::default()),
             EnvironmentRoutingMode::PerHostnameListenerSet => {}
         }
         if !target
@@ -705,7 +742,7 @@ impl<T: CloudProvider> Router<T> {
             .k8s_deploy_api_gateway
             .unwrap_or(false)
         {
-            return Ok(vec![]);
+            return Ok(HostnameListenerSetPlan::default());
         }
 
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
@@ -717,7 +754,7 @@ impl<T: CloudProvider> Router<T> {
         let ports = associated_service_public_ports(environment, &service_id)
             .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
         let cluster_domain = target.dns_provider.domain().to_string();
-        plan_router_hostname_listener_sets(
+        plan_router_hostname_listener_set_plan(
             &self.kube_name,
             &ports,
             &self.default_domain,
@@ -766,6 +803,86 @@ impl<T: CloudProvider> Router<T> {
 }
 
 const MAX_GATEWAY_HTTP_ROUTE_HOSTNAMES_PER_RESOURCE: usize = 16;
+
+/// Planned route namespaces and certificate requests for one router's custom hostnames.
+#[derive(Default, Clone)]
+pub struct HostnameListenerSetPlan {
+    pub(crate) namespaces: BTreeMap<String, BTreeSet<String>>,
+    pub(crate) certificate_hostnames: BTreeSet<String>,
+}
+
+fn share_hostname_listener_sets(
+    router_id: Uuid,
+    custom_domains: &[CustomDomain],
+    mapping: &HostnameMapping,
+    own_plan: HostnameListenerSetPlan,
+    peers: &BTreeMap<Uuid, HostnameListenerSetPlan>,
+) -> Result<Vec<HostnameListenerSet>, RouterError> {
+    let mut listener_sets = Vec::new();
+    for (hostname, mut namespaces) in own_plan.namespaces {
+        let router_ids =
+            mapped_hostname_routers(mapping, &hostname, custom_domains).unwrap_or_else(|| BTreeSet::from([router_id]));
+        if !router_ids.contains(&router_id) {
+            return Err(RouterError::InvalidConfig(format!(
+                "hostname_mapping for `{hostname}` does not include router `{router_id}`"
+            )));
+        }
+        let certified = own_plan.certificate_hostnames.contains(&hostname)
+            || router_ids.iter().any(|id| {
+                peers
+                    .get(id)
+                    .is_some_and(|plan| plan.certificate_hostnames.contains(&hostname))
+            });
+        if !certified {
+            continue;
+        }
+        for id in router_ids {
+            if let Some(peer_namespaces) = peers.get(&id).and_then(|plan| plan.namespaces.get(&hostname)) {
+                namespaces.extend(peer_namespaces.iter().cloned());
+            }
+        }
+        listener_sets.push(HostnameListenerSet::new(hostname, namespaces));
+    }
+    Ok(listener_sets)
+}
+
+fn plan_router_hostname_listener_set_plan(
+    service_name: &str,
+    ports: &[&Port],
+    default_domain: &str,
+    custom_domains: &[CustomDomain],
+    cluster_domain: &str,
+    environment_namespace: &str,
+) -> Result<HostnameListenerSetPlan, RouterError> {
+    let requested = plan_router_hostname_listener_sets(
+        service_name,
+        ports,
+        default_domain,
+        custom_domains,
+        cluster_domain,
+        environment_namespace,
+    )?;
+    // Enumerate routes independently of which peer requests the shared certificate.
+    let mut candidate_domains = custom_domains.to_vec();
+    for domain in &mut candidate_domains {
+        domain.generate_certificate = true;
+    }
+    let candidates = plan_router_hostname_listener_sets(
+        service_name,
+        ports,
+        default_domain,
+        &candidate_domains,
+        cluster_domain,
+        environment_namespace,
+    )?;
+    Ok(HostnameListenerSetPlan {
+        namespaces: candidates
+            .into_iter()
+            .map(|set| (set.hostname, set.namespaces))
+            .collect(),
+        certificate_hostnames: requested.into_iter().map(|set| set.hostname).collect(),
+    })
+}
 
 /// Chart of the router release for a routing mode. The release name is the same for both charts.
 fn ingress_chart_name(routing_mode: EnvironmentRoutingMode) -> &'static str {
@@ -1326,9 +1443,18 @@ pub trait RouterService: Service + DeploymentAction + ToTeraContext + Send {
     /// all domains (auto-generated by Qovery and user custom domains) associated to the router
     fn has_custom_domains(&self) -> bool;
 
+    /// Custom hostname declarations, including their certificate-generation setting.
+    fn custom_domains(&self) -> &[CustomDomain];
+
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 
     fn associated_service_id(&self) -> Option<Uuid>;
+
+    /// Route namespaces and certificate requests before combining mapped routers.
+    fn hostname_listener_set_plan(
+        &self,
+        target: &DeploymentTarget,
+    ) -> Result<HostnameListenerSetPlan, Box<EngineError>>;
 }
 
 impl<T: CloudProvider> RouterService for Router<T>
@@ -1339,6 +1465,10 @@ where
         !self.custom_domains.is_empty()
     }
 
+    fn custom_domains(&self) -> &[CustomDomain] {
+        &self.custom_domains
+    }
+
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
     }
@@ -1346,21 +1476,169 @@ where
     fn associated_service_id(&self) -> Option<Uuid> {
         self.routes.first().map(|route| route.service_long_id)
     }
+
+    fn hostname_listener_set_plan(
+        &self,
+        target: &DeploymentTarget,
+    ) -> Result<HostnameListenerSetPlan, Box<EngineError>> {
+        self.own_hostname_listener_set_plan(target)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{
-        ORGA_9C983A44, generate_certificate_alternative_names, plan_router_hostname_listener_sets,
-        router_policy_http2_enabled, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
+        HostnameListenerSetPlan, ORGA_9C983A44, generate_certificate_alternative_names,
+        plan_router_hostname_listener_set_plan, plan_router_hostname_listener_sets, router_policy_http2_enabled,
+        share_hostname_listener_sets, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
         to_gateway_http_routes_data_template, to_host_data_template,
     };
 
+    use crate::io_models::environment::HostnameMapping;
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
     use maplit::hashset;
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use uuid::Uuid;
+
+    #[test]
+    fn a_declared_hostname_shares_a_certificate_requested_for_a_peers_generated_port_hostname() {
+        let router_a = uuid::uuid!("44444444-4444-4444-4444-444444444444");
+        let router_b = uuid::uuid!("55555555-5555-5555-5555-555555555555");
+        let mapping: HostnameMapping = serde_json::from_value(serde_json::json!({
+            "example.com": [router_b], "api.example.com": [router_a, router_b]
+        }))
+        .unwrap();
+        let mut plans = BTreeMap::new();
+        let domains_a = [CustomDomain {
+            domain: "api.example.com".to_string(),
+            target_domain: String::new(),
+            generate_certificate: false,
+            use_cdn: false,
+        }];
+        let domains_b = [CustomDomain {
+            domain: "example.com".to_string(),
+            target_domain: String::new(),
+            generate_certificate: true,
+            use_cdn: false,
+        }];
+        for (id, domains, port_name, namespace) in [
+            (router_a, &domains_a, "p8000", "ns-a"),
+            (router_b, &domains_b, "api", "ns-b"),
+        ] {
+            let port = Port {
+                long_id: Uuid::new_v4(),
+                port: 8000,
+                is_default: true,
+                name: port_name.to_string(),
+                protocol: PortProtocol::HTTP {
+                    public: Some(HttpPublicPortConfig {
+                        path: "/".to_string(),
+                        path_rewrite: None,
+                    }),
+                },
+                service_name: None,
+                namespace: Some(namespace.to_string()),
+            };
+            plans.insert(
+                id,
+                plan_router_hostname_listener_set_plan(
+                    "service",
+                    &[&port],
+                    "router.abc.rustrocks.me",
+                    domains,
+                    "abc.rustrocks.me",
+                    "env-ns",
+                )
+                .unwrap(),
+            );
+        }
+        for (id, domains) in [(router_a, &domains_a), (router_b, &domains_b)] {
+            let shared = share_hostname_listener_sets(id, domains, &mapping, plans[&id].clone(), &plans).unwrap();
+            let api = shared.iter().find(|set| set.hostname == "api.example.com").unwrap();
+            assert_eq!(api.name, "listenerset-d0c43d3885064d9a");
+            assert_eq!(api.namespaces, BTreeSet::from(["ns-a".to_string(), "ns-b".to_string()]));
+            assert!(!shared.iter().any(|set| set.hostname == "p8000.api.example.com"));
+        }
+    }
+
+    #[test]
+    fn mapped_routers_plan_the_same_listener_sets_in_both_namespaces_with_one_certificate_request() {
+        let router_a = uuid::uuid!("44444444-4444-4444-4444-444444444444");
+        let router_b = uuid::uuid!("55555555-5555-5555-5555-555555555555");
+        let outsider = uuid::uuid!("66666666-6666-6666-6666-666666666666");
+        let mapping: HostnameMapping = serde_json::from_value(serde_json::json!({
+            "api.example.com": [router_a, router_b]
+        }))
+        .unwrap();
+        for (certificate_a, certificate_b, eligible) in [
+            (true, true, true),
+            (true, false, true),
+            (false, true, true),
+            (false, false, false),
+        ] {
+            let domain = |generate_certificate| {
+                vec![CustomDomain {
+                    domain: "api.example.com".to_string(),
+                    target_domain: String::new(),
+                    generate_certificate,
+                    use_cdn: false,
+                }]
+            };
+            let domains_a = domain(certificate_a);
+            let domains_b = domain(certificate_b);
+            let peers = [(router_a, domains_a.as_slice()), (router_b, domains_b.as_slice())];
+            let mut plans = BTreeMap::new();
+            for (id, domains, namespace) in [(router_a, &domains_a, "ns-a"), (router_b, &domains_b, "ns-b")] {
+                let port = Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8000,
+                    is_default: true,
+                    name: "p8000".to_string(),
+                    protocol: PortProtocol::HTTP {
+                        public: Some(HttpPublicPortConfig {
+                            path: "/".to_string(),
+                            path_rewrite: None,
+                        }),
+                    },
+                    service_name: None,
+                    namespace: Some(namespace.to_string()),
+                };
+                let plan = plan_router_hostname_listener_set_plan(
+                    "service",
+                    &[&port],
+                    "router.abc.rustrocks.me",
+                    domains,
+                    "abc.rustrocks.me",
+                    "env-ns",
+                )
+                .unwrap();
+                plans.insert(id, plan);
+            }
+            plans.insert(
+                outsider,
+                HostnameListenerSetPlan {
+                    namespaces: BTreeMap::from([(
+                        "api.example.com".to_string(),
+                        BTreeSet::from(["ns-outsider".to_string()]),
+                    )]),
+                    certificate_hostnames: BTreeSet::from(["api.example.com".to_string()]),
+                },
+            );
+            for (id, domains) in peers {
+                let shared = share_hostname_listener_sets(id, domains, &mapping, plans[&id].clone(), &plans).unwrap();
+                assert_eq!(shared.len(), if eligible { 2 } else { 0 });
+                for set in &shared {
+                    assert_eq!(set.namespaces, BTreeSet::from(["ns-a".to_string(), "ns-b".to_string()]));
+                }
+                if eligible {
+                    assert_eq!(shared[0].hostname, "api.example.com");
+                    assert_eq!(shared[0].name, "listenerset-d0c43d3885064d9a");
+                    assert_eq!(shared[1].hostname, "p8000.api.example.com");
+                }
+            }
+        }
+    }
 
     #[test]
     fn routing_mode_selects_its_own_ingress_chart() {

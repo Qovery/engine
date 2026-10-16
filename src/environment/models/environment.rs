@@ -2,7 +2,7 @@ use crate::infrastructure::models::cloud_provider::service::Action;
 
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::environment::EnvironmentRoutingMode;
+use crate::io_models::environment::{EnvironmentRoutingMode, HostnameMapping};
 
 use crate::environment::models::agentic_workflow::AgenticWorkflowService;
 use crate::environment::models::application::ApplicationService;
@@ -29,6 +29,7 @@ pub struct Environment {
     pub max_parallel_build: u32,
     pub max_parallel_deploy: u32,
     pub routing_mode: EnvironmentRoutingMode,
+    pub hostname_mapping: HostnameMapping,
     pub applications: Vec<Box<dyn ApplicationService>>,
     pub containers: Vec<Box<dyn ContainerService>>,
     pub routers: Vec<Box<dyn RouterService>>,
@@ -51,6 +52,7 @@ impl Environment {
         max_parallel_build: u32,
         max_parallel_deploy: u32,
         routing_mode: EnvironmentRoutingMode,
+        hostname_mapping: HostnameMapping,
         applications: Vec<Box<dyn ApplicationService>>,
         containers: Vec<Box<dyn ContainerService>>,
         routers: Vec<Box<dyn RouterService>>,
@@ -81,6 +83,7 @@ impl Environment {
             max_parallel_build,
             max_parallel_deploy,
             routing_mode,
+            hostname_mapping,
             applications,
             containers,
             routers,

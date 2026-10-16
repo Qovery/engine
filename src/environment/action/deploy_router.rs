@@ -5,8 +5,10 @@ use crate::environment::action::helm_release_inventory::installed_helm_releases;
 use crate::environment::action::router_listener_set_ownership::{
     claim_hostname_release, delete_claim, installed_release, list_claims, list_legacy_release_owners,
 };
-use crate::environment::models::router::Router;
-use crate::environment::models::router_listener_set::HostnameListenerSet;
+use crate::environment::models::router::{HostnameListenerSetPlan, Router};
+use crate::environment::models::router_listener_set::{
+    HostnameListenerSet, listener_set_name, mapped_hostname_routers,
+};
 use crate::environment::models::router_listener_set_ownership::{
     ClaimError, release_stale_claim, remove_if_owned, stale_claims, stale_legacy_releases, unclaimed_hostname_releases,
 };
@@ -19,6 +21,7 @@ use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::kubernetes::Kind;
+use crate::io_models::environment::HostnameMapping;
 use crate::io_models::models::CustomDomain;
 use crate::runtime::block_on;
 use crate::{
@@ -41,6 +44,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
 where
@@ -128,7 +132,7 @@ where
                 );
 
                 let result = helm.on_delete(target).and_then(|()| {
-                    // These releases belong to this router alone, nothing else uses them.
+                    // Shared releases still used by mapped peers are retained during cleanup.
                     uninstall_hostname_listener_sets(self, target, &BTreeSet::new(), EnvironmentStep::Delete, logger)
                 });
 
@@ -156,8 +160,8 @@ where
 
 /// Applies one Helm release per hostname of the router in `PER_HOSTNAME_LISTENER_SET` mode.
 ///
-/// A release only depends on the hostname, so applying it again changes nothing.
-/// A release already owned by another router is never taken over, the deployment fails instead.
+/// Parallel routers share one apply and wait for its result before creating their routes.
+/// An existing owner must belong to the hostname mapping; unmapped hostnames keep exclusive ownership.
 /// Releases of hostnames the router no longer serves are removed. In the legacy mode nothing is applied and the
 /// releases left by a previous `PER_HOSTNAME_LISTENER_SET` mode are removed before the router chart is applied.
 fn deploy_hostname_listener_sets<T: CloudProvider>(
@@ -182,43 +186,55 @@ where
 
     // Every claim is taken before the first release is applied, so a hostname held by another router
     // fails the deployment before anything changed.
-    let router_long_id = router.long_id.to_string();
+    let mut owners = Vec::with_capacity(listener_sets.len());
     for listener_set in &listener_sets {
-        claim_hostname_release(target, &router_long_id, &listener_set.name, &listener_set.hostname)
-            .map_err(|error| claim_error(&event_details, listener_set, error))?;
-    }
-    for listener_set in &listener_sets {
-        logger.info(format!(
-            "Applying ListenerSet release `{}` for hostname `{}`",
-            listener_set.name, listener_set.hostname
-        ));
-        let workspace_directory = router
-            .workspace_directory
-            .with_file_name(format!("{}-listenersets", router.long_id))
-            .join(&listener_set.name);
-        std::fs::create_dir_all(&workspace_directory).map_err(|error| {
-            Box::new(EngineError::new_cannot_create_file(
-                event_details.clone(),
-                CommandError::new_from_safe_message(format!(
-                    "cannot create `{}`: {error}",
-                    workspace_directory.display()
-                )),
-            ))
-        })?;
-
-        let helm = HelmDeployment::new(
-            event_details.clone(),
-            hostname_listener_set_chart_values(router, target, listener_set),
-            PathBuf::from(router.hostname_listener_set_chart_dir()),
-            HelmChartValues::SerializedContext,
-            ChartInfo {
-                name: listener_set.name.clone(),
-                path: workspace_directory.to_string_lossy().to_string(),
-                namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
-                ..Default::default()
-            },
+        let authorized_routers = mapped_hostname_routers(
+            &target.environment.hostname_mapping,
+            &listener_set.hostname,
+            &router.custom_domains,
+        )
+        .unwrap_or_else(|| BTreeSet::from([router.long_id]));
+        owners.push(
+            claim_hostname_release(target, &authorized_routers, &listener_set.name, &listener_set.hostname)
+                .map_err(|error| claim_error(&event_details, listener_set, error))?,
         );
-        helm.on_create(target)?;
+    }
+    for (listener_set, owner) in listener_sets.iter().zip(&owners) {
+        target
+            .hostname_listener_set_deployments
+            .deploy_once(&listener_set.name, || {
+                logger.info(format!(
+                    "Applying ListenerSet release `{}` for hostname `{}`",
+                    listener_set.name, listener_set.hostname
+                ));
+                let workspace_directory = router
+                    .workspace_directory
+                    .with_file_name(format!("{}-listenersets", router.long_id))
+                    .join(&listener_set.name);
+                std::fs::create_dir_all(&workspace_directory).map_err(|error| {
+                    Box::new(EngineError::new_cannot_create_file(
+                        event_details.clone(),
+                        CommandError::new_from_safe_message(format!(
+                            "cannot create `{}`: {error}",
+                            workspace_directory.display()
+                        )),
+                    ))
+                })?;
+
+                let helm = HelmDeployment::new(
+                    event_details.clone(),
+                    hostname_listener_set_chart_values(router, target, listener_set, owner),
+                    PathBuf::from(router.hostname_listener_set_chart_dir()),
+                    HelmChartValues::SerializedContext,
+                    ChartInfo {
+                        name: listener_set.name.clone(),
+                        path: workspace_directory.to_string_lossy().to_string(),
+                        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+                        ..Default::default()
+                    },
+                );
+                helm.on_create(target)
+            })?;
     }
 
     let wanted: BTreeSet<&str> = listener_sets
@@ -256,7 +272,7 @@ fn claim_error(
     let message = match error {
         ClaimError::Foreign { owner } => format!(
             "ListenerSet release `{}` for hostname `{}` is owned by router `{owner}`. \
-             A hostname must be served by a single router, the release is not taken over",
+             That router is not authorized by hostname_mapping, the release is not taken over",
             listener_set.name, listener_set.hostname
         ),
         ClaimError::Unverifiable { reason } => format!(
@@ -272,17 +288,51 @@ fn hostname_listener_set_chart_values<T: CloudProvider>(
     router: &Router<T>,
     target: &DeploymentTarget,
     listener_set: &HostnameListenerSet,
+    owner: &str,
 ) -> TeraContext {
     let mut context = TeraContext::new();
     context.insert("name", &listener_set.name);
     context.insert("hostname", &listener_set.hostname);
     context.insert("tls_secret_name", &listener_set.tls_secret_name);
     context.insert("namespaces", &listener_set.namespaces);
-    context.insert("router_long_id", &router.long_id);
-    context.insert("router_name", &router.kube_name);
+    context.insert("router_long_id", owner);
+    let owner_name = target
+        .environment
+        .routers
+        .iter()
+        .find(|candidate| candidate.long_id().to_string() == owner)
+        .map(|candidate| candidate.kube_name())
+        .unwrap_or(&router.kube_name);
+    context.insert("router_name", owner_name);
     context.insert("environment_long_id", &target.environment.long_id);
     context.insert("project_long_id", &target.environment.project_long_id);
     context
+}
+
+// Unmapped routers cannot protect a shared release. A mapped router's plan must remain verifiable
+// before cleanup can remove any releases, so those planning errors still propagate.
+fn protected_hostname_listener_set_releases<'a, E, Plan>(
+    router_id: &Uuid,
+    mapping: &HostnameMapping,
+    candidates: impl IntoIterator<Item = (Uuid, &'a [CustomDomain], Plan)>,
+) -> Result<BTreeSet<String>, E>
+where
+    Plan: FnOnce() -> Result<HostnameListenerSetPlan, E>,
+{
+    let mut protected = BTreeSet::new();
+    for (_, custom_domains, plan) in candidates
+        .into_iter()
+        .filter(|(candidate_id, _, _)| mapping.contains_router(candidate_id))
+    {
+        for hostname in plan()?.namespaces.keys() {
+            if mapped_hostname_routers(mapping, hostname, custom_domains)
+                .is_some_and(|routers| routers.iter().any(|id| id != router_id))
+            {
+                protected.insert(listener_set_name(hostname));
+            }
+        }
+    }
+    Ok(protected)
 }
 
 /// Uninstalls the hostname releases of the router that are not in `wanted`, then releases their claims.
@@ -314,6 +364,25 @@ where
     }
 
     let event_details = router.get_event_details(Stage::Environment(step));
+    // Creation cleanup and individual router deletion must retain releases used by mapped peers.
+    let protected = if strict && !target.environment.hostname_mapping.is_empty() {
+        protected_hostname_listener_set_releases(
+            &router.long_id,
+            &target.environment.hostname_mapping,
+            target.environment.routers.iter().map(|candidate| {
+                (*candidate.long_id(), candidate.custom_domains(), || {
+                    candidate.hostname_listener_set_plan(target)
+                })
+            }),
+        )?
+    } else {
+        BTreeSet::new()
+    };
+    let wanted: BTreeSet<&str> = wanted
+        .iter()
+        .copied()
+        .chain(protected.iter().map(String::as_str))
+        .collect();
     let namespace = target.environment.namespace();
     // Read from the Secret metadata: `helm list -a` loads every revision of every release, which can run out of memory.
     let releases =
@@ -342,7 +411,7 @@ where
     // The release goes first and its claim last: until the release is gone, no other router can claim it.
     // Whether the release is the router's is read from its Helm manifest right before it is uninstalled.
     // A failure keeps the claim, the next deployment removes what is left.
-    for claim in stale_claims(&router_long_id, &claims, wanted) {
+    for claim in stale_claims(&router_long_id, &claims, &wanted) {
         let result = release_stale_claim(
             &router_long_id,
             claim,
@@ -362,7 +431,7 @@ where
     }
 
     // Releases applied before claims existed have a hostname name and no claim, they are not left behind either.
-    for release_name in unclaimed_hostname_releases(installed.iter().copied(), &claims, wanted) {
+    for release_name in unclaimed_hostname_releases(installed.iter().copied(), &claims, &wanted) {
         let result = remove_if_owned(
             &router_long_id,
             || installed_release(target, release_name).map_err(store_error),
@@ -979,13 +1048,72 @@ mod tests {
         MAX_GATEWAY_CERTIFICATE_REFS, combine_gateway_fallback_cleanup_results,
         ensure_gateway_certificate_ref_capacity, gateway_certificate_ref_ensure_patch,
         gateway_certificate_ref_remove_patch, is_engine_gateway_fallback_reference_grant, is_kubernetes_conflict,
-        reference_grant_allows_gateway_to_secret,
+        protected_hostname_listener_set_releases, reference_grant_allows_gateway_to_secret,
     };
     use crate::cmd::kubectl::{GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE};
+    use crate::environment::models::router::HostnameListenerSetPlan;
+    use crate::environment::models::router_listener_set_ownership::{Claim, stale_claims};
     use crate::errors::CommandError;
+    use crate::io_models::environment::HostnameMapping;
+    use crate::io_models::models::CustomDomain;
     use kube::api::ApiResource;
     use kube::core::{DynamicObject, GroupVersionKind, Status};
     use serde_json::json;
+    use std::collections::{BTreeMap, BTreeSet};
+    use uuid::uuid;
+
+    #[test]
+    fn cleanup_ignores_unmapped_router_plan_errors() {
+        let owner = uuid!("44444444-4444-4444-4444-444444444444");
+        let peer = uuid!("55555555-5555-5555-5555-555555555555");
+        let unrelated = uuid!("66666666-6666-6666-6666-666666666666");
+        let mapping: HostnameMapping = serde_json::from_value(json!({ "api.example.com": [owner, peer] })).unwrap();
+        let domains = [CustomDomain {
+            domain: "api.example.com".to_string(),
+            target_domain: String::new(),
+            generate_certificate: true,
+            use_cdn: false,
+        }];
+        let candidates = [peer, unrelated].into_iter().map(|id| {
+            (id, domains.as_slice(), move || {
+                if id == unrelated {
+                    return Err("unrelated router's service is absent");
+                }
+                Ok(HostnameListenerSetPlan {
+                    namespaces: BTreeMap::from([("api.example.com".to_string(), BTreeSet::from(["app".to_string()]))]),
+                    ..Default::default()
+                })
+            })
+        });
+
+        let protected = protected_hostname_listener_set_releases(&owner, &mapping, candidates).unwrap();
+        assert_eq!(protected, BTreeSet::from(["listenerset-d0c43d3885064d9a".to_string()]));
+        let claims = ["listenerset-d0c43d3885064d9a", "listenerset-0000000000000000"].map(|release| Claim {
+            release: release.to_string(),
+            owner: owner.to_string(),
+            uid: release.to_string(),
+        });
+        let wanted = protected.iter().map(String::as_str).collect();
+        let stale = stale_claims(&owner.to_string(), &claims, &wanted);
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].release, "listenerset-0000000000000000");
+    }
+
+    #[test]
+    fn cleanup_preserves_mapped_peer_plan_errors() {
+        let owner = uuid!("44444444-4444-4444-4444-444444444444");
+        let peer = uuid!("55555555-5555-5555-5555-555555555555");
+        let mapping: HostnameMapping = serde_json::from_value(json!({ "api.example.com": [owner, peer] })).unwrap();
+        let result = protected_hostname_listener_set_releases(
+            &owner,
+            &mapping,
+            [(peer, &[][..], || {
+                Err::<HostnameListenerSetPlan, _>("mapped peer's service is absent")
+            })],
+        );
+
+        assert_eq!(result, Err("mapped peer's service is absent"));
+    }
 
     #[test]
     fn certificate_ref_capacity_error_explains_the_gke_fallback_limit() {
