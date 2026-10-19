@@ -20,6 +20,25 @@ environmentVariables:
   QOVERY_ENGINE_WORKER_IMAGE_REPOSITORY: "public.ecr.aws/r3m4q3r9/engine"
   QOVERY_ENGINE_WORKER_IMAGE_TAG_SUFFIX: ""
 
+metrics:
+  port: 8080
+  podMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+probes:
+  enabled: false
+  liveness:
+    periodSeconds: 60
+    timeoutSeconds: 10
+    failureThreshold: 10
+  readiness:
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""

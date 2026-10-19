@@ -48,6 +48,8 @@ spec:
               value: {{ $kubefullname | quote }}
             - name: "CLUSTER_JWT_SECRET_KEY"
               value: "CLUSTER_JWT_TOKEN"
+            - name: "HTTP_LISTEN"
+              value: {{ printf "[::]:%v" .Values.metrics.port | quote }}
             {{- range $key, $value := .Values.environmentVariables }}
             {{- if $value }}
             - name: "{{ $key }}"
@@ -58,6 +60,22 @@ spec:
             {{- end }}
             {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          {{- if .Values.probes.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: metrics
+            {{- toYaml .Values.probes.liveness | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: metrics
+            {{- toYaml .Values.probes.readiness | nindent 12 }}
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
