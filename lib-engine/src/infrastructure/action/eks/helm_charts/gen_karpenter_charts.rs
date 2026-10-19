@@ -61,6 +61,9 @@ pub fn generate_karpenter_charts(
             .cluster_advanced_settings
             .aws_eks_ec2_ami
             .to_model(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_karpenter_private_pool_cpu_manager_policy_static,
         AwsStorageType::try_from(chart_config_prerequisites.kubernetes_storage_class_fast_ssd.clone()).map_err(
             |_e| {
                 CommandError::new_from_safe_message(format!(

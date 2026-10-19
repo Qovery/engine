@@ -605,6 +605,12 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
     #[serde(alias = "aws.eks.ec2.ami", default = "default_aws_eks_ec2_ami")]
     pub aws_eks_ec2_ami: Ec2Ami,
+    /// Runs the kubelet with `cpuManagerPolicy: static` on the `qovery-default-private` Karpenter pool, so
+    /// Guaranteed pods with integer CPU requests (the buildkit builder pods) get an exclusive cpuset and
+    /// tools reading the CPU affinity mask see the pod's CPU count instead of the host's. Applied through
+    /// the EC2NodeClass userData: changing it makes Karpenter replace every node of the pool.
+    #[serde(alias = "aws.eks.karpenter.private_pool.cpu_manager_policy_static")]
+    pub aws_eks_karpenter_private_pool_cpu_manager_policy_static: bool,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
     pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "aws.vpc.flow_logs_retention_days")]
@@ -855,6 +861,7 @@ impl Default for ClusterAdvancedSettings {
             cloud_provider_container_registry_tags: HashMap::new(),
             aws_eks_ec2_metadata_imds: AwsEc2MetadataImds::Optional,
             aws_eks_ec2_ami: Ec2Ami::AmazonLinux2023,
+            aws_eks_karpenter_private_pool_cpu_manager_policy_static: false,
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
             aws_vpc_enable_nat_gateway_secondary_eip: false,
@@ -1458,6 +1465,16 @@ mod tests {
         let data = r#"{"aws.eks.ec2.ami": "AmazonLinux2023"}"#;
         let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
         assert_eq!(settings.aws_eks_ec2_ami, super::Ec2Ami::AmazonLinux2023);
+    }
+
+    #[test]
+    fn test_private_pool_cpu_manager_policy_static_is_opt_in() {
+        let settings: ClusterAdvancedSettings = serde_json::from_str("{}").unwrap();
+        assert!(!settings.aws_eks_karpenter_private_pool_cpu_manager_policy_static);
+
+        let data = r#"{"aws.eks.karpenter.private_pool.cpu_manager_policy_static": true}"#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert!(settings.aws_eks_karpenter_private_pool_cpu_manager_policy_static);
     }
 
     #[test]

@@ -77,4 +77,26 @@ spec:
     {{- range $key, $value := .Values.tags }}
        {{ $key }}: {{ $value }}
     {{- end }}
+
+  {{- if .Values.defaultPrivateNodePool.cpuManagerPolicyStatic }}
+  # Static CPU manager: Guaranteed pods with integer CPU requests (builder pods) get an
+  # exclusive cpuset, so the CPU count they see matches their request, not the host size.
+  # Karpenter merges this with its own generated config; keys Karpenter itself sets
+  # (cluster, clusterDNS, maxPods, kubeReserved) win, cpuManagerPolicy is passed through.
+  # amiFamily is the Karpenter family, custom AMIs included, and Karpenter merges userData for
+  # AL2023 and Bottlerocket. Not rendered for AL2 (bootstrap.sh based, no nodeadm NodeConfig).
+  {{- if eq .Values.amiFamily "Bottlerocket" }}
+  userData: |
+    [settings.kubernetes]
+    cpu-manager-policy = "static"
+  {{- else if eq .Values.amiFamily "AL2023" }}
+  userData: |
+    apiVersion: node.eks.aws/v1alpha1
+    kind: NodeConfig
+    spec:
+      kubelet:
+        config:
+          cpuManagerPolicy: static
+  {{- end }}
+  {{- end }}
 {{- end }}

@@ -101,3 +101,6 @@ defaultPrivateNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
+  # kubelet cpuManagerPolicy=static on the pool's nodes (opt-in, see ec2nodeclass userData).
+  # Karpenter's spec.kubelet has no cpuManagerPolicy knob, so it goes through userData.
+  cpuManagerPolicyStatic: false

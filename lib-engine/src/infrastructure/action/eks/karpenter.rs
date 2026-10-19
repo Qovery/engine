@@ -760,6 +760,9 @@ impl Karpenter {
             options.vpc_qovery_network_mode.clone(),
             options.user_provided_network.as_ref(),
             kubernetes.advanced_settings().aws_eks_ec2_ami.to_model(),
+            kubernetes
+                .advanced_settings()
+                .aws_eks_karpenter_private_pool_cpu_manager_policy_static,
             AwsStorageType::try_from(kubernetes.advanced_settings.k8s_storage_class_fast_ssd.to_model()).map_err(
                 |e| {
                     Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(

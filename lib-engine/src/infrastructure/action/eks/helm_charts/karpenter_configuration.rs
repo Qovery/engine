@@ -44,6 +44,7 @@ pub struct KarpenterConfigurationChart {
     is_user_provided_network: bool,
     explicit_subnet_ids: Vec<String>,
     eks_ec2_ami: Ec2Ami,
+    private_pool_static_cpu_manager: bool,
     aws_storage_type: AwsStorageType,
     pleco_resources_ttl: i32,
     resource_tags: HashMap<String, String>,
@@ -66,6 +67,7 @@ impl KarpenterConfigurationChart {
         vpc_qovery_network_mode: VpcQoveryNetworkMode,
         user_network_config: Option<&UserNetworkConfig>,
         eks_ec2_ami: Ec2Ami,
+        private_pool_static_cpu_manager: bool,
         aws_storage_type: AwsStorageType,
         pleco_resources_ttl: i32,
         resource_tags: HashMap<String, String>,
@@ -115,6 +117,7 @@ impl KarpenterConfigurationChart {
                 Vec::with_capacity(0)
             },
             eks_ec2_ami: eks_ec2_ami.for_kubernetes_version(&kubernetes_version),
+            private_pool_static_cpu_manager,
             aws_storage_type,
             pleco_resources_ttl,
             resource_tags,
@@ -681,6 +684,23 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                         value: "RAID0".to_string(),
                     });
                 }
+
+                if self.private_pool_static_cpu_manager {
+                    // The template only renders the kubelet userData for the AL2023 (nodeadm) and
+                    // Bottlerocket families, custom AMIs included. AL2 (bootstrap.sh) gets nothing.
+                    let supported = matches!(self.eks_ec2_ami.karpenter_ami_family(), "AL2023" | "Bottlerocket");
+                    if !supported {
+                        warn!(
+                            cluster_id = %self.cluster_id,
+                            ami = %self.eks_ec2_ami,
+                            "aws.eks.karpenter.private_pool.cpu_manager_policy_static is set but the resolved AMI does not support it (AL2023 or Bottlerocket only), ignored"
+                        );
+                    }
+                    values.push(ChartSetValue {
+                        key: "defaultPrivateNodePool.cpuManagerPolicyStatic".to_string(),
+                        value: true.to_string(),
+                    });
+                }
             }
             (Some(_), false) => {
                 warn!(
@@ -699,6 +719,19 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     value: "false".to_string(),
                 });
             }
+        }
+
+        let private_pool_rendered = self
+            .karpenter_parameters
+            .qovery_node_pools
+            .default_private_override
+            .is_some()
+            && private_pool_allowed;
+        if self.private_pool_static_cpu_manager && !private_pool_rendered {
+            warn!(
+                cluster_id = %self.cluster_id,
+                "aws.eks.karpenter.private_pool.cpu_manager_policy_static is set but the cluster has no private node pool, ignored"
+            );
         }
 
         // Default node pool limits
@@ -1500,6 +1533,7 @@ mod tests {
             VpcQoveryNetworkMode::WithNatGateways,
             None,
             Ec2Ami::AmazonLinux2023,
+            false,
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
@@ -1722,6 +1756,7 @@ mod tests {
             VpcQoveryNetworkMode::WithNatGateways,
             Some(&user_network_config),
             Ec2Ami::AmazonLinux2023,
+            false,
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
@@ -1818,6 +1853,7 @@ mod tests {
             VpcQoveryNetworkMode::WithNatGateways,
             Some(&user_network_config),
             Ec2Ami::AmazonLinux2023,
+            false,
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
@@ -1915,6 +1951,7 @@ mod tests {
             VpcQoveryNetworkMode::WithNatGateways,
             None,
             ec2_ami,
+            false,
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
@@ -2224,6 +2261,35 @@ mod tests {
         user_network_config: Option<&UserNetworkConfig>,
         qovery_node_pools: KarpenterNodePool,
     ) -> String {
+        generate_chart_yaml_with_network_and_ami(
+            vpc_qovery_network_mode,
+            user_network_config,
+            qovery_node_pools,
+            Ec2Ami::AmazonLinux2023,
+            KUBERNETES_VERSION,
+            false,
+        )
+    }
+
+    fn generate_static_cpu_manager_chart_yaml(ec2_ami: Ec2Ami, kubernetes_version: KubernetesVersion) -> String {
+        generate_chart_yaml_with_network_and_ami(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            egress_node_pools(true, true),
+            ec2_ami,
+            kubernetes_version,
+            true,
+        )
+    }
+
+    fn generate_chart_yaml_with_network_and_ami(
+        vpc_qovery_network_mode: VpcQoveryNetworkMode,
+        user_network_config: Option<&UserNetworkConfig>,
+        qovery_node_pools: KarpenterNodePool,
+        ec2_ami: Ec2Ami,
+        kubernetes_version: KubernetesVersion,
+        private_pool_static_cpu_manager: bool,
+    ) -> String {
         let chart = KarpenterConfigurationChart::new(
             None,
             "test-cluster".to_string(),
@@ -2233,7 +2299,7 @@ mod tests {
             Uuid::new_v4(),
             "org-id",
             Uuid::new_v4(),
-            KUBERNETES_VERSION,
+            kubernetes_version,
             "us-east-1",
             KarpenterParameters {
                 spot_enabled: false,
@@ -2246,7 +2312,8 @@ mod tests {
             },
             vpc_qovery_network_mode,
             user_network_config,
-            Ec2Ami::AmazonLinux2023,
+            ec2_ami,
+            private_pool_static_cpu_manager,
             AwsStorageType::GP3,
             0,
             std::collections::HashMap::new(),
@@ -2506,6 +2573,89 @@ mod tests {
             "private pool should not be rendered on WithoutNatGateways clusters (no private subnets)"
         );
         assert!(find_resource(&documents, "EC2NodeClass", "qovery-default-private").is_none());
+    }
+
+    #[test]
+    fn test_private_pool_has_no_user_data_without_static_cpu_manager() {
+        let yaml = generate_chart_yaml_with_network(
+            VpcQoveryNetworkMode::WithNatGateways,
+            None,
+            egress_node_pools(true, true),
+        );
+        let documents = parse_documents(&yaml);
+
+        let private_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-private").unwrap();
+        assert!(
+            private_node_class["spec"].get("userData").is_none(),
+            "cpuManagerPolicyStatic is opt-in: no userData should be rendered by default"
+        );
+    }
+
+    #[test]
+    fn test_private_pool_static_cpu_manager_renders_al2023_node_config() {
+        let yaml = generate_static_cpu_manager_chart_yaml(Ec2Ami::AmazonLinux2023, KUBERNETES_VERSION);
+        let documents = parse_documents(&yaml);
+
+        let private_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-private").unwrap();
+        let user_data = private_node_class["spec"]["userData"]
+            .as_str()
+            .expect("private EC2NodeClass should carry userData when cpuManagerPolicyStatic is set");
+        let node_config: Value = serde_yaml::from_str(user_data).expect("userData should be a nodeadm NodeConfig");
+        assert_eq!(node_config["apiVersion"].as_str(), Some("node.eks.aws/v1alpha1"));
+        assert_eq!(node_config["kind"].as_str(), Some("NodeConfig"));
+        assert_eq!(
+            node_config["spec"]["kubelet"]["config"]["cpuManagerPolicy"].as_str(),
+            Some("static")
+        );
+
+        // Only the private pool (where builder pods land) is affected
+        let public_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-public").unwrap();
+        assert!(public_node_class["spec"].get("userData").is_none());
+    }
+
+    #[test]
+    fn test_private_pool_static_cpu_manager_renders_bottlerocket_settings() {
+        let yaml = generate_static_cpu_manager_chart_yaml(Ec2Ami::Bottlerocket, KUBERNETES_VERSION);
+        let documents = parse_documents(&yaml);
+
+        let private_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-private").unwrap();
+        let user_data = private_node_class["spec"]["userData"]
+            .as_str()
+            .expect("userData expected");
+        assert!(user_data.contains("[settings.kubernetes]"));
+        assert!(user_data.contains("cpu-manager-policy = \"static\""));
+    }
+
+    #[test]
+    fn test_private_pool_static_cpu_manager_skipped_on_al2() {
+        // Standard AMIs only resolve to AL2 up to Kubernetes 1.32
+        let yaml = generate_static_cpu_manager_chart_yaml(Ec2Ami::AmazonLinux2, k8s_version("1.32"));
+        let documents = parse_documents(&yaml);
+
+        let private_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-private").unwrap();
+        assert!(
+            private_node_class["spec"].get("userData").is_none(),
+            "AL2 nodes use bootstrap.sh, a nodeadm NodeConfig would be silently ignored"
+        );
+    }
+
+    #[test]
+    fn test_private_pool_static_cpu_manager_follows_custom_ami_family() {
+        let user_data = |ec2_ami: Ec2Ami| {
+            let yaml = generate_static_cpu_manager_chart_yaml(ec2_ami, KUBERNETES_VERSION);
+            let documents = parse_documents(&yaml);
+            let private_node_class = find_resource(&documents, "EC2NodeClass", "qovery-default-private").unwrap();
+            private_node_class["spec"]["userData"].as_str().map(str::to_string)
+        };
+
+        // Karpenter merges userData for custom AMIs too, based on their amiFamily
+        let al2023 =
+            user_data(Ec2Ami::Custom("ami-12345".to_string())).expect("AL2023 custom AMI should carry userData");
+        assert!(al2023.contains("cpuManagerPolicy: static"));
+        let bottlerocket = user_data(Ec2Ami::Custom("bottlerocket:ami-12345".to_string()))
+            .expect("Bottlerocket custom AMI should carry userData");
+        assert!(bottlerocket.contains("cpu-manager-policy = \"static\""));
+        assert!(user_data(Ec2Ami::Custom("al2:ami-12345".to_string())).is_none());
     }
 
     #[test]
