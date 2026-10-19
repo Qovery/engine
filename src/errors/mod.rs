@@ -699,7 +699,7 @@ impl From<DockerError> for CommandError {
                 None,
             ),
             DockerError::BuilderPodTerminated { raw_error_message } => CommandError::new(
-                "Docker error, builder pod was terminated unexpectedly".to_string(),
+                "Docker error, builder pod ran out of memory (OOMKilled)".to_string(),
                 Some(raw_error_message),
                 None,
             ),

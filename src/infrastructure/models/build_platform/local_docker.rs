@@ -358,8 +358,16 @@ impl LocalDocker {
         });
         record_export_timings(metrics_registry, build.image.service_long_id, &export_timings);
 
-        build_record
-            .set_builder_observation(builder, exit_status.as_ref().is_err_and(|err| err.is_builder_oom_killed()));
+        let oom_killed = exit_status.as_ref().is_err_and(|err| err.is_builder_oom_killed());
+        if oom_killed {
+            let instance_type = builder.node.as_ref().and_then(|node| node.instance_type.as_deref());
+            logger.send_warning(builder_oom_guidance(
+                build.max_ram_in_gib,
+                build.max_cpu_in_milli,
+                instance_type,
+            ));
+        }
+        build_record.set_builder_observation(builder, oom_killed);
         if let Err(err) = exit_status {
             return Err(to_build_error(build.image.service_id.clone(), err));
         }
@@ -519,6 +527,19 @@ fn close_build_record(build_record: &StepRecordHandle, build_result: &Result<(),
         Err(BuildError::Aborted { .. }) => StepStatus::Cancel,
         Err(_) => StepStatus::Error,
     });
+}
+
+/// Tells the user what to change when the builder pod is OOMKilled. The common cause is build tools
+/// sizing their worker pool from the node's CPU count: a CPU limit is a CFS quota, so the pod still
+/// sees every core of the host and a large node multiplies the memory used by the build (QOV-2251).
+fn builder_oom_guidance(max_ram_in_gib: u32, max_cpu_in_milli: u32, instance_type: Option<&str>) -> String {
+    let node = instance_type.map_or_else(String::new, |instance_type| format!(" on a {instance_type} node"));
+    format!(
+        "💥 The builder ran out of memory{node}: it exceeded its {max_ram_in_gib}GiB limit and was OOMKilled. \
+Raise `build.ram_max_in_gib` in the service advanced settings, or lower the build parallelism. \
+Node tools that start one worker per CPU (Jest, webpack/terser, Next.js) can see every core of the node \
+instead of the {max_cpu_in_milli}m CPU given to the build, and use much more memory on large nodes."
+    )
 }
 
 /// The push and the cache export run inside the build command, so their timings are parsed from its
@@ -1625,5 +1646,20 @@ RUN chmod +x entrypoint.sh"#;
                 (StepName::CacheExport, Some(Duration::from_secs(3)), Some(StepStatus::Success)),
             ]
         );
+    }
+
+    #[test]
+    fn test_builder_oom_guidance_names_the_limits_and_the_setting() {
+        let message = builder_oom_guidance(8, 4_000, Some("c6a.24xlarge"));
+        assert!(message.contains("on a c6a.24xlarge node"));
+        assert!(message.contains("its 8GiB limit"));
+        assert!(message.contains("`build.ram_max_in_gib`"));
+        assert!(message.contains("4000m CPU given to the build"));
+    }
+
+    #[test]
+    fn test_builder_oom_guidance_without_node() {
+        let message = builder_oom_guidance(8, 4_000, None);
+        assert!(message.starts_with("💥 The builder ran out of memory: it exceeded"));
     }
 }
