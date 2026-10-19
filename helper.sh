@@ -966,8 +966,6 @@ function unused_dependencies() { ## Check rust unused dependencies
 function update_qovery_chart() {
   use_sccache
   set -e
-
-  apt-get update && apt-get install -y git openssl
   
   github_app_auth
 

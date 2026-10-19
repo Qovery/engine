@@ -55,7 +55,7 @@ ARG PKL_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
-  make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg binutils \
+  make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg binutils openssl \
   skopeo=$SKOPEO_VERSION \
   docker-ce=$DOCKER_VERSION \
   docker-ce-cli=$DOCKER_VERSION \
@@ -72,7 +72,14 @@ RUN apt-get update && \
   rm -f /tmp/krr.zip && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
   mkdir /build ${BIN_DEST_FOLDER} && \
-  mkdir -p $TF_PLUGIN_CACHE_DIR
+  mkdir -p $TF_PLUGIN_CACHE_DIR && \
+  mkdir -p -m 755 /etc/apt/keyrings && \
+  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+  chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && \
+  mkdir -p -m 755 /etc/apt/sources.list.d && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list && \
+  apt update && \
+  apt install gh -y
 
 RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 
