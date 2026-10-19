@@ -408,6 +408,103 @@ fn operator_without_placement_keeps_scheduling_unconstrained() {
     )));
 }
 
+fn operator_container(documents: &[Value]) -> Value {
+    let deployment = document_by_kind_and_name(documents, "Deployment", "qovery-operator")
+        .expect("qovery-operator Deployment must be rendered");
+    yaml_path(deployment, &["spec", "template", "spec", "containers"])
+        .and_then(Value::as_sequence)
+        .and_then(|containers| containers.first())
+        .expect("qovery-operator container must be rendered")
+        .clone()
+}
+
+fn render_operator_with(extra_arguments: &[&str]) -> Vec<Value> {
+    render(
+        "qovery-operator",
+        "lib-engine/lib/common/bootstrap/charts/qovery-operator",
+        "qovery",
+        &[values(
+            "platform-catalog/components/qovery-operator/config/static-values/base.yaml",
+        )],
+        extra_arguments,
+    )
+}
+
+fn yaml_u64(value: &Value, path: &[&str]) -> Option<u64> {
+    yaml_path(value, path).and_then(Value::as_u64)
+}
+
+#[test]
+fn operator_serves_metrics_on_one_port_without_probes_or_a_monitor_by_default() {
+    let documents = render_operator_with(&[]);
+    let container = operator_container(&documents);
+
+    let ports = yaml_path(&container, &["ports"])
+        .and_then(Value::as_sequence)
+        .expect("Operator container ports must be rendered");
+    assert_eq!(ports.len(), 1);
+    assert_eq!(yaml_string(&ports[0], &["name"]), Some("metrics"));
+    assert_eq!(yaml_u64(&ports[0], &["containerPort"]), Some(8080));
+    let listen = operator_container_environment(&documents)
+        .into_iter()
+        .find(|entry| yaml_string(entry, &["name"]) == Some("HTTP_LISTEN"))
+        .expect("HTTP_LISTEN must be exposed to the Operator");
+    assert_eq!(yaml_string(&listen, &["value"]), Some("[::]:8080"));
+    assert!(yaml_path(&container, &["livenessProbe"]).is_none());
+    assert!(yaml_path(&container, &["readinessProbe"]).is_none());
+    assert!(
+        documents
+            .iter()
+            .all(|document| document_kind(document) != Some("PodMonitor"))
+    );
+}
+
+#[test]
+fn operator_probes_use_the_metrics_port_when_enabled() {
+    let documents = render_operator_with(&["--set", "probes.enabled=true"]);
+    let container = operator_container(&documents);
+
+    for (probe, path) in [("livenessProbe", "/healthz"), ("readinessProbe", "/readyz")] {
+        assert_eq!(yaml_string(&container, &[probe, "httpGet", "path"]), Some(path));
+        assert_eq!(yaml_string(&container, &[probe, "httpGet", "port"]), Some("metrics"));
+    }
+    let liveness_budget = yaml_u64(&container, &["livenessProbe", "periodSeconds"]).unwrap()
+        * yaml_u64(&container, &["livenessProbe", "failureThreshold"]).unwrap();
+    assert!(
+        liveness_budget >= 600,
+        "a slow Kubernetes API must not get a healthy Operator killed: {liveness_budget}s"
+    );
+}
+
+#[test]
+fn operator_pod_monitor_and_port_follow_their_values() {
+    let documents = render_operator_with(&["--set", "metrics.port=9090,metrics.podMonitor.enabled=true"]);
+    let container = operator_container(&documents);
+
+    let port = yaml_path(&container, &["ports"])
+        .and_then(Value::as_sequence)
+        .and_then(|ports| ports.first())
+        .expect("Operator metrics port must be rendered");
+    assert_eq!(yaml_u64(port, &["containerPort"]), Some(9090));
+    assert!(operator_container_environment(&documents).iter().any(|entry| {
+        yaml_string(entry, &["name"]) == Some("HTTP_LISTEN") && yaml_string(entry, &["value"]) == Some("[::]:9090")
+    }));
+
+    let monitor = document_by_kind_and_name(&documents, "PodMonitor", "qovery-operator")
+        .expect("enabled PodMonitor must be rendered");
+    assert_eq!(yaml_string(monitor, &["metadata", "namespace"]), Some("qovery"));
+    assert_eq!(
+        yaml_string(monitor, &["spec", "selector", "matchLabels", "app.kubernetes.io/name"]),
+        Some("qovery-operator")
+    );
+    let endpoint = yaml_path(monitor, &["spec", "podMetricsEndpoints"])
+        .and_then(Value::as_sequence)
+        .and_then(|endpoints| endpoints.first())
+        .expect("PodMonitor endpoint must be rendered");
+    assert_eq!(yaml_string(endpoint, &["port"]), Some("metrics"));
+    assert_eq!(yaml_string(endpoint, &["path"]), Some("/metrics"));
+}
+
 #[test]
 fn operator_can_list_worker_pods_with_default_or_external_service_accounts() {
     for (namespace, service_account, extra_arguments) in [

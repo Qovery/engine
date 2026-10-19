@@ -17,7 +17,7 @@ platformTemplateRelease:
       chart:
         repository: oci://public.ecr.aws/r3m4q3r9/charts/
         name: qovery-operator
-        version: 0.2.3
+        version: 0.2.4
       configRef:
         chart: qovery-operator
         version: v1
