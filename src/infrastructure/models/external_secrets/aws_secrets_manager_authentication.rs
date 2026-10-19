@@ -7,11 +7,24 @@ pub enum AwsSecretsManagerSource {
     AwsParameterStore,
 }
 
+/// Role that ESO assumes with `sts:AssumeRole` once it holds a session of the base role.
+///
+/// Rendered as `spec.provider.aws.role` and `spec.provider.aws.externalID` on the ClusterSecretStore,
+/// which makes ESO chain: service account token → base role (web identity) → this role.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct AwsAssumeRole {
+    pub role_arn: String,
+    pub external_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AwsAuthenticationMode {
     Automatic,
+    /// User-provided base role annotated on the ESO service account (IRSA),
+    /// optionally followed by an `sts:AssumeRole` hop into another role.
     ArnRole {
         arn_role: String,
+        assume_role: Option<AwsAssumeRole>,
     },
     AwsStaticCredentials {
         access_key_id: String,
@@ -93,7 +106,8 @@ impl AwsAuthenticationMode {
                         message: "missing authentication.arn_role for ROLE_ARN mode".to_string(),
                     })?
                     .clone();
-                Ok(AwsAuthenticationMode::ArnRole { arn_role })
+                let assume_role = AwsAssumeRole::try_parse(auth)?;
+                Ok(AwsAuthenticationMode::ArnRole { arn_role, assume_role })
             }
             AwsAuthenticationModeKey::StaticCreds => {
                 let access_key_id = auth
@@ -117,6 +131,25 @@ impl AwsAuthenticationMode {
     }
 }
 
+impl AwsAssumeRole {
+    fn try_parse(auth: &HashMap<String, String>) -> Result<Option<AwsAssumeRole>, SecretsManagerConversionError> {
+        /// Authentication key holding the role ESO assumes after the base role (`ROLE_ARN` mode only).
+        const ASSUME_ROLE_ARN_KEY: &str = "assume_role_arn";
+        /// Authentication key holding the optional STS external id sent when assuming that role.
+        const ASSUME_ROLE_EXTERNAL_ID_KEY: &str = "assume_role_external_id";
+
+        // A blank value means unset: STS treats an empty ExternalId differently from an absent one
+        let non_blank = |key: &str| auth.get(key).filter(|value| !value.trim().is_empty());
+
+        match (non_blank(ASSUME_ROLE_ARN_KEY), non_blank(ASSUME_ROLE_EXTERNAL_ID_KEY)) {
+            (None, _) => Ok(None),
+            (Some(role_arn), external_id) => Ok(Some(AwsAssumeRole {
+                role_arn: role_arn.clone(),
+                external_id: external_id.cloned(),
+            })),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,7 +194,8 @@ mod tests {
         assert_eq!(
             result,
             AwsAuthenticationMode::ArnRole {
-                arn_role: "arn:aws:iam::123456789012:role/my-role".to_string()
+                arn_role: "arn:aws:iam::123456789012:role/my-role".to_string(),
+                assume_role: None,
             }
         );
     }
@@ -170,6 +204,85 @@ mod tests {
     fn test_parse_authentication_arn_role_missing_field() {
         let err = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth_map(&[])).unwrap_err();
         assert!(err.message.contains("missing authentication.arn_role"));
+    }
+
+    #[test]
+    fn test_parse_authentication_arn_role_with_assume_role_and_external_id() {
+        let auth = auth_map(&[
+            ("arn_role", "arn:aws:iam::111111111111:role/base"),
+            ("assume_role_arn", "arn:aws:iam::222222222222:role/ssm-reader"),
+            ("assume_role_external_id", "prod-eu-1"),
+        ]);
+        let result = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth).unwrap();
+        assert_eq!(
+            result,
+            AwsAuthenticationMode::ArnRole {
+                arn_role: "arn:aws:iam::111111111111:role/base".to_string(),
+                assume_role: Some(AwsAssumeRole {
+                    role_arn: "arn:aws:iam::222222222222:role/ssm-reader".to_string(),
+                    external_id: Some("prod-eu-1".to_string()),
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_authentication_arn_role_with_assume_role_without_external_id() {
+        let auth = auth_map(&[
+            ("arn_role", "arn:aws:iam::111111111111:role/base"),
+            ("assume_role_arn", "arn:aws:iam::222222222222:role/ssm-reader"),
+        ]);
+        let result = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth).unwrap();
+        assert_eq!(
+            result,
+            AwsAuthenticationMode::ArnRole {
+                arn_role: "arn:aws:iam::111111111111:role/base".to_string(),
+                assume_role: Some(AwsAssumeRole {
+                    role_arn: "arn:aws:iam::222222222222:role/ssm-reader".to_string(),
+                    external_id: None,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_authentication_arn_role_with_blank_external_id_sends_none() {
+        for blank in ["", "  "] {
+            let auth = auth_map(&[
+                ("arn_role", "arn:aws:iam::111111111111:role/base"),
+                ("assume_role_arn", "arn:aws:iam::222222222222:role/ssm-reader"),
+                ("assume_role_external_id", blank),
+            ]);
+            let result = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth).unwrap();
+            assert_eq!(
+                result,
+                AwsAuthenticationMode::ArnRole {
+                    arn_role: "arn:aws:iam::111111111111:role/base".to_string(),
+                    assume_role: Some(AwsAssumeRole {
+                        role_arn: "arn:aws:iam::222222222222:role/ssm-reader".to_string(),
+                        external_id: None,
+                    }),
+                },
+                "external id {blank:?} must be treated as unset"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_authentication_arn_role_with_blank_assume_role_has_no_assume_role() {
+        let auth = auth_map(&[
+            ("arn_role", "arn:aws:iam::111111111111:role/base"),
+            ("assume_role_arn", ""),
+            ("assume_role_external_id", "prod-eu-1"),
+        ]);
+        let result = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth).unwrap();
+        assert_eq!(
+            result,
+            AwsAuthenticationMode::ArnRole {
+                arn_role: "arn:aws:iam::111111111111:role/base".to_string(),
+                assume_role: None,
+            }
+        );
     }
 
     #[test]
@@ -227,12 +340,13 @@ mod tests {
             region: "us-east-1".to_string(),
             authentication_mode: AwsAuthenticationMode::ArnRole {
                 arn_role: "arn:aws:iam::123:role/r".to_string(),
+                assume_role: None,
             },
         };
         assert_eq!(conn.source, AwsSecretsManagerSource::AwsParameterStore);
         assert_eq!(conn.region, "us-east-1");
         match conn.authentication_mode {
-            AwsAuthenticationMode::ArnRole { arn_role } => assert_eq!(arn_role, "arn:aws:iam::123:role/r"),
+            AwsAuthenticationMode::ArnRole { arn_role, .. } => assert_eq!(arn_role, "arn:aws:iam::123:role/r"),
             _ => panic!("Expected ArnRole"),
         }
     }
@@ -276,7 +390,8 @@ mod tests {
         assert_eq!(
             result.authentication_mode,
             AwsAuthenticationMode::ArnRole {
-                arn_role: "arn:aws:iam::123456789012:role/my-role".to_string()
+                arn_role: "arn:aws:iam::123456789012:role/my-role".to_string(),
+                assume_role: None,
             }
         );
     }

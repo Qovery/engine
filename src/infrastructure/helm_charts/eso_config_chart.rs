@@ -18,6 +18,7 @@ use itertools::Itertools;
 use kube::Client;
 use kube::api::{Api, ListParams};
 use kube::core::DynamicObject;
+use serde_json::Value;
 use std::collections::{BTreeSet, HashSet};
 
 pub struct EsoConfigChart {
@@ -130,7 +131,10 @@ impl ToCommonHelmChart for EsoConfigChart {
                                     value: "qovery".to_string(),
                                 });
                             }
-                            AwsAuthenticationMode::ArnRole { arn_role: _ } => {
+                            AwsAuthenticationMode::ArnRole {
+                                arn_role: _,
+                                assume_role,
+                            } => {
                                 values.push(ChartSetValue {
                                     key: format!("authentications[{}].type", idx),
                                     value: "aws-iam".to_string(),
@@ -143,6 +147,20 @@ impl ToCommonHelmChart for EsoConfigChart {
                                     key: format!("authentications[{}].serviceAccount.namespace", idx),
                                     value: "qovery".to_string(),
                                 });
+                                // IAM role names and STS external ids may contain commas, which split a
+                                // `--set` value: send them as JSON strings through `--set-json` instead.
+                                if let Some(assume_role) = assume_role {
+                                    values_json.push(ChartSetValue {
+                                        key: format!("authentications[{}].role", idx),
+                                        value: Value::String(assume_role.role_arn.clone()).to_string(),
+                                    });
+                                    if let Some(external_id) = &assume_role.external_id {
+                                        values_json.push(ChartSetValue {
+                                            key: format!("authentications[{}].externalID", idx),
+                                            value: Value::String(external_id.clone()).to_string(),
+                                        });
+                                    }
+                                }
                             }
                             AwsAuthenticationMode::AwsStaticCredentials {
                                 access_key_id,
@@ -364,13 +382,108 @@ mod tests {
     use super::*;
     use crate::infrastructure::helm_charts::{HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name};
     use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::{
-        AwsConnection, AwsSecretsManagerSource,
+        AwsAssumeRole, AwsConnection, AwsSecretsManagerSource,
     };
     use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpConnection;
     use crate::services::kube_retry::test_support::{empty_list_body, scripted_kube_client, status_body};
     use serde_json::json;
     use std::env;
     use std::sync::atomic::Ordering;
+
+    fn role_arn_chart_with_assume_role(assume_role: Option<AwsAssumeRole>) -> CommonChart {
+        EsoConfigChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HelmAction::Deploy,
+            Some(vec![SecretsManagerAccess {
+                id: "test-chain".to_string(),
+                connection: SecretsManagerConnection::Aws(AwsConnection {
+                    source: AwsSecretsManagerSource::AwsParameterStore,
+                    region: "eu-west-1".to_string(),
+                    authentication_mode: AwsAuthenticationMode::ArnRole {
+                        arn_role: "arn:aws:iam::111111111111:role/base".to_string(),
+                        assume_role,
+                    },
+                }),
+            }]),
+            EsoClusterOutputs::Aws {
+                role_arn_automatically_generated: None,
+            },
+        )
+        .to_common_helm_chart()
+        .unwrap()
+    }
+
+    /// The assume role is sent as JSON strings so `--set-json` keeps commas, which IAM role names
+    /// and STS external ids allow, inside the value.
+    #[test]
+    fn test_aws_iam_authentication_with_assume_role() {
+        // execute:
+        let chart = role_arn_chart_with_assume_role(Some(AwsAssumeRole {
+            role_arn: "arn:aws:iam::222222222222:role/ssm,reader".to_string(),
+            external_id: Some("prod,eu-1".to_string()),
+        }));
+
+        // verify:
+        let values_json: Vec<(&str, &str)> = chart
+            .chart_info
+            .values_json
+            .iter()
+            .map(|v| (v.key.as_str(), v.value.as_str()))
+            .collect();
+        assert_eq!(
+            values_json,
+            vec![
+                ("authentications[0].role", r#""arn:aws:iam::222222222222:role/ssm,reader""#),
+                ("authentications[0].externalID", r#""prod,eu-1""#),
+            ]
+        );
+        assert!(
+            chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "authentications[0].type" && v.value == "aws-iam")
+        );
+        assert!(
+            !chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key.ends_with(".role") || v.key.ends_with(".externalID")),
+            "the assume role must not go through --set"
+        );
+    }
+
+    #[test]
+    fn test_aws_iam_authentication_with_assume_role_without_external_id() {
+        // execute:
+        let chart = role_arn_chart_with_assume_role(Some(AwsAssumeRole {
+            role_arn: "arn:aws:iam::222222222222:role/ssm-reader".to_string(),
+            external_id: None,
+        }));
+
+        // verify:
+        let values_json: Vec<(&str, &str)> = chart
+            .chart_info
+            .values_json
+            .iter()
+            .map(|v| (v.key.as_str(), v.value.as_str()))
+            .collect();
+        assert_eq!(
+            values_json,
+            vec![("authentications[0].role", r#""arn:aws:iam::222222222222:role/ssm-reader""#)]
+        );
+    }
+
+    #[test]
+    fn test_aws_iam_authentication_without_assume_role_sets_no_role() {
+        // execute:
+        let chart = role_arn_chart_with_assume_role(None);
+
+        // verify:
+        assert!(chart.chart_info.values_json.is_empty());
+    }
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -452,6 +565,7 @@ mod tests {
                     region: "us-east-1".to_string(),
                     authentication_mode: AwsAuthenticationMode::ArnRole {
                         arn_role: "arn:aws:iam::123456789012:role/test-iam-role".to_string(),
+                        assume_role: None,
                     },
                 }),
             }]),
@@ -518,6 +632,7 @@ mod tests {
                     region: "us-east-1".to_string(),
                     authentication_mode: AwsAuthenticationMode::ArnRole {
                         arn_role: "arn:aws:iam::123456789012:role/test-param-store-role".to_string(),
+                        assume_role: None,
                     },
                 }),
             }]),
@@ -719,6 +834,7 @@ mod tests {
                         region: "us-east-1".to_string(),
                         authentication_mode: AwsAuthenticationMode::ArnRole {
                             arn_role: "arn:aws:iam::123456789012:role/first-iam-role".to_string(),
+                            assume_role: None,
                         },
                     }),
                 },
