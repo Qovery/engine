@@ -209,6 +209,9 @@ fn install_karpenter_charts(
         kubernetes.options.vpc_qovery_network_mode.clone(),
         kubernetes.options.user_provided_network.as_ref(),
         kubernetes.advanced_settings.aws_eks_ec2_ami.to_model(),
+        kubernetes
+            .advanced_settings
+            .aws_eks_karpenter_private_pool_cpu_manager_policy_static,
         aws_storage_type,
         kubernetes.advanced_settings.pleco_resources_ttl,
         kubernetes.options.resource_tags.clone(),
