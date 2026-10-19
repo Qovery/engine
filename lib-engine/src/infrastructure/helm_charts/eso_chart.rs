@@ -95,7 +95,7 @@ impl ToCommonHelmChart for EsoChart {
                 .iter()
                 .find_map(|access| match &access.connection {
                     SecretsManagerConnection::Aws(conn) => match &conn.authentication_mode {
-                        AwsAuthenticationMode::ArnRole { arn_role } => Some(arn_role.clone()),
+                        AwsAuthenticationMode::ArnRole { arn_role, .. } => Some(arn_role.clone()),
                         _ => None,
                     },
                     _ => None,

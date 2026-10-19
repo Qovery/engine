@@ -1043,6 +1043,7 @@ mod tests {
                 AwsSecretsManagerSource::AwsSecretsManager,
                 AwsAuthenticationMode::ArnRole {
                     arn_role: "arn:aws:iam::123:role/r".to_string(),
+                    assume_role: None,
                 },
             ),
             make_aws_access(
@@ -1131,6 +1132,7 @@ mod tests {
                 AwsSecretsManagerSource::AwsParameterStore,
                 AwsAuthenticationMode::ArnRole {
                     arn_role: "arn:aws:iam::123:role/r".to_string(),
+                    assume_role: None,
                 },
             ),
         ];
