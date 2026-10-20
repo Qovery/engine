@@ -156,11 +156,11 @@ default:
       - scheduler_failure
     exit_codes: [1, 101, 137]
 
-# Template for test jobs to run in parallel after minimal-tests
+# Template for test jobs to run in parallel after automatic minimal-tests.
+# Azure minimal tests are manual and must not gate other test jobs.
 .needs-minimal-tests:
   needs:
     - build-and-lint-code
-    - azure-minimal-tests
     - job: scw-minimal-tests
       optional: true
     - aws-minimal-tests
@@ -173,6 +173,7 @@ default:
 # shared engine code changes (→ all providers). Otherwise the job is still
 # offered as an OPTIONAL MANUAL job (see .rules-manual-fallback) so it can be
 # triggered on demand. No infra change → nothing runs automatically.
+# Azure test jobs are always manual, regardless of which paths change.
 
 # Shared engine code — a change here fans out to every provider.
 .paths-shared:
@@ -254,10 +255,6 @@ default:
 
 .rules-azure:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-      changes:
-        paths: !reference [.paths-azure, paths]
-    - !reference [.rules-shared, rules]
     - !reference [.rules-manual-fallback, rules]
 
 .rules-gcp:
@@ -482,8 +479,7 @@ azure-minimal-tests:
   timeout: 3 hours
   script:
     - ./helper.sh azure_minimal_tests
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  rules: !reference [.rules-azure, rules]
   tags:
     - k8s-runner
   dependencies:
