@@ -31,7 +31,6 @@ use url::Url;
 use uuid::Uuid;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
-const HELM_MAX_HISTORY: &str = "50";
 /// Bounded instead of relying on Helm's "0 disables truncation" special case: the limit only
 /// applies when it is smaller than the result set, so this never truncates a plausible inventory
 /// and a saturated result is detectable instead of silently partial.
@@ -49,6 +48,23 @@ impl HelmDiffSecretVisibility {
         match self {
             HelmDiffSecretVisibility::Show => None,
             HelmDiffSecretVisibility::Suppress => Some("--suppress-secrets"),
+        }
+    }
+}
+
+/// Number of revisions Helm keeps per release (`--history-max`), each stored as a Secret in etcd.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum HelmHistoryMax {
+    #[default]
+    Standard,
+    Reduced,
+}
+
+impl HelmHistoryMax {
+    fn cli_arg(self) -> &'static str {
+        match self {
+            HelmHistoryMax::Standard => "50",
+            HelmHistoryMax::Reduced => "10",
         }
     }
 }
@@ -414,21 +430,8 @@ impl Helm {
             return Err(CannotRollback(chart.name.clone()));
         }
 
-        let timeout = format!("{}s", chart.timeout_in_seconds);
-        let namespace = chart.get_namespace_string();
-        let args = vec![
-            "rollback",
-            &chart.name,
-            "--namespace",
-            &namespace,
-            "--timeout",
-            &timeout,
-            "--history-max",
-            HELM_MAX_HISTORY,
-            "--cleanup-on-fail",
-            "--force",
-            "--wait",
-        ];
+        let args = rollback_args(chart);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
 
         let mut stderr = String::new();
         match helm_exec_with_output(
@@ -1231,8 +1234,6 @@ impl Helm {
             "--debug".to_string(),
             "--timeout".to_string(),
             timeout_string.as_str().to_string(),
-            "--history-max".to_string(),
-            HELM_MAX_HISTORY.to_string(),
             "--namespace".to_string(),
             chart.get_namespace_string(),
         ];
@@ -1254,6 +1255,7 @@ impl Helm {
             args_string.push("--wait".to_string())
         }
 
+        append_history_max_arg(&mut args_string, chart);
         append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
 
@@ -2238,6 +2240,25 @@ fn append_helm_diff_secret_visibility_arg(args: &mut Vec<String>, secret_visibil
     }
 }
 
+fn rollback_args(chart: &ChartInfo) -> Vec<String> {
+    let mut args = vec![
+        "rollback".to_string(),
+        chart.name.clone(),
+        "--namespace".to_string(),
+        chart.get_namespace_string(),
+        "--timeout".to_string(),
+        format!("{}s", chart.timeout_in_seconds),
+    ];
+    append_history_max_arg(&mut args, chart);
+    args.extend(["--cleanup-on-fail", "--force", "--wait"].map(String::from));
+    args
+}
+
+fn append_history_max_arg(args: &mut Vec<String>, chart: &ChartInfo) {
+    args.push("--history-max".to_string());
+    args.push(chart.history_max.cli_arg().to_string());
+}
+
 fn append_skip_crds_arg(args: &mut Vec<String>, chart: &ChartInfo) {
     if chart.skip_crds {
         args.push("--skip-crds".to_string());
@@ -2421,8 +2442,8 @@ impl Drop for HelmRegistry<'_> {
 #[cfg(test)]
 mod unit_tests {
     use super::{
-        Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, append_engine_post_renderer_args,
-        append_helm_diff_secret_visibility_arg,
+        Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, HelmHistoryMax, append_engine_post_renderer_args,
+        append_helm_diff_secret_visibility_arg, append_history_max_arg, rollback_args,
     };
     use crate::cmd::command::CommandKiller;
     use crate::helm::{ChartInfo, ChartValuesGenerated, PublicEcrImageMirror};
@@ -2437,6 +2458,58 @@ mod unit_tests {
 
         append_helm_diff_secret_visibility_arg(&mut args, HelmDiffSecretVisibility::Suppress);
         assert_eq!(args, vec!["diff".to_string(), "--suppress-secrets".to_string()]);
+    }
+
+    #[test]
+    fn history_max_arg_follows_the_chart_history() {
+        for (history_max, expected) in [(HelmHistoryMax::Standard, "50"), (HelmHistoryMax::Reduced, "10")] {
+            let chart = ChartInfo {
+                history_max,
+                ..Default::default()
+            };
+            let mut args = Vec::new();
+
+            append_history_max_arg(&mut args, &chart);
+
+            assert_eq!(args, vec!["--history-max".to_string(), expected.to_string()]);
+        }
+    }
+
+    #[test]
+    fn rollback_keeps_the_chart_history() {
+        for (history_max, expected) in [(HelmHistoryMax::Standard, "50"), (HelmHistoryMax::Reduced, "10")] {
+            let chart = ChartInfo {
+                history_max,
+                timeout_in_seconds: 10,
+                ..ChartInfo::new_from_release_name("release", "qovery")
+            };
+
+            assert_eq!(
+                rollback_args(&chart),
+                [
+                    "rollback",
+                    "release",
+                    "--namespace",
+                    "qovery",
+                    "--timeout",
+                    "10s",
+                    "--history-max",
+                    expected,
+                    "--cleanup-on-fail",
+                    "--force",
+                    "--wait"
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn history_max_arg_defaults_to_fifty_revisions() {
+        let mut args = Vec::new();
+
+        append_history_max_arg(&mut args, &ChartInfo::default());
+
+        assert_eq!(args, vec!["--history-max".to_string(), "50".to_string()]);
     }
 
     #[test]

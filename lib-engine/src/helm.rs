@@ -1,4 +1,4 @@
-use crate::cmd::helm::{Helm, HelmError, HelmListCache};
+use crate::cmd::helm::{Helm, HelmError, HelmHistoryMax, HelmListCache};
 use crate::cmd::helm_utils::{
     BackupStatus, CRDSUpdate, apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade,
     update_crds_on_upgrade,
@@ -481,6 +481,7 @@ pub struct ChartInfo {
     /// Shared cache injected before parallel deployment to ensure `helm list` is called
     /// at most once per namespace across all chart threads in the same level.
     pub helm_list_cache: Option<HelmListCache>,
+    pub history_max: HelmHistoryMax,
     /// Enables the engine post-renderer for this chart.
     /// When enabled, Helm commands add:
     /// `--post-renderer <engine_post_renderer-binary>`
@@ -570,6 +571,7 @@ impl Default for ChartInfo {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: false,
             public_ecr_image_mirror: None,
         }
@@ -965,6 +967,7 @@ impl CommonChart {
                 None => vec![],
             },
             timeout_in_seconds: 15,
+            history_max: current_chart.history_max,
             ..Default::default()
         }
     }
@@ -1203,6 +1206,7 @@ pub fn client_side_engine_values_string() -> Vec<ChartSetValue> {
 
 #[cfg(test)]
 mod tests {
+    use crate::cmd::helm::HelmHistoryMax;
     use crate::helm::{
         CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaControllerResources, VpaTargetRefApiVersion,
         VpaTargetRefKind, client_side_engine_values_string,
@@ -1220,6 +1224,21 @@ mod tests {
     use crate::io_models::models::KubernetesMemoryResourceUnit;
 
     use super::{ChartInfo, VpaConfig, VpaContainerPolicy, VpaTargetRef};
+
+    #[test]
+    fn vpa_chart_keeps_the_history_max_of_its_parent_chart() {
+        let chart = ChartInfo {
+            history_max: HelmHistoryMax::Reduced,
+            ..ChartInfo::new_from_release_name("vpa_test", "qovery")
+        };
+        let common_chart_vpa = CommonChartVpa::new("./".to_string(), vec![]);
+        let common_chart = CommonChart::new(chart, None, Some(common_chart_vpa.clone()));
+
+        assert_eq!(
+            common_chart.get_vpa_chart_info(Some(common_chart_vpa)).history_max,
+            HelmHistoryMax::Reduced
+        );
+    }
 
     #[test]
     fn test_vpa() {

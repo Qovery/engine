@@ -1,6 +1,6 @@
 use super::InfraLogger;
 use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::{Helm, HelmListCache};
+use crate::cmd::helm::{Helm, HelmHistoryMax, HelmListCache};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EventDetails, InfrastructureDiffType};
 use crate::helm::{HelmAction, HelmChart, HelmChartError, PublicEcrImageMirror};
@@ -258,6 +258,7 @@ pub(super) trait HelmInfraResources {
         self.charts_context().prepare_helm_files_on_disk()?;
 
         let mut charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
+        set_history_max_for_all_charts(&mut charts_to_deploy, infra_ctx.kubernetes().helm_history_max());
         let public_ecr_image_mirror = self.public_ecr_image_mirror();
         let chart_count =
             enable_engine_post_renderer_for_all_charts(&mut charts_to_deploy, public_ecr_image_mirror.as_ref());
@@ -358,6 +359,13 @@ pub(super) trait HelmInfraResources {
 
         Ok(())
     }
+}
+
+fn set_history_max_for_all_charts(charts_to_deploy: &mut [Vec<Box<dyn HelmChart>>], history_max: HelmHistoryMax) {
+    charts_to_deploy
+        .iter_mut()
+        .flatten()
+        .for_each(|chart| chart.get_chart_info_mut().history_max = history_max);
 }
 
 fn enable_engine_post_renderer_for_all_charts(
@@ -736,7 +744,28 @@ fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<Bu
 
 #[cfg(test)]
 mod tests {
-    use super::{BoundedHelmDiffOutput, HELM_DIFF_LOG_MAX_BYTES};
+    use super::{BoundedHelmDiffOutput, HELM_DIFF_LOG_MAX_BYTES, set_history_max_for_all_charts};
+    use crate::cmd::helm::HelmHistoryMax;
+    use crate::helm::{ChartInfo, CommonChart, HelmChart};
+
+    fn chart(name: &str) -> Box<dyn HelmChart> {
+        Box::new(CommonChart::new(ChartInfo::new_from_release_name(name, "qovery"), None, None))
+    }
+
+    #[test]
+    fn history_max_is_set_on_every_chart_of_every_level() {
+        let mut charts_to_deploy = vec![vec![chart("a"), chart("b")], vec![chart("c")]];
+
+        set_history_max_for_all_charts(&mut charts_to_deploy, HelmHistoryMax::Reduced);
+
+        assert!(
+            charts_to_deploy
+                .iter()
+                .flatten()
+                .all(|chart| chart.get_chart_info().history_max == HelmHistoryMax::Reduced)
+        );
+        assert_eq!(charts_to_deploy.iter().flatten().count(), 3);
+    }
 
     #[test]
     fn helm_diff_log_output_is_bounded_in_ci() {

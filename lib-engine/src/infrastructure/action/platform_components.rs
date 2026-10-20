@@ -666,6 +666,7 @@ fn apply_platform_helm_unit(
         // the archived workspace, never pass its contents as command-line arguments, and keep it
         // alive until both Helm commands have completed.
         values_files: vec![values_file.path().to_string_lossy().into_owned()],
+        history_max: infra_ctx.kubernetes().helm_history_max(),
         ..Default::default()
     };
 

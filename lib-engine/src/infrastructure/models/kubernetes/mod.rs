@@ -8,6 +8,7 @@ pub mod keda;
 pub mod scaleway;
 pub mod self_managed;
 
+use crate::cmd::helm::HelmHistoryMax;
 use crate::cmd::kubectl::kubectl_delete_apiservice;
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_get_node,
@@ -596,6 +597,10 @@ pub trait Kubernetes: Send + Sync {
     }
     fn is_keda_enabled(&self) -> bool {
         false
+    }
+    /// Revisions kept per Helm release of the charts Qovery deploys on this cluster.
+    fn helm_history_max(&self) -> HelmHistoryMax {
+        HelmHistoryMax::Standard
     }
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
 
@@ -2748,5 +2753,73 @@ mod tests {
             Arc::from("+k3s1")
         );
         assert_eq!(version_full.to_string(), "v1.24.16+k3s1".to_string())
+    }
+}
+
+#[cfg(test)]
+mod helm_history_max_tests {
+    use super::{Kind, Kubernetes, KubernetesVersion};
+    use crate::cmd::helm::HelmHistoryMax;
+    use crate::infrastructure::action::InfrastructureAction;
+    use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+    use crate::io_models::context::Context;
+    use crate::io_models::models::CpuArchitecture;
+    use crate::logger::Logger;
+    use std::path::Path;
+    use uuid::Uuid;
+
+    struct ClusterWithoutHistoryOverride;
+
+    impl Kubernetes for ClusterWithoutHistoryOverride {
+        fn context(&self) -> &Context {
+            unimplemented!()
+        }
+        fn kind(&self) -> Kind {
+            Kind::Eks
+        }
+        fn short_id(&self) -> &str {
+            unimplemented!()
+        }
+        fn long_id(&self) -> &Uuid {
+            unimplemented!()
+        }
+        fn name(&self) -> &str {
+            unimplemented!()
+        }
+        fn version(&self) -> KubernetesVersion {
+            unimplemented!()
+        }
+        fn region(&self) -> &str {
+            unimplemented!()
+        }
+        fn zones(&self) -> Option<Vec<&str>> {
+            unimplemented!()
+        }
+        fn logger(&self) -> &dyn Logger {
+            unimplemented!()
+        }
+        fn is_network_managed_by_user(&self) -> bool {
+            unimplemented!()
+        }
+        fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
+            unimplemented!()
+        }
+        fn temp_dir(&self) -> &Path {
+            unimplemented!()
+        }
+        fn advanced_settings(&self) -> &ClusterAdvancedSettings {
+            unimplemented!()
+        }
+        fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+            unimplemented!()
+        }
+        fn as_infra_actions(&self) -> &dyn InfrastructureAction {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn clusters_other_than_kapsule_keep_the_standard_helm_history() {
+        assert_eq!(ClusterWithoutHistoryOverride.helm_history_max(), HelmHistoryMax::Standard);
     }
 }
