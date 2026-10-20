@@ -251,7 +251,7 @@ DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deploym
 
       ```toml
       [toolchain]
-      channel = "1.98.0"
+      channel = "1.98.1"
       components = ["rustfmt", "clippy"]
       ```
 

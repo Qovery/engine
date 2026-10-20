@@ -27,7 +27,7 @@ ARG GOVC_VERSION=0.52.0
 ARG CARGO_AUDITABLE_VERSION="0.7.7"
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.98.0-2026-08-25T15-59-29"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.98.1-2026-10-15T13-47-13"
 
 
 ###########################################
