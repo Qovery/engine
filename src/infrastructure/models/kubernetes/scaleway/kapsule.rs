@@ -1,3 +1,4 @@
+use crate::cmd::helm::HelmHistoryMax;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Transmitter};
@@ -50,6 +51,18 @@ pub enum KapsuleClusterType {
     KapsuleDedicated4,
     KapsuleDedicated8,
     KapsuleDedicated16,
+}
+
+impl KapsuleClusterType {
+    /// The shared control plane has the smallest etcd, and each Helm revision is a Secret stored in it.
+    pub fn helm_history_max(&self) -> HelmHistoryMax {
+        match self {
+            KapsuleClusterType::Kapsule => HelmHistoryMax::Reduced,
+            KapsuleClusterType::KapsuleDedicated4
+            | KapsuleClusterType::KapsuleDedicated8
+            | KapsuleClusterType::KapsuleDedicated16 => HelmHistoryMax::Standard,
+        }
+    }
 }
 
 impl ToTerraformString for KapsuleClusterType {
@@ -398,6 +411,10 @@ impl Kubernetes for Kapsule {
         &self.advanced_settings
     }
 
+    fn helm_history_max(&self) -> HelmHistoryMax {
+        self.options.scaleway_kubernetes_type.helm_history_max()
+    }
+
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         // SCW doesn't support UDP loadbalancer
         // https://www.scaleway.com/en/docs/network/load-balancer/reference-content/configuring-backends/
@@ -432,5 +449,23 @@ impl Kubernetes for Kapsule {
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::KapsuleClusterType;
+    use crate::cmd::helm::HelmHistoryMax;
+
+    #[test]
+    fn only_the_shared_control_plane_reduces_the_helm_history() {
+        for (cluster_type, expected) in [
+            (KapsuleClusterType::Kapsule, HelmHistoryMax::Reduced),
+            (KapsuleClusterType::KapsuleDedicated4, HelmHistoryMax::Standard),
+            (KapsuleClusterType::KapsuleDedicated8, HelmHistoryMax::Standard),
+            (KapsuleClusterType::KapsuleDedicated16, HelmHistoryMax::Standard),
+        ] {
+            assert_eq!(cluster_type.helm_history_max(), expected, "{cluster_type:?}");
+        }
     }
 }

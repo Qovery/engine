@@ -4,7 +4,7 @@ use crate::helm::{
     lib_dir, managed_database_context,
 };
 use kube::core::DynamicObject;
-use qovery_engine::cmd::helm::Helm;
+use qovery_engine::cmd::helm::{Helm, HelmHistoryMax};
 use qovery_engine::environment::action::deploy_helm::{HelmChartValues, HelmDeployment};
 use qovery_engine::helm::CommonChart;
 use qovery_engine::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
@@ -124,6 +124,7 @@ fn q_ingress_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -177,6 +178,7 @@ fn q_container_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -236,6 +238,7 @@ fn q_application_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -295,6 +298,7 @@ fn q_container_psql_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -358,6 +362,7 @@ fn q_managed_psql_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -421,6 +426,7 @@ fn q_job_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -496,6 +502,7 @@ fn q_application_with_ndots_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -599,6 +606,7 @@ fn q_container_with_ndots_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -702,6 +710,7 @@ fn q_job_with_ndots_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
@@ -820,6 +829,7 @@ fn q_container_with_none_ndots_test() {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: true,
             public_ecr_image_mirror: None,
         },
