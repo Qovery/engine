@@ -19,6 +19,7 @@ use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
+use url::Url;
 use uuid::Uuid;
 
 /// An agentic workflow carries no build advanced settings on the wire, so these mirror the defaults
@@ -63,6 +64,11 @@ pub struct AgenticWorkflowModel {
     /// execution cluster's region during conversion.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub region: Option<String>,
+    /// Custom Anthropic-compatible API root for Claude (e.g. a LiteLLM gateway), HTTP or HTTPS.
+    /// Omitted for direct Claude, Bedrock and older q-core payloads. When present, `api_key` is sent
+    /// as a bearer token to this root instead of as an Anthropic `x-api-key`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
@@ -365,7 +371,22 @@ impl AgenticWorkflow {
             api_key,
             settings,
             region,
+            base_url,
         } = self.model;
+
+        if let Some(base_url) = &base_url {
+            if model_type == AgenticWorkflowModelType::Bedrock {
+                return Err(AgenticWorkflowError::InvalidConfig(
+                    "custom base_url is only supported for Claude models".to_string(),
+                ));
+            }
+            validate_custom_base_url(base_url)?;
+            if api_key.trim().is_empty() {
+                return Err(AgenticWorkflowError::InvalidConfig(
+                    "custom base_url requires a model credential".to_string(),
+                ));
+            }
+        }
 
         let project_repositories = self
             .project_repositories
@@ -444,6 +465,7 @@ impl AgenticWorkflow {
             cluster_region,
             bedrock,
             model_api_key: api_key,
+            model_base_url: base_url,
             model_settings: settings,
             mcp: self.mcp,
             project_repositories,
@@ -464,6 +486,35 @@ impl AgenticWorkflow {
                 .collect::<BTreeSet<_>>(),
         })
     }
+}
+
+/// Accepts an absolute HTTP(S) root, path prefix included. The value is passed to the CLI verbatim,
+/// so anything `Url::parse` would silently normalize (padding, backslashes, a missing `//`) is
+/// rejected rather than rewritten. Errors never echo the value: it may hold a pasted credential.
+fn validate_custom_base_url(raw: &str) -> Result<(), AgenticWorkflowError> {
+    let invalid = |reason: &str| AgenticWorkflowError::InvalidConfig(format!("custom base_url {reason}"));
+
+    if raw.chars().any(|c| c.is_whitespace() || c.is_control() || c == '\\') {
+        return Err(invalid("must not contain whitespace, control characters or backslashes"));
+    }
+    let (_, rest) = raw
+        .split_once("://")
+        .ok_or_else(|| invalid("must be an absolute http(s) URL"))?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if authority.is_empty() {
+        return Err(invalid("must have a host"));
+    }
+    if authority.contains('@') {
+        return Err(invalid("must not contain user info"));
+    }
+    let url = Url::parse(raw).map_err(|_| invalid("is not a valid URL"))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(invalid("must use http or https"));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(invalid("must not contain a query or fragment"));
+    }
+    Ok(())
 }
 
 fn select_agentic_workflow_architecture(
@@ -751,6 +802,108 @@ mod tests {
             config.bedrock.expect("Bedrock config should be present").region,
             TEST_CLUSTER_REGION
         );
+    }
+
+    fn claude_json_with_base_url(base_url: &str) -> serde_json::Value {
+        let mut value: serde_json::Value = serde_json::from_str(GOLDEN_JSON).expect("valid golden JSON");
+        value["model"]["base_url"] = serde_json::json!(base_url);
+        value
+    }
+
+    fn domain_config_for(value: serde_json::Value) -> Result<AgenticWorkflowConfig, AgenticWorkflowError> {
+        serde_json::from_value::<AgenticWorkflow>(value)
+            .expect("payload parsing does not perform domain validation")
+            .into_domain_config(TEST_CLUSTER_REGION.to_string())
+    }
+
+    /// q-core payloads that predate `base_url` (the golden JSON has none) keep direct Claude behavior.
+    #[test]
+    fn a_claude_model_without_base_url_keeps_direct_claude_behavior() {
+        for json in [GOLDEN_JSON, GOLDEN_JSON_DEFAULTS] {
+            let workflow: AgenticWorkflow = serde_json::from_str(json).expect("legacy payload should deserialize");
+            assert_eq!(workflow.model.base_url, None);
+            let config = workflow
+                .into_domain_config(TEST_CLUSTER_REGION.to_string())
+                .expect("domain config should build");
+            assert_eq!(config.model_base_url, None);
+        }
+
+        let mut null_url = claude_json_with_base_url("unused");
+        null_url["model"]["base_url"] = serde_json::Value::Null;
+        assert_eq!(
+            domain_config_for(null_url)
+                .expect("null base_url means absent")
+                .model_base_url,
+            None
+        );
+    }
+
+    #[test]
+    fn a_claude_model_carries_a_custom_base_url_verbatim() {
+        for url in [
+            "http://litellm.internal:4000",
+            "https://gateway.example.com",
+            "https://gateway.example.com/",
+            "https://gateway.example.com/anthropic/v1",
+            "HTTPS://Gateway.Example.com:8443/prefix/",
+        ] {
+            let config = domain_config_for(claude_json_with_base_url(url)).expect(url);
+            assert_eq!(config.model_base_url.as_deref(), Some(url));
+            assert_eq!(config.model_api_key, "sk-secret");
+        }
+    }
+
+    #[test]
+    fn an_unusable_custom_base_url_is_rejected_without_echoing_it() {
+        for url in [
+            "",
+            "   ",
+            " https://gateway.example.com",
+            "https://gateway.example.com ",
+            "gateway.example.com",
+            "https:gateway.example.com",
+            "https://",
+            "http:///path",
+            "ftp://gateway.example.com",
+            "ws://gateway.example.com",
+            "file:///etc/passwd",
+            "https://user:topsecret@gateway.example.com",
+            "https://topsecret@gateway.example.com",
+            "https://:topsecret@gateway.example.com",
+            "https://@gateway.example.com",
+            "https://gateway.example.com?token=topsecret",
+            "https://gateway.example.com/v1?",
+            "https://gateway.example.com/v1#topsecret",
+            "https://gateway.example.com/v1#",
+            "https://gateway.example.com\\@evil.example",
+            "https://gateway.example.com:notaport",
+            "https://gate way.example.com",
+        ] {
+            let err =
+                domain_config_for(claude_json_with_base_url(url)).expect_err(&format!("{url:?} must be rejected"));
+            let message = format!("{err}");
+            assert!(message.contains("custom base_url"), "{url:?}: {message}");
+            assert!(!message.contains("topsecret"), "{url:?} leaked into: {message}");
+        }
+    }
+
+    #[test]
+    fn a_custom_base_url_requires_a_model_credential() {
+        let mut value = claude_json_with_base_url("https://gateway.example.com");
+        value["model"]["api_key"] = serde_json::json!("  ");
+
+        let err = domain_config_for(value).expect_err("a gateway without a bearer token is unusable");
+        assert!(format!("{err}").contains("credential"));
+    }
+
+    /// Bedrock never takes a custom endpoint: the Anthropic variables must not reroute it.
+    #[test]
+    fn a_bedrock_model_rejects_a_custom_base_url() {
+        let mut value = claude_json_with_base_url("https://gateway.example.com");
+        value["model"]["type"] = serde_json::json!("BEDROCK");
+
+        let err = domain_config_for(value).expect_err("Bedrock must not accept a custom base_url");
+        assert!(format!("{err}").contains("only supported for Claude"));
     }
 
     #[test]

@@ -34,6 +34,8 @@ const RESERVED_ENVIRONMENT_VARIABLE_NAMES: &[&str] = &[
     "CLAUDE_MODEL",
     "MODEL_SETTINGS",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
     "MCP_SERVERS",
     "HOST_ALLOWLIST",
     "GIT_REPOS",
@@ -194,7 +196,10 @@ pub struct AgenticWorkflowConfig {
     /// Internal Bedrock runtime settings derived from the flat workflow model, when selected.
     pub bedrock: Option<BedrockRuntime>,
     /// Anthropic key for Claude runs; Bedrock emits no `ANTHROPIC_API_KEY`.
+    /// With `model_base_url` set it is sent as the gateway bearer token instead.
     pub model_api_key: String,
+    /// Custom Anthropic-compatible root for Claude runs, already validated. Always `None` for Bedrock.
+    pub model_base_url: Option<String>,
     pub model_settings: String,
     pub mcp: String,
     pub project_repositories: Vec<AgenticWorkflowProjectRepository>,
@@ -250,6 +255,32 @@ impl AgenticWorkflowConfig {
         ))
     }
 
+    /// Plain Claude Code gateway variables, base64-encoded for the Secret's `data:` block so
+    /// Kubernetes decodes them once and the CLI reads plaintext. Empty without a custom base URL.
+    /// The credential goes in `ANTHROPIC_AUTH_TOKEN` (bearer); `ANTHROPIC_API_KEY` stays empty so
+    /// the CLI never sends `x-api-key`.
+    fn gateway_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        let Some(base_url) = self
+            .model_base_url
+            .as_ref()
+            .filter(|_| self.model_type == AgenticWorkflowModelType::Claude)
+        else {
+            return vec![];
+        };
+        vec![
+            EnvironmentVariable {
+                key: "ANTHROPIC_BASE_URL".to_string(),
+                value: general_purpose::STANDARD.encode(base_url.as_bytes()),
+                is_secret: false,
+            },
+            EnvironmentVariable {
+                key: "ANTHROPIC_AUTH_TOKEN".to_string(),
+                value: general_purpose::STANDARD.encode(self.model_api_key.as_bytes()),
+                is_secret: true,
+            },
+        ]
+    }
+
     /// Add Bedrock-only AWS names to the reserved user-variable set.
     fn reserved_environment_variable_names(&self) -> Vec<&'static str> {
         let mut reserved = RESERVED_ENVIRONMENT_VARIABLE_NAMES.to_vec();
@@ -288,11 +319,18 @@ fn contract_environment_variables(config: &AgenticWorkflowConfig) -> Vec<Environ
 
     // Bedrock must never receive an Anthropic key that could reroute the CLI.
     if config.model_type == AgenticWorkflowModelType::Claude {
+        // A custom endpoint is bearer-only: the key is explicitly empty, the credential travels as
+        // `ANTHROPIC_AUTH_TOKEN` (see `gateway_environment_variables`).
+        let api_key = if config.model_base_url.is_some() {
+            ""
+        } else {
+            &config.model_api_key
+        };
         vars.insert(
             2,
             EnvironmentVariable {
                 key: "ANTHROPIC_API_KEY".to_string(),
-                value: b64(&config.model_api_key),
+                value: b64(api_key),
                 is_secret: true,
             },
         );
@@ -355,6 +393,7 @@ impl std::fmt::Debug for AgenticWorkflowConfig {
             .field("cluster_region", &self.cluster_region)
             .field("bedrock", &self.bedrock)
             .field("model_api_key", &"***")
+            .field("model_base_url", &self.model_base_url.as_ref().map(|_| "***"))
             .field("model_settings", &self.model_settings)
             .field("mcp", &"***")
             .field("project_repositories", &self.project_repositories.len())
@@ -528,11 +567,18 @@ impl AgenticWorkflow {
             },
             environment_variables: self.get_environment_variables(),
             bedrock_credentials: bedrock.map(|(_, credentials)| credentials).unwrap_or_default(),
-            user_environment_variables: to_user_environment_variables(
-                &self.config.environment_variables,
-                &self.long_id,
-                &self.config.reserved_environment_variable_names(),
-            ),
+            // Gateway variables ride the same decoded-once `data:` block as user variables. Their
+            // names are reserved, so the two lists never share a key.
+            user_environment_variables: self
+                .config
+                .gateway_environment_variables()
+                .into_iter()
+                .chain(to_user_environment_variables(
+                    &self.config.environment_variables,
+                    &self.long_id,
+                    &self.config.reserved_environment_variable_names(),
+                ))
+                .collect(),
             mounted_files: self.config.mounted_files.iter().cloned().collect::<Vec<_>>(),
             registry: self
                 .build
@@ -1163,6 +1209,7 @@ mod tests {
                 auth,
             }),
             model_api_key: "sk-anthropic".to_string(),
+            model_base_url: None,
             model_settings: String::new(),
             mcp: String::new(),
             project_repositories: vec![],
@@ -1738,6 +1785,125 @@ mod tests {
                 },
             ]
         );
+    }
+
+    const TEST_GATEWAY_URL: &str = "http://litellm.internal:4000/anthropic";
+
+    fn gateway_config() -> AgenticWorkflowConfig {
+        AgenticWorkflowConfig {
+            model_base_url: Some(TEST_GATEWAY_URL.to_string()),
+            ..config_for(AgenticWorkflowModelType::Claude, None)
+        }
+    }
+
+    /// Without a custom URL the Claude contract is unchanged and no gateway variable exists.
+    #[test]
+    fn direct_claude_emits_no_gateway_variables() {
+        let config = config_for(AgenticWorkflowModelType::Claude, None);
+
+        assert!(config.gateway_environment_variables().is_empty());
+        let bedrock = config_for(
+            AgenticWorkflowModelType::Bedrock,
+            Some(BedrockAuth::BearerToken("bedrock-token".to_string())),
+        );
+        assert!(bedrock.gateway_environment_variables().is_empty());
+
+        // Defense in depth: validation already refuses a Bedrock base URL.
+        let bedrock_with_url = AgenticWorkflowConfig {
+            model_base_url: Some(TEST_GATEWAY_URL.to_string()),
+            ..bedrock
+        };
+        assert!(bedrock_with_url.gateway_environment_variables().is_empty());
+    }
+
+    /// Bearer-only: the credential is `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` is empty, so
+    /// the CLI has no key to send as `x-api-key`.
+    #[test]
+    fn a_custom_endpoint_sends_the_credential_as_a_bearer_token_only() {
+        let config = gateway_config();
+
+        let contract = contract_environment_variables(&config);
+        let api_key = contract
+            .iter()
+            .find(|ev| ev.key == "ANTHROPIC_API_KEY")
+            .expect("ANTHROPIC_API_KEY must stay present, explicitly empty");
+        assert_eq!(api_key.value, "");
+        assert!(
+            !contract
+                .iter()
+                .any(|ev| ev.key == "ANTHROPIC_BASE_URL" || ev.key == "ANTHROPIC_AUTH_TOKEN"),
+            "gateway values belong in the decoded `data` block, not the contract `stringData`"
+        );
+
+        let gateway = config.gateway_environment_variables();
+        assert_eq!(
+            gateway.iter().map(|ev| ev.key.as_str()).collect::<Vec<_>>(),
+            vec!["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"]
+        );
+        assert_eq!(decode(&gateway[0].value), TEST_GATEWAY_URL);
+        assert!(!gateway[0].is_secret);
+        assert_eq!(decode(&gateway[1].value), "sk-anthropic");
+        assert!(gateway[1].is_secret);
+    }
+
+    /// Kubernetes decodes `data` once, so the process sees plaintext; `stringData` is left for
+    /// ai-runner, which decodes the (empty) key itself.
+    #[test]
+    fn a_custom_endpoint_reaches_the_process_as_plaintext_after_kubernetes_decoding() {
+        let config = gateway_config();
+        let mut context = build_agentic_workflow_tera_context();
+        context.environment_variables = contract_environment_variables(&config);
+        context.user_environment_variables = config.gateway_environment_variables();
+
+        let rendered = render_template(secret_template(), context);
+        let secret: serde_yaml::Value = serde_yaml::Deserializer::from_str(&rendered)
+            .map(|doc| serde_yaml::Value::deserialize(doc).expect("rendered secret must parse as YAML"))
+            .find(|doc| !doc.is_null())
+            .expect("a secret must be rendered");
+
+        let kubernetes_decoded = |name: &str| {
+            decode(
+                secret["data"][name]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{name} must be under data:\n{rendered}")),
+            )
+        };
+        assert_eq!(kubernetes_decoded("ANTHROPIC_BASE_URL"), TEST_GATEWAY_URL);
+        assert_eq!(kubernetes_decoded("ANTHROPIC_AUTH_TOKEN"), "sk-anthropic");
+        assert_eq!(secret["stringData"]["ANTHROPIC_API_KEY"].as_str(), Some(""));
+        assert!(secret["stringData"]["ANTHROPIC_BASE_URL"].is_null());
+        assert!(secret["stringData"]["ANTHROPIC_AUTH_TOKEN"].is_null());
+        assert!(secret["data"]["ANTHROPIC_API_KEY"].is_null());
+    }
+
+    #[test]
+    fn user_variables_cannot_override_the_gateway_variables() {
+        let user_variables = BTreeMap::from([
+            ("ANTHROPIC_BASE_URL".to_string(), plain("https://evil.example")),
+            ("ANTHROPIC_AUTH_TOKEN".to_string(), plain("stolen")),
+            ("MY_VAR".to_string(), plain("kept")),
+        ]);
+
+        for reserved in [
+            RESERVED_ENVIRONMENT_VARIABLE_NAMES.to_vec(),
+            [
+                RESERVED_ENVIRONMENT_VARIABLE_NAMES,
+                BEDROCK_RESERVED_ENVIRONMENT_VARIABLE_NAMES,
+            ]
+            .concat(),
+        ] {
+            let kept = to_user_environment_variables(&user_variables, &Uuid::new_v4(), &reserved);
+            assert_eq!(kept.iter().map(|ev| ev.key.as_str()).collect::<Vec<_>>(), vec!["MY_VAR"]);
+        }
+    }
+
+    #[test]
+    fn debug_output_redacts_the_custom_endpoint() {
+        let debug = format!("{:?}", gateway_config());
+
+        assert!(!debug.contains("sk-anthropic"), "debug leaked the credential: {debug}");
+        assert!(!debug.contains("litellm.internal"), "debug leaked the gateway URL: {debug}");
+        assert!(!debug.contains(&general_purpose::STANDARD.encode("sk-anthropic")));
     }
 
     #[test]
