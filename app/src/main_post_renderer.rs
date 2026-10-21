@@ -8,6 +8,8 @@ const MANDATORY_DEPLOYED_BY_LABEL_KEY: &str = "deployed-by";
 const MANDATORY_DEPLOYED_BY_LABEL_VALUE: &str = "qovery";
 const PUBLIC_ECR_IMAGE_PREFIX: &str = "public.ecr.aws/";
 const CONTAINER_FIELDS: [&str; 3] = ["containers", "initContainers", "ephemeralContainers"];
+// Helm 4 rejects an empty post-renderer response, even when the chart rendered no resources.
+const EMPTY_MANIFEST_COMMENT: &str = "# qovery-engine-post-renderer: no resources rendered\n";
 
 #[derive(Parser)]
 struct PostRendererArgs {
@@ -35,6 +37,9 @@ fn run_post_renderer<R: Read, W: Write>(mut input: R, mut output: W, config: &Po
     input.read_to_string(&mut manifest).context("cannot read stdin")?;
 
     if manifest.trim().is_empty() {
+        output
+            .write_all(EMPTY_MANIFEST_COMMENT.as_bytes())
+            .context("cannot write empty manifest marker")?;
         return Ok(());
     }
 
@@ -229,6 +234,17 @@ spec: {}
         assert!(ret.is_ok(), "post renderer should be best-effort");
         let output_yaml = String::from_utf8(output).expect("output must be valid utf8");
         assert_eq!(output_yaml, input);
+    }
+
+    #[test]
+    fn test_post_renderer_marks_an_empty_manifest() {
+        let mut output: Vec<u8> = Vec::new();
+
+        run_post_renderer(Cursor::new(""), &mut output, &PostRendererConfig::default())
+            .expect("post renderer should succeed");
+
+        let output_yaml = String::from_utf8(output).expect("output must be valid utf8");
+        assert_eq!(output_yaml, super::EMPTY_MANIFEST_COMMENT);
     }
 
     #[test]
