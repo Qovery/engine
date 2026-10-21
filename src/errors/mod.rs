@@ -75,7 +75,8 @@ static TRANSIENT_ERROR_REGEX: Lazy<Regex> = Lazy::new(|| {
 
             # Stream/pipe errors
             eof |
-            broken\ pipe
+            broken\ pipe |
+            connection\ lost
         )",
     )
     .expect("Failed to compile transient error regex")
@@ -5728,6 +5729,7 @@ mod tests {
         assert!(has_transient_error_pattern("EOF"));
         assert!(has_transient_error_pattern("broken pipe"));
         assert!(has_transient_error_pattern("write: broken pipe"));
+        assert!(has_transient_error_pattern("http2: client connection lost"));
     }
 
     #[test]

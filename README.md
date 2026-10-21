@@ -43,18 +43,15 @@ This terminal walkthrough shows the Qovery CLI driving a deployment through the 
 
 ## Run an Engine request locally
 
-The Engine service receives a typed deployment request, creates the corresponding task, then runs it. For local investigation, the application binary can replay a captured request:
+The Engine service receives a typed deployment request, creates the corresponding task, then runs it. For local investigation, replay a captured request with Mise:
 
 ```shell
-LIB_ROOT_DIR="$PWD/lib-engine/lib" \
-WORKSPACE_ROOT_DIR="$PWD/.qovery-workspace" \
-DEPLOY_FROM_FILE_KIND=env \
-DEPLOY_FROM_FILE=/absolute/path/to/environment-request.json \
-TEST_CLUSTER=true \
-cargo run --bin engine
+mise run env:run-local /absolute/path/to/environment-request.json
 ```
 
-Use `DEPLOY_FROM_FILE_KIND=infra` for an infrastructure request. A replay can create, modify, or delete cloud resources; use a dedicated test account and a request whose credentials you understand.
+Use `mise run infra:run-local /absolute/path/to/infrastructure-request.json` for an infrastructure request. Both
+commands prepare the repository-local Helm 4 post-renderer before starting Engine. A replay can create, modify, or
+delete cloud resources; use a dedicated test account and a request whose credentials you understand.
 
 ## Integrate the library
 

@@ -258,6 +258,10 @@ fn base() -> Json {
         "cluster_envoy_proxy_protocol_enabled": false,
         "cluster_envoy_enable_compression": false,
         "cluster_envoy_custom_http_errors_default": null,
+        "gateway_custom_http_error_pages": [{
+            "status_code": 404,
+            "response_body": "<!DOCTYPE html>\n<html lang=\"en\"><body><h1>404 Not Found</h1></body></html>",
+        }],
         "cluster_envoy_gateway_api_retry_num_retries": null,
         "cluster_envoy_gateway_api_retry_retry_on": "",
         "cluster_envoy_gateway_api_retry_http_status_codes": "",
@@ -417,10 +421,10 @@ fn http_host() -> Json {
 fn probe_variants() -> Vec<[(&'static str, Json); 2]> {
     let readiness = |kind: Json| ("service.readiness_probe.type", kind);
     let liveness = |kind: Json| ("service.liveness_probe.type", kind);
-    let tcp = || json!({ "tcp": { "host": "127.0.0.1" }, "http": null, "exec": null, "grpc": null });
+    let tcp = || json!({ "tcp": { "host": null }, "http": null, "exec": null, "grpc": null });
     let http = || json!({ "tcp": null, "http": { "path": "/health", "scheme": "HTTP" }, "exec": null, "grpc": null });
     let exec = || json!({ "tcp": null, "http": null, "exec": { "commands": ["sh", "-c", "true"] }, "grpc": null });
-    let grpc = || json!({ "tcp": null, "http": null, "exec": null, "grpc": { "service": "pkg.Health" } });
+    let grpc = || json!({ "tcp": null, "http": null, "exec": null, "grpc": { "service": null } });
 
     vec![
         [readiness(tcp()), liveness(grpc())],
@@ -569,11 +573,27 @@ fn escaping_preserves_q_job_manifests() {
         ("service.type", json!("job")),
         ("service.cronjob_schedule", json!(null)),
     ];
+    let nullable_probe_handlers = [
+        (
+            "service.readiness_probe.type",
+            json!({ "tcp": null, "http": null, "exec": null, "grpc": { "service": null } }),
+        ),
+        (
+            "service.liveness_probe.type",
+            json!({ "tcp": { "host": null }, "http": null, "exec": null, "grpc": null }),
+        ),
+    ];
+    let one_shot_with_nullable_probe_handlers: Vec<(&str, Json)> =
+        one_shot.iter().chain(nullable_probe_handlers.iter()).cloned().collect();
+    let cronjob_with_nullable_probe_handlers: Vec<(&str, Json)> =
+        job.iter().chain(nullable_probe_handlers.iter()).cloned().collect();
     assert_family_equivalent(
         "q-job",
         vec![
             ("job", ctx(&one_shot)),
             ("cronjob", ctx(&job)),
+            ("job", ctx(&one_shot_with_nullable_probe_handlers)),
+            ("cronjob", ctx(&cronjob_with_nullable_probe_handlers)),
             ("secret", ctx(&job)),
             ("pdb", ctx(&job)),
             ("rbac", ctx(&job)),

@@ -211,25 +211,25 @@ spec:
           {{- end }}
               {{- if $.Values.service.readiness_probe }}
               readinessProbe:
-                {{- if $.Values.service.readiness_probe.type.tcp }}
+                {{- if hasKey $.Values.service.readiness_probe.type "tcp" }}
                 tcpSocket:
                   port: {{ $.Values.service.readiness_probe.port }}
                   host: {{ $.Values.service.readiness_probe.type.tcp.host | toJson }}
                 {{- end }}
-                {{- if $.Values.service.readiness_probe.type.http }}
+                {{- if hasKey $.Values.service.readiness_probe.type "http" }}
                 httpGet:
                   port: {{ $.Values.service.readiness_probe.port }}
                   path: {{ $.Values.service.readiness_probe.type.http.path | toJson }}
                   scheme: {{ $.Values.service.readiness_probe.type.http.scheme }}
                 {{- end }}
-                {{- if $.Values.service.readiness_probe.type.exec }}
+                {{- if hasKey $.Values.service.readiness_probe.type "exec" }}
                 exec:
                   command:
                   {{- range $cmd := $.Values.service.readiness_probe.type.exec.commands }}
                   - {{ $cmd | toJson }}
                   {{- end }}
                 {{- end }}
-                {{- if $.Values.service.readiness_probe.type.grpc }}
+                {{- if hasKey $.Values.service.readiness_probe.type "grpc" }}
                 grpc:
                   port: {{ $.Values.service.readiness_probe.port }}
                   service: {{ $.Values.service.readiness_probe.type.grpc.service | toJson }}
@@ -242,25 +242,25 @@ spec:
               {{- end }}
               {{- if $.Values.service.liveness_probe }}
               livenessProbe:
-                {{- if $.Values.service.liveness_probe.type.tcp }}
+                {{- if hasKey $.Values.service.liveness_probe.type "tcp" }}
                 tcpSocket:
                   port: {{ $.Values.service.liveness_probe.port }}
                   host: {{ $.Values.service.liveness_probe.type.tcp.host | toJson }}
                 {{- end }}
-                {{- if $.Values.service.liveness_probe.type.http }}
+                {{- if hasKey $.Values.service.liveness_probe.type "http" }}
                 httpGet:
                   port: {{ $.Values.service.liveness_probe.port }}
                   path: {{ $.Values.service.liveness_probe.type.http.path | toJson }}
                   scheme: {{ $.Values.service.liveness_probe.type.http.scheme }}
                 {{- end }}
-                {{- if $.Values.service.liveness_probe.type.exec }}
+                {{- if hasKey $.Values.service.liveness_probe.type "exec" }}
                 exec:
                   command:
                   {{- range $cmd := $.Values.service.liveness_probe.type.exec.commands }}
                   - {{ $cmd | toJson }}
                   {{- end }}
                 {{- end }}
-                {{- if $.Values.service.liveness_probe.type.grpc }}
+                {{- if hasKey $.Values.service.liveness_probe.type "grpc" }}
                 grpc:
                   port: {{ $.Values.service.liveness_probe.port }}
                   service: {{ $.Values.service.liveness_probe.type.grpc.service | toJson }}

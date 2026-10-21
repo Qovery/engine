@@ -779,6 +779,7 @@ mod tests {
     use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
     use crate::environment::models::container::ClusterTeraContext;
     use crate::environment::models::labels_group::LabelsGroupTeraContext;
+    use crate::environment::models::probe::{Probe, ProbeType};
     use crate::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
     use crate::io_models::container::ContainerAdvancedSettings;
     use crate::io_models::labels_group::{Label, LabelsGroup};
@@ -898,6 +899,29 @@ mod tests {
             2,
             "ephemeral-storage should appear in both requests and limits"
         );
+    }
+
+    #[test]
+    fn renders_tcp_liveness_probe_with_a_handler() {
+        let mut context = build_container_tera_context(None);
+        context.service.liveness_probe = Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: 80,
+            initial_delay_seconds: 30,
+            timeout_seconds: 5,
+            period_seconds: 10,
+            success_threshold: 1,
+            failure_threshold: 3,
+        });
+
+        let manifests = parse_manifests(&render_template("deployment", context));
+        let liveness_probe = &manifests[0]["spec"]["template"]["spec"]["containers"][0]["livenessProbe"];
+
+        assert_eq!(
+            liveness_probe["tcpSocket"]["port"], 80,
+            "liveness probe rendered by Helm: {liveness_probe:?}"
+        );
+        assert!(liveness_probe["tcpSocket"].get("host").is_some());
     }
 
     #[test]

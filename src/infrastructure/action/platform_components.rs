@@ -12,9 +12,9 @@ use crate::io_models::Action;
 use crate::io_models::container::Registry;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{
-    OperatorContainerUpdateUnit, PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction,
-    PlatformPreflightCheckResult, PlatformPreflightCheckStatus, PlatformPreflightRequest, PlatformPreflightRequirement,
-    PlatformUnitErrorCode, PlatformUnitResult,
+    OperatorContainerUpdateUnit, PlatformExecutionResult, PlatformHelmApplyStrategy, PlatformHelmUnit,
+    PlatformHelmUnitAction, PlatformPreflightCheckResult, PlatformPreflightCheckStatus, PlatformPreflightRequest,
+    PlatformPreflightRequirement, PlatformUnitErrorCode, PlatformUnitResult,
 };
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -31,6 +31,7 @@ const HELM_UPGRADE_TIMEOUT: Duration = Duration::from_secs(600);
 
 pub(super) const LEGACY_REQUEST_SCHEMA_VERSION: u32 = 1;
 pub(super) const PREFLIGHT_REQUEST_SCHEMA_VERSION: u32 = 2;
+pub(super) const SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION: u32 = 3;
 
 /// Kubernetes reads the container termination message from this path by default and truncates
 /// it at 4096 bytes. Override with `QOVERY_TERMINATION_MESSAGE_PATH` (tests, local runs).
@@ -369,12 +370,16 @@ fn validate_platform_request(
     }
 
     let schema_version = match schema_version.map(str::parse::<u32>) {
-        Some(Ok(version @ (LEGACY_REQUEST_SCHEMA_VERSION | PREFLIGHT_REQUEST_SCHEMA_VERSION))) => version,
+        Some(Ok(
+            version @ (LEGACY_REQUEST_SCHEMA_VERSION
+            | PREFLIGHT_REQUEST_SCHEMA_VERSION
+            | SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION),
+        )) => version,
         Some(Ok(version)) => {
             return Err(request_error(
                 PlatformUnitErrorCode::UnsupportedSchemaVersion,
                 format!(
-                    "unsupported request schema_version {version}: this engine supports {LEGACY_REQUEST_SCHEMA_VERSION} and {PREFLIGHT_REQUEST_SCHEMA_VERSION}"
+                    "unsupported request schema_version {version}: this engine supports {LEGACY_REQUEST_SCHEMA_VERSION}, {PREFLIGHT_REQUEST_SCHEMA_VERSION} and {SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION}"
                 ),
             ));
         }
@@ -397,8 +402,8 @@ fn validate_platform_request(
         // An omitted section is the wire representation of DISABLED and deliberately performs
         // no extra cluster reads. This also keeps schema 2 backward-compatible for callers that
         // do not activate preflight yet.
-        (PREFLIGHT_REQUEST_SCHEMA_VERSION, None) => {}
-        (PREFLIGHT_REQUEST_SCHEMA_VERSION, Some(preflight)) => {
+        (PREFLIGHT_REQUEST_SCHEMA_VERSION | SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION, None) => {}
+        (PREFLIGHT_REQUEST_SCHEMA_VERSION | SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION, Some(preflight)) => {
             preflight.validate().map_err(|error| {
                 request_error(
                     PlatformUnitErrorCode::InvalidPayload,
@@ -450,6 +455,36 @@ fn validate_platform_request(
                 PlatformUnitErrorCode::ForbiddenAction,
                 format!("platform Helm unit `{}` has an unsupported action", unit.key),
             ));
+        }
+        match (schema_version, unit.apply_strategy) {
+            (SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION, None) => {
+                return Err(unit_error(
+                    PlatformUnitErrorCode::InvalidPayload,
+                    format!(
+                        "platform Helm unit `{}` is missing apply_strategy for request schema_version 3",
+                        unit.key
+                    ),
+                ));
+            }
+            (SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION, Some(PlatformHelmApplyStrategy::Unknown)) => {
+                return Err(unit_error(
+                    PlatformUnitErrorCode::InvalidPayload,
+                    format!("platform Helm unit `{}` has an unsupported apply_strategy", unit.key),
+                ));
+            }
+            (
+                LEGACY_REQUEST_SCHEMA_VERSION | PREFLIGHT_REQUEST_SCHEMA_VERSION,
+                Some(PlatformHelmApplyStrategy::ServerSideApplyCrds | PlatformHelmApplyStrategy::Unknown),
+            ) => {
+                return Err(unit_error(
+                    PlatformUnitErrorCode::InvalidPayload,
+                    format!(
+                        "platform Helm unit `{}` apply_strategy requires request schema_version 3",
+                        unit.key
+                    ),
+                ));
+            }
+            _ => {}
         }
         if !is_valid_namespace(&unit.namespace) {
             return Err(unit_error(
@@ -535,6 +570,7 @@ fn is_valid_namespace(namespace: &str) -> bool {
 pub(super) fn result_schema_version_for(schema_version: Option<&str>) -> u32 {
     match schema_version.and_then(|version| version.parse::<u32>().ok()) {
         Some(PREFLIGHT_REQUEST_SCHEMA_VERSION) => PREFLIGHT_REQUEST_SCHEMA_VERSION,
+        Some(SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION) => SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION,
         _ => LEGACY_REQUEST_SCHEMA_VERSION,
     }
 }
@@ -657,7 +693,7 @@ fn apply_platform_helm_unit(
         }
     };
 
-    let chart_info = ChartInfo {
+    let mut chart_info = ChartInfo {
         name: unit.release_name.clone(),
         path: chart_dir,
         namespace: HelmChartNamespaces::Custom(unit.namespace.clone()),
@@ -670,45 +706,77 @@ fn apply_platform_helm_unit(
         ..Default::default()
     };
 
-    logger.info(PlatformHelmDeploymentEvent::ShowingDiff.to_string());
-    // Keep the traditional cluster behavior: a best-effort diff must never block the deployment.
-    // Do not log the Helm error because command errors may contain sensitive values.
-    let mut has_visible_diff = false;
-    let diff_result = helm.upgrade_diff_with_secrets_suppressed(
-        &chart_info,
-        &[],
-        &CommandKiller::from_timeout(HELM_DIFF_TIMEOUT),
-        &mut |line| {
-            if let Some(line) = platform_helm_diff_line(&line) {
-                has_visible_diff = true;
-                logger.diff(InfrastructureDiffType::Helm, line);
+    match unit.apply_strategy.unwrap_or(PlatformHelmApplyStrategy::HelmRelease) {
+        PlatformHelmApplyStrategy::HelmRelease => {
+            logger.info(PlatformHelmDeploymentEvent::ShowingDiff.to_string());
+            // Keep the traditional cluster behavior: a best-effort diff must never block the deployment.
+            // Do not log the Helm error because command errors may contain sensitive values.
+            let mut has_visible_diff = false;
+            let diff_result = helm.upgrade_diff_with_secrets_suppressed(
+                &chart_info,
+                &[],
+                &CommandKiller::from_timeout(HELM_DIFF_TIMEOUT),
+                &mut |line| {
+                    if let Some(line) = platform_helm_diff_line(&line) {
+                        has_visible_diff = true;
+                        logger.diff(InfrastructureDiffType::Helm, line);
+                    }
+                },
+            );
+            match diff_result {
+                Ok(()) if !has_visible_diff => logger.info("│ No diff to display"),
+                Ok(()) => {}
+                Err(_) => logger.warn("│ Diff unavailable; continuing deployment"),
             }
-        },
-    );
-    match diff_result {
-        // Not diff content: report it as an ordinary informational line.
-        Ok(()) if !has_visible_diff => logger.info("│ No diff to display"),
-        Ok(()) => {}
-        Err(_) => logger.warn("│ Diff unavailable; continuing deployment"),
-    }
 
-    if infra_ctx.context().is_dry_run_deploy() {
-        logger.warn(format!("│ Dry run: skipping installation of `{}`", unit.key));
-        return Ok(());
-    }
+            if infra_ctx.context().is_dry_run_deploy() {
+                logger.warn(format!("│ Dry run: skipping installation of `{}`", unit.key));
+                return Ok(());
+            }
 
-    logger.info(PlatformHelmDeploymentEvent::Deploying.to_string());
-    helm.upgrade(&chart_info, &[], &CommandKiller::from_timeout(HELM_UPGRADE_TIMEOUT))
-        .map_err(|err| {
-            (
-                PlatformUnitErrorCode::HelmFailed,
-                format!(
-                    "helm upgrade failed for release `{}` in namespace `{}`",
-                    unit.release_name, unit.namespace
-                ),
-                Box::new(EngineError::new_helm_chart_error(event_details.clone(), err.into())),
+            logger.info(PlatformHelmDeploymentEvent::Deploying.to_string());
+            helm.upgrade(&chart_info, &[], &CommandKiller::from_timeout(HELM_UPGRADE_TIMEOUT))
+                .map_err(|err| {
+                    (
+                        PlatformUnitErrorCode::HelmFailed,
+                        format!(
+                            "helm upgrade failed for release `{}` in namespace `{}`",
+                            unit.release_name, unit.namespace
+                        ),
+                        Box::new(EngineError::new_helm_chart_error(event_details.clone(), err.into())),
+                    )
+                })?;
+        }
+        PlatformHelmApplyStrategy::ServerSideApplyCrds => {
+            logger.info("│ Rendering CRDs and applying them with Kubernetes server-side apply");
+            if infra_ctx.context().is_dry_run_deploy() {
+                logger.warn(format!("│ Dry run: skipping installation of `{}`", unit.key));
+                return Ok(());
+            }
+
+            chart_info.force_conflicts = true;
+            chart_info.requires_server_side_apply = true;
+            chart_info.wait_for_crd_establishment = true;
+            logger.info(PlatformHelmDeploymentEvent::Deploying.to_string());
+            helm.upgrade_with_server_side_apply(
+                infra_ctx.kubernetes().kubeconfig_local_file_path(),
+                &chart_info,
+                &[],
+                &CommandKiller::from_timeout(HELM_UPGRADE_TIMEOUT),
             )
-        })?;
+            .map_err(|err| {
+                (
+                    PlatformUnitErrorCode::HelmFailed,
+                    format!(
+                        "server-side apply failed for CRD chart `{}` in namespace `{}`",
+                        unit.release_name, unit.namespace
+                    ),
+                    Box::new(EngineError::new_helm_chart_error(event_details.clone(), err.into())),
+                )
+            })?;
+        }
+        PlatformHelmApplyStrategy::Unknown => unreachable!("validation rejects unknown apply strategies"),
+    }
 
     Ok(())
 }
@@ -861,6 +929,7 @@ mod tests {
                 name: "qovery-cluster-agent".to_string(),
                 version: "0.1.0".to_string(),
             },
+            apply_strategy: None,
             values_yaml: "image:\n  tag: \"0.1.0\"\n".to_string(),
             images: vec![],
             preflight_requirements: Default::default(),
@@ -987,6 +1056,12 @@ mod tests {
             validate_create_request(Some("2"), &[valid_unit()], None).unwrap(),
             PREFLIGHT_REQUEST_SCHEMA_VERSION
         );
+        let mut server_side_apply_crds_unit = valid_unit();
+        server_side_apply_crds_unit.apply_strategy = Some(PlatformHelmApplyStrategy::ServerSideApplyCrds);
+        assert_eq!(
+            validate_create_request(Some("3"), &[server_side_apply_crds_unit], None).unwrap(),
+            SERVER_SIDE_APPLY_CRDS_REQUEST_SCHEMA_VERSION
+        );
     }
 
     #[test]
@@ -1002,7 +1077,7 @@ mod tests {
 
     #[test]
     fn missing_or_unsupported_schema_version_is_rejected_before_execution() {
-        for schema_version in [None, Some("3"), Some("abc")] {
+        for schema_version in [None, Some("4"), Some("abc")] {
             let err = validate_create_request(schema_version, &[valid_unit()], None)
                 .err()
                 .unwrap();
@@ -1047,6 +1122,19 @@ mod tests {
         let err = validate_create_request(Some("1"), &[unit], None).err().unwrap();
         assert_eq!(err.code, PlatformUnitErrorCode::ForbiddenAction);
         assert_eq!(err.unit_key.as_deref(), Some("cluster-agent"));
+    }
+
+    #[test]
+    fn server_side_apply_crds_requires_schema_three_and_an_explicit_strategy() {
+        let err = validate_create_request(Some("3"), &[valid_unit()], None).err().unwrap();
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert!(err.message.contains("missing apply_strategy"));
+
+        let mut unit = valid_unit();
+        unit.apply_strategy = Some(PlatformHelmApplyStrategy::ServerSideApplyCrds);
+        let err = validate_create_request(Some("2"), &[unit], None).err().unwrap();
+        assert_eq!(err.code, PlatformUnitErrorCode::InvalidPayload);
+        assert!(err.message.contains("requires request schema_version 3"));
     }
 
     #[test]

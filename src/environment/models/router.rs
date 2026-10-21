@@ -149,6 +149,86 @@ struct GatewayApiBackendTrafficPolicySettings {
     gateway_api_retry_per_try_timeout_seconds: Option<u32>,
 }
 
+#[derive(serde::Serialize, Clone, Debug, Eq, PartialEq)]
+struct GatewayCustomHttpErrorPage {
+    status_code: u16,
+    response_body: String,
+}
+
+fn to_gateway_custom_http_error_pages(status_codes: Option<&[u16]>) -> Vec<GatewayCustomHttpErrorPage> {
+    status_codes
+        .unwrap_or_default()
+        .iter()
+        .copied()
+        .map(|status_code| GatewayCustomHttpErrorPage {
+            status_code,
+            response_body: gateway_custom_http_error_response_body(status_code),
+        })
+        .collect()
+}
+
+fn gateway_custom_http_error_response_body(status_code: u16) -> String {
+    let (title, message, background, color) = match status_code {
+        400 => (
+            "Bad Request",
+            "The request could not be understood by the server due to malformed syntax.",
+            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            "#fff",
+        ),
+        401 => (
+            "Unauthorized",
+            "Authentication is required to access this resource.",
+            "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+            "#fff",
+        ),
+        403 => (
+            "Forbidden",
+            "You don't have permission to access this resource.",
+            "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+            "#fff",
+        ),
+        404 => (
+            "Not Found",
+            "The page you are looking for could not be found.",
+            "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+            "#fff",
+        ),
+        500 => (
+            "Internal Server Error",
+            "Something went wrong on our end. Please try again later.",
+            "linear-gradient(135deg, #f857a6 0%, #ff5858 100%)",
+            "#fff",
+        ),
+        502 => (
+            "Bad Gateway",
+            "The server received an invalid response from an upstream server.",
+            "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+            "#333",
+        ),
+        503 => (
+            "Service Unavailable",
+            "The service is temporarily unavailable. Please try again in a few moments.",
+            "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
+            "#333",
+        ),
+        504 => (
+            "Gateway Timeout",
+            "The server didn't receive a timely response from an upstream server.",
+            "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
+            "#333",
+        ),
+        _ => {
+            return format!(
+                "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>{status_code} Error</title>\n</head>\n<body>\n    <h1>{status_code}</h1>\n    <p>An unexpected error occurred.</p>\n</body>\n</html>"
+            );
+        }
+    };
+
+    format!(
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>{status_code} {title}</title>\n    <style>\n        body {{ font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;\n               display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;\n               background: {background}; color: {color}; }}\n        .container {{ text-align: center; padding: 2rem; }}\n        h1 {{ font-size: 6rem; margin: 0; font-weight: 700; }}\n        h2 {{ font-size: 2rem; margin: 1rem 0; font-weight: 400; }}\n        p {{ font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }}\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>{status_code}</h1>\n        <h2>{title}</h2>\n        <p>{message}</p>\n    </div>\n</body>\n</html>"
+    )
+}
+
 fn select_gateway_api_retry_vec_with_fallback<T: Clone>(service_value: &[T], cluster_value: &Option<Vec<T>>) -> Vec<T> {
     if !service_value.is_empty() {
         return service_value.to_vec();
@@ -253,192 +333,211 @@ impl<T: CloudProvider> Router<T> {
             .service_long_id;
 
         // Check if the service is an application
-        let (service_name, ports, gateway_http_route_headers_signature, service_gateway_api_policy_settings) =
-            if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
-                // advanced settings
-                context.insert("advanced_settings", &application.advanced_settings());
-                context.insert("associated_service_long_id", &service_id);
-                context.insert("associated_service_type", "application");
+        let (
+            service_name,
+            ports,
+            gateway_http_route_headers_signature,
+            service_gateway_api_policy_settings,
+            gateway_custom_http_error_pages,
+        ) = if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
+            // advanced settings
+            context.insert("advanced_settings", &application.advanced_settings());
+            context.insert("associated_service_long_id", &service_id);
+            context.insert("associated_service_type", "application");
 
-                if let Some(network_ingress_nginx_controller_server_snippet) = &application
-                    .advanced_settings()
-                    .network_ingress_nginx_controller_server_snippet
-                {
-                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
-                    context.insert(
-                        "nginx_ingress_controller_server_snippet",
-                        &network_ingress_nginx_controller_server_snippet
-                            .to_model()
-                            .get_snippet_value(),
-                    );
-                }
-
-                if let Some(network_ingress_nginx_controller_configuration_snippet) = &application
-                    .advanced_settings()
-                    .network_ingress_nginx_controller_configuration_snippet
-                {
-                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
-                    context.insert(
-                        "nginx_ingress_controller_configuration_snippet",
-                        &network_ingress_nginx_controller_configuration_snippet
-                            .to_model()
-                            .get_snippet_value(),
-                    );
-                }
-
-                (
-                    application.kube_name(),
-                    application.public_ports(),
-                    to_gateway_http_route_headers_signature(
-                        &application.advanced_settings().network_gateway_api_add_headers,
-                        &application.advanced_settings().network_gateway_api_proxy_set_headers,
-                    ),
-                    GatewayApiBackendTrafficPolicySettings {
-                        gateway_api_retry_num_retries: application
-                            .advanced_settings()
-                            .network_gateway_api_retry_num_retries,
-                        gateway_api_retry_retry_on_triggers: application
-                            .advanced_settings()
-                            .network_gateway_api_retry_retry_on
-                            .clone()
-                            .unwrap_or_default(),
-                        gateway_api_retry_http_status_codes: application
-                            .advanced_settings()
-                            .network_gateway_api_retry_http_status_codes
-                            .clone()
-                            .unwrap_or_default(),
-                        gateway_api_retry_per_try_timeout_seconds: application
-                            .advanced_settings()
-                            .network_gateway_api_retry_per_try_timeout_seconds,
-                    },
-                )
-            } else if let Some(container) = &environment
-                .containers
-                .iter()
-                .find(|container| container.long_id() == &service_id)
+            if let Some(network_ingress_nginx_controller_server_snippet) = &application
+                .advanced_settings()
+                .network_ingress_nginx_controller_server_snippet
             {
-                // advanced settings
-                context.insert("advanced_settings", &container.advanced_settings());
-                context.insert("associated_service_long_id", &service_id);
-                context.insert("associated_service_type", "container");
+                // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                context.insert(
+                    "nginx_ingress_controller_server_snippet",
+                    &network_ingress_nginx_controller_server_snippet
+                        .to_model()
+                        .get_snippet_value(),
+                );
+            }
 
-                if let Some(network_ingress_nginx_controller_server_snippet) = &container
-                    .advanced_settings()
-                    .network_ingress_nginx_controller_server_snippet
-                {
-                    // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
-                    context.insert(
-                        "nginx_ingress_controller_server_snippet",
-                        &network_ingress_nginx_controller_server_snippet
-                            .to_model()
-                            .get_snippet_value(),
-                    );
-                }
+            if let Some(network_ingress_nginx_controller_configuration_snippet) = &application
+                .advanced_settings()
+                .network_ingress_nginx_controller_configuration_snippet
+            {
+                // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                context.insert(
+                    "nginx_ingress_controller_configuration_snippet",
+                    &network_ingress_nginx_controller_configuration_snippet
+                        .to_model()
+                        .get_snippet_value(),
+                );
+            }
 
-                if let Some(network_ingress_nginx_controller_configuration_snippet) = &container
-                    .advanced_settings()
-                    .network_ingress_nginx_controller_configuration_snippet
-                {
-                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
-                    context.insert(
-                        "nginx_ingress_controller_configuration_snippet",
-                        &network_ingress_nginx_controller_configuration_snippet
-                            .to_model()
-                            .get_snippet_value(),
-                    );
-                }
+            (
+                application.kube_name(),
+                application.public_ports(),
+                to_gateway_http_route_headers_signature(
+                    &application.advanced_settings().network_gateway_api_add_headers,
+                    &application.advanced_settings().network_gateway_api_proxy_set_headers,
+                ),
+                GatewayApiBackendTrafficPolicySettings {
+                    gateway_api_retry_num_retries: application
+                        .advanced_settings()
+                        .network_gateway_api_retry_num_retries,
+                    gateway_api_retry_retry_on_triggers: application
+                        .advanced_settings()
+                        .network_gateway_api_retry_retry_on
+                        .clone()
+                        .unwrap_or_default(),
+                    gateway_api_retry_http_status_codes: application
+                        .advanced_settings()
+                        .network_gateway_api_retry_http_status_codes
+                        .clone()
+                        .unwrap_or_default(),
+                    gateway_api_retry_per_try_timeout_seconds: application
+                        .advanced_settings()
+                        .network_gateway_api_retry_per_try_timeout_seconds,
+                },
+                to_gateway_custom_http_error_pages(
+                    application
+                        .advanced_settings()
+                        .network_gateway_api_custom_http_errors
+                        .as_deref(),
+                ),
+            )
+        } else if let Some(container) = &environment
+            .containers
+            .iter()
+            .find(|container| container.long_id() == &service_id)
+        {
+            // advanced settings
+            context.insert("advanced_settings", &container.advanced_settings());
+            context.insert("associated_service_long_id", &service_id);
+            context.insert("associated_service_type", "container");
 
-                (
-                    container.kube_name(),
-                    container.public_ports(),
-                    to_gateway_http_route_headers_signature(
-                        &container.advanced_settings().network_gateway_api_add_headers,
-                        &container.advanced_settings().network_gateway_api_proxy_set_headers,
-                    ),
-                    GatewayApiBackendTrafficPolicySettings {
-                        gateway_api_retry_num_retries: container
-                            .advanced_settings()
-                            .network_gateway_api_retry_num_retries,
-                        gateway_api_retry_retry_on_triggers: container
-                            .advanced_settings()
-                            .network_gateway_api_retry_retry_on
-                            .clone()
-                            .unwrap_or_default(),
-                        gateway_api_retry_http_status_codes: container
-                            .advanced_settings()
-                            .network_gateway_api_retry_http_status_codes
-                            .clone()
-                            .unwrap_or_default(),
-                        gateway_api_retry_per_try_timeout_seconds: container
-                            .advanced_settings()
-                            .network_gateway_api_retry_per_try_timeout_seconds,
-                    },
-                )
-            } else {
-                let helm_chart = environment
-                    .helm_charts
-                    .iter()
-                    .find(|helm_chart| helm_chart.long_id() == &service_id)
-                    .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
+            if let Some(network_ingress_nginx_controller_server_snippet) = &container
+                .advanced_settings()
+                .network_ingress_nginx_controller_server_snippet
+            {
+                // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
+                context.insert(
+                    "nginx_ingress_controller_server_snippet",
+                    &network_ingress_nginx_controller_server_snippet
+                        .to_model()
+                        .get_snippet_value(),
+                );
+            }
 
-                // advanced settings
-                context.insert("advanced_settings", &helm_chart.advanced_settings());
-                context.insert("associated_service_long_id", &service_id);
-                context.insert("associated_service_type", "helm");
+            if let Some(network_ingress_nginx_controller_configuration_snippet) = &container
+                .advanced_settings()
+                .network_ingress_nginx_controller_configuration_snippet
+            {
+                // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                context.insert(
+                    "nginx_ingress_controller_configuration_snippet",
+                    &network_ingress_nginx_controller_configuration_snippet
+                        .to_model()
+                        .get_snippet_value(),
+                );
+            }
 
-                if let Some(network_ingress_nginx_controller_server_snippet) = &helm_chart
-                    .advanced_settings()
-                    .network_ingress_nginx_controller_server_snippet
-                {
-                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
-                    context.insert(
-                        "nginx_ingress_controller_server_snippet",
-                        &network_ingress_nginx_controller_server_snippet
-                            .to_model()
-                            .get_snippet_value(),
-                    );
-                }
+            (
+                container.kube_name(),
+                container.public_ports(),
+                to_gateway_http_route_headers_signature(
+                    &container.advanced_settings().network_gateway_api_add_headers,
+                    &container.advanced_settings().network_gateway_api_proxy_set_headers,
+                ),
+                GatewayApiBackendTrafficPolicySettings {
+                    gateway_api_retry_num_retries: container.advanced_settings().network_gateway_api_retry_num_retries,
+                    gateway_api_retry_retry_on_triggers: container
+                        .advanced_settings()
+                        .network_gateway_api_retry_retry_on
+                        .clone()
+                        .unwrap_or_default(),
+                    gateway_api_retry_http_status_codes: container
+                        .advanced_settings()
+                        .network_gateway_api_retry_http_status_codes
+                        .clone()
+                        .unwrap_or_default(),
+                    gateway_api_retry_per_try_timeout_seconds: container
+                        .advanced_settings()
+                        .network_gateway_api_retry_per_try_timeout_seconds,
+                },
+                to_gateway_custom_http_error_pages(
+                    container
+                        .advanced_settings()
+                        .network_gateway_api_custom_http_errors
+                        .as_deref(),
+                ),
+            )
+        } else {
+            let helm_chart = environment
+                .helm_charts
+                .iter()
+                .find(|helm_chart| helm_chart.long_id() == &service_id)
+                .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
 
-                if let Some(network_ingress_nginx_controller_configuration_snippet) = &helm_chart
-                    .advanced_settings()
-                    .network_ingress_nginx_controller_configuration_snippet
-                {
-                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
-                    context.insert(
-                        "nginx_ingress_controller_configuration_snippet",
-                        &network_ingress_nginx_controller_configuration_snippet
-                            .to_model()
-                            .get_snippet_value(),
-                    );
-                }
+            // advanced settings
+            context.insert("advanced_settings", &helm_chart.advanced_settings());
+            context.insert("associated_service_long_id", &service_id);
+            context.insert("associated_service_type", "helm");
 
-                (
-                    helm_chart.kube_name(),
-                    helm_chart.public_ports(),
-                    to_gateway_http_route_headers_signature(
-                        &helm_chart.advanced_settings().network_gateway_api_add_headers,
-                        &helm_chart.advanced_settings().network_gateway_api_proxy_set_headers,
-                    ),
-                    GatewayApiBackendTrafficPolicySettings {
-                        gateway_api_retry_num_retries: helm_chart
-                            .advanced_settings()
-                            .network_gateway_api_retry_num_retries,
-                        gateway_api_retry_retry_on_triggers: helm_chart
-                            .advanced_settings()
-                            .network_gateway_api_retry_retry_on
-                            .clone()
-                            .unwrap_or_default(),
-                        gateway_api_retry_http_status_codes: helm_chart
-                            .advanced_settings()
-                            .network_gateway_api_retry_http_status_codes
-                            .clone()
-                            .unwrap_or_default(),
-                        gateway_api_retry_per_try_timeout_seconds: helm_chart
-                            .advanced_settings()
-                            .network_gateway_api_retry_per_try_timeout_seconds,
-                    },
-                )
-            };
+            if let Some(network_ingress_nginx_controller_server_snippet) = &helm_chart
+                .advanced_settings()
+                .network_ingress_nginx_controller_server_snippet
+            {
+                // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                context.insert(
+                    "nginx_ingress_controller_server_snippet",
+                    &network_ingress_nginx_controller_server_snippet
+                        .to_model()
+                        .get_snippet_value(),
+                );
+            }
+
+            if let Some(network_ingress_nginx_controller_configuration_snippet) = &helm_chart
+                .advanced_settings()
+                .network_ingress_nginx_controller_configuration_snippet
+            {
+                // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                context.insert(
+                    "nginx_ingress_controller_configuration_snippet",
+                    &network_ingress_nginx_controller_configuration_snippet
+                        .to_model()
+                        .get_snippet_value(),
+                );
+            }
+
+            (
+                helm_chart.kube_name(),
+                helm_chart.public_ports(),
+                to_gateway_http_route_headers_signature(
+                    &helm_chart.advanced_settings().network_gateway_api_add_headers,
+                    &helm_chart.advanced_settings().network_gateway_api_proxy_set_headers,
+                ),
+                GatewayApiBackendTrafficPolicySettings {
+                    gateway_api_retry_num_retries: helm_chart.advanced_settings().network_gateway_api_retry_num_retries,
+                    gateway_api_retry_retry_on_triggers: helm_chart
+                        .advanced_settings()
+                        .network_gateway_api_retry_retry_on
+                        .clone()
+                        .unwrap_or_default(),
+                    gateway_api_retry_http_status_codes: helm_chart
+                        .advanced_settings()
+                        .network_gateway_api_retry_http_status_codes
+                        .clone()
+                        .unwrap_or_default(),
+                    gateway_api_retry_per_try_timeout_seconds: helm_chart
+                        .advanced_settings()
+                        .network_gateway_api_retry_per_try_timeout_seconds,
+                },
+                to_gateway_custom_http_error_pages(
+                    helm_chart
+                        .advanced_settings()
+                        .network_gateway_api_custom_http_errors
+                        .as_deref(),
+                ),
+            )
+        };
 
         // inject basic auth data
         context.insert("basic_auth_htaccess", &self.advanced_settings.basic_auth);
@@ -522,6 +621,7 @@ impl<T: CloudProvider> Router<T> {
         context.insert("http_hosts_per_namespace_nginx", &http_hosts_per_namespace_nginx);
         context.insert("http_hosts_per_namespace_gateway", &http_hosts_per_namespace_gateway);
         context.insert("gateway_http_routes_per_namespace", &gateway_http_routes_per_namespace);
+        context.insert("gateway_custom_http_error_pages", &gateway_custom_http_error_pages);
         context.insert("grpc_hosts_has_regex_path", &grpc_hosts_has_regex_path);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace_nginx);
         context.insert("grpc_hosts_per_namespace_nginx", &grpc_hosts_per_namespace_nginx);
@@ -1491,8 +1591,8 @@ mod tests {
     use crate::environment::models::router::{
         HostnameListenerSetPlan, ORGA_9C983A44, generate_certificate_alternative_names,
         plan_router_hostname_listener_set_plan, plan_router_hostname_listener_sets, router_policy_http2_enabled,
-        share_hostname_listener_sets, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
-        to_gateway_http_routes_data_template, to_host_data_template,
+        share_hostname_listener_sets, to_gateway_custom_http_error_pages, to_gateway_host_data_template,
+        to_gateway_http_route_headers_signature, to_gateway_http_routes_data_template, to_host_data_template,
     };
 
     use crate::io_models::environment::HostnameMapping;
@@ -1667,6 +1767,19 @@ mod tests {
     fn router_policy_http2_is_enabled_only_for_orga_9c983a44() {
         assert!(router_policy_http2_enabled(ORGA_9C983A44));
         assert!(!router_policy_http2_enabled(Uuid::new_v4()));
+    }
+
+    #[test]
+    fn gateway_custom_http_error_pages_resolve_known_and_fallback_responses() {
+        let pages = to_gateway_custom_http_error_pages(Some(&[404, 503, 418]));
+
+        assert_eq!(
+            pages.iter().map(|page| page.status_code).collect::<Vec<_>>(),
+            vec![404, 503, 418]
+        );
+        assert!(pages[0].response_body.contains("404 Not Found"));
+        assert!(pages[1].response_body.contains("503 Service Unavailable"));
+        assert!(pages[2].response_body.contains("418 Error"));
     }
 
     #[test]

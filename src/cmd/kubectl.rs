@@ -518,9 +518,22 @@ where
     if kubernetes_config.exists() {
         environment_variables.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
     }
+
+    kubectl_exec_rollout_restart_deployment_with_envs(name, namespace, &environment_variables)
+}
+
+/// Restarts a Deployment using the Kubernetes credentials already present in `envs`.
+///
+/// This is useful for callers, such as Helm, that have already assembled their full Kubernetes
+/// environment and therefore do not own a kubeconfig path themselves.
+pub fn kubectl_exec_rollout_restart_deployment_with_envs(
+    name: &str,
+    namespace: &str,
+    envs: &[(&str, &str)],
+) -> Result<(), CommandError> {
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
-    kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| {
+    kubectl_exec_with_output(args, envs.to_vec(), &mut |line| info!("{}", line), &mut |line| {
         error!("{}", line)
     })
 }
@@ -2146,6 +2159,87 @@ pub fn kubectl_apply_with_server_side_apply<P>(
 where
     P: AsRef<Path>,
 {
+    let tmp_file = write_manifest_to_temporary_file(template)?;
+    kubectl_apply_with_server_side_apply_file(kubernetes_config, envs, args, tmp_file.path(), force_conflicts)
+}
+
+/// Applies a manifest with server-side apply, then waits for its CRD API types to be served.
+///
+/// Applying a `CustomResourceDefinition` returns before the API server has established it. The
+/// dependent chart may create custom resources immediately afterwards, so this wait is part of
+/// the same operation rather than a best-effort readiness probe.
+pub fn kubectl_apply_crds_with_server_side_apply<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    args: Option<Vec<&str>>,
+    template: &str,
+    force_conflicts: bool,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let tmp_file = write_manifest_to_temporary_file(template)?;
+    let apply_output = kubectl_apply_with_server_side_apply_file(
+        &kubernetes_config,
+        envs.clone(),
+        args,
+        tmp_file.path(),
+        force_conflicts,
+    )?;
+
+    let crd_resources = custom_resource_definition_resources(template)?;
+    if !crd_resources.is_empty() {
+        let mut wait_args = vec!["wait", "--for=condition=Established", "--timeout=600s"];
+        wait_args.extend(crd_resources.iter().map(String::as_str));
+        kubectl_exec_raw_output::<P>(wait_args, kubernetes_config, envs, false)?;
+    }
+
+    Ok(apply_output)
+}
+
+fn custom_resource_definition_resources(template: &str) -> Result<Vec<String>, CommandError> {
+    Deserializer::from_str(template)
+        .filter_map(|document| match serde_yaml::Value::deserialize(document) {
+            Ok(serde_yaml::Value::Null) => None,
+            Ok(value) => Some(Ok(value)),
+            Err(error) => Some(Err(error)),
+        })
+        .map(|document| {
+            let document = document.map_err(|_| {
+                CommandError::new("Error while parsing a rendered Kubernetes manifest.".to_string(), None, None)
+            })?;
+            if document.get("kind").and_then(serde_yaml::Value::as_str) != Some("CustomResourceDefinition") {
+                return Ok(None);
+            }
+            let name = document
+                .get("metadata")
+                .and_then(serde_yaml::Value::as_mapping)
+                .and_then(|metadata| metadata.get(serde_yaml::Value::String("name".to_string())))
+                .and_then(serde_yaml::Value::as_str)
+                .filter(|name| !name.is_empty())
+                .ok_or_else(|| {
+                    CommandError::new(
+                        "Rendered CustomResourceDefinition has no metadata.name.".to_string(),
+                        None,
+                        None,
+                    )
+                })?;
+            Ok(Some(format!("customresourcedefinition/{name}")))
+        })
+        .collect::<Result<Vec<_>, CommandError>>()
+        .map(|resources| resources.into_iter().flatten().collect())
+}
+
+fn kubectl_apply_with_server_side_apply_file<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    args: Option<Vec<&str>>,
+    manifest_path: &Path,
+    force_conflicts: bool,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
     let mut cmd_args = vec!["apply"];
 
     if let Some(args) = args {
@@ -2160,8 +2254,12 @@ where
 
     cmd_args.push("--server-side");
     cmd_args.push("-f");
+    cmd_args.push(manifest_path.to_str().unwrap_or_default());
 
-    // write the template in a temporary file
+    kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
+}
+
+fn write_manifest_to_temporary_file(template: &str) -> Result<tempfile::NamedTempFile, CommandError> {
     let tmp_file = tempfile::NamedTempFile::new().map_err(|e| {
         CommandError::new(
             "Error while creating temporary file for kubectl apply.".to_string(),
@@ -2176,10 +2274,7 @@ where
             None,
         )
     })?;
-
-    cmd_args.push(tmp_file.path().to_str().unwrap_or_default());
-
-    kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
+    Ok(tmp_file)
 }
 
 pub fn kubectl_create_secret<P>(
@@ -2354,9 +2449,10 @@ mod tests {
     use super::{
         GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL, GATEWAY_FALLBACK_REFERENCE_GRANT_LABEL_VALUE,
         KubernetesServicePortForwardTarget, client_traffic_policy_crd_supports_listenerset,
-        gateway_certificate_refs_reconciliation_patch, gateway_fallback_certificate_ref_ownership,
-        gateway_to_secret_reference_grant_manifest, is_engine_gateway_fallback_reference_grant,
-        is_kubernetes_optimistic_concurrency_conflict, reconcile_router_tls_certificate_refs,
+        custom_resource_definition_resources, gateway_certificate_refs_reconciliation_patch,
+        gateway_fallback_certificate_ref_ownership, gateway_to_secret_reference_grant_manifest,
+        is_engine_gateway_fallback_reference_grant, is_kubernetes_optimistic_concurrency_conflict,
+        reconcile_router_tls_certificate_refs,
     };
     use kube::api::ApiResource;
     use kube::core::{DynamicObject, GroupVersionKind, Status};
@@ -2427,6 +2523,34 @@ mod tests {
         let url = Url::parse("https://thanos.example.com").unwrap();
 
         assert_eq!(KubernetesServicePortForwardTarget::from_service_url(&url), None);
+    }
+
+    #[test]
+    fn crd_establishment_wait_targets_only_rendered_custom_resource_definitions() {
+        let manifest = r#"
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gateways.gateway.networking.k8s.io
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: gateway.networking.k8s.io
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: httproutes.gateway.networking.k8s.io
+"#;
+
+        assert_eq!(
+            custom_resource_definition_resources(manifest).unwrap(),
+            vec![
+                "customresourcedefinition/gateways.gateway.networking.k8s.io",
+                "customresourcedefinition/httproutes.gateway.networking.k8s.io",
+            ]
+        );
     }
 
     #[test]

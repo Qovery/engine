@@ -3,7 +3,7 @@ use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::CommandError;
 use crate::helm::{
     ChartInfo, ChartInfoUpgradeRetry, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError,
-    HelmChartNamespaces,
+    HelmChartNamespaces, HelmWaitStrategy,
 };
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::helm_charts::{
@@ -263,6 +263,10 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                     nb_retry: 10,
                     delay_in_milli_sec: 30_000,
                 }),
+                // Certificate issuance is asynchronous and can outlive the chart deployment.
+                // Helm 4's watcher waits for the Certificate CR to become Ready, whereas Helm 3
+                // considered it deployed after creating the resource.
+                wait_strategy: HelmWaitStrategy::Legacy,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(CertManagerConfigsChartChecker::new(
@@ -648,7 +652,7 @@ async fn find_ingress_owning_secret(
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::HelmChartNamespaces;
+    use crate::helm::{HelmChartNamespaces, HelmWaitStrategy};
     use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
     use crate::infrastructure::helm_charts::cert_manager_config_chart::{
         CertManagerConfigsChart, CertManagerConfigsChartChecker, CertificateOwnerTarget, LetsEncryptConfig,
@@ -792,6 +796,34 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    #[test]
+    fn cert_manager_configs_chart_uses_legacy_wait_for_asynchronous_certificate_issuance() {
+        let lets_encrypt_config = LetsEncryptConfig::new("whatever".to_string(), true);
+        let dns_provider_config = DnsProviderConfiguration::QoveryDns(QoveryDnsConfig {
+            api_key: "whatever".to_string(),
+            api_url: Url::parse("https://whatever.com").expect("Unable to parse URL"),
+            api_url_port: "whatever".to_string(),
+            api_url_scheme_and_domain: "whatever".to_string(),
+        });
+        let chart = CertManagerConfigsChart::new(
+            None,
+            &lets_encrypt_config,
+            &dns_provider_config,
+            vec!["whatever".to_string()],
+            HelmChartNamespaces::CertManager,
+            false,
+            false,
+            false,
+            None,
+        );
+
+        let common_chart = chart
+            .to_common_helm_chart()
+            .expect("chart configuration should be valid");
+
+        assert_eq!(common_chart.chart_info.wait_strategy, HelmWaitStrategy::Legacy);
     }
 
     #[test]

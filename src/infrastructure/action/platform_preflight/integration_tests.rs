@@ -223,8 +223,8 @@ fn preflight_reads_large_release_inventory_once_and_preserves_legacy_lookup() {
         r#"#!/bin/sh
 printf '%s\n' "$*" >> "$PREFLIGHT_FIXTURE/calls"
 case "$*" in
-  'list -a -o json -A') cat "$PREFLIGHT_FIXTURE/legacy.json" ;;
-  'list -a -o json -A --max 1000'|'list -a -o json -n qovery --max 1000')
+  'list -o json -A') cat "$PREFLIGHT_FIXTURE/legacy.json" ;;
+  'list -o json -A --max 1000'|'list -o json -n qovery --max 1000')
     if [ "$FAIL_INVENTORY" = 1 ]; then exit 1; fi
     if [ "$SATURATE_INVENTORY" = 1 ]; then cat "$PREFLIGHT_FIXTURE/saturated.json"; else
     cat "$PREFLIGHT_FIXTURE/complete.json"; fi ;;

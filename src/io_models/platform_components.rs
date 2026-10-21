@@ -26,6 +26,10 @@ pub struct PlatformHelmUnit {
     pub release_name: String,
     pub namespace: String,
     pub chart: PlatformHelmChartSource,
+    /// Required by request schema 3; absent only in schemas 1 and 2, where Helm release
+    /// management is the sole supported behavior.
+    #[serde(default)]
+    pub apply_strategy: Option<PlatformHelmApplyStrategy>,
     pub values_yaml: String,
     #[serde(default)]
     pub images: Vec<PlatformImageSnapshot>,
@@ -41,6 +45,7 @@ impl std::fmt::Debug for PlatformHelmUnit {
             .field("release_name", &self.release_name)
             .field("namespace", &self.namespace)
             .field("chart", &self.chart)
+            .field("apply_strategy", &self.apply_strategy)
             .field("values_yaml", &"<redacted>")
             .field("images", &self.images)
             .field("preflight_requirements", &self.preflight_requirements)
@@ -66,6 +71,19 @@ pub struct OperatorContainerUpdateUnit {
     pub image: String,
     /// Written to the new container's `OPERATOR_VERSION`.
     pub operator_version: String,
+}
+
+/// Controls the state owner for a platform Helm unit.
+///
+/// `ServerSideApplyCrds` is intentionally restricted to CRD bundles: it avoids putting
+/// large CRD schemas in Helm release Secrets while preserving Helm releases for workloads.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PlatformHelmApplyStrategy {
+    HelmRelease,
+    ServerSideApplyCrds,
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -431,6 +449,7 @@ mod tests {
         assert_eq!(unit.chart.repository, "https://helm.qovery.com");
         assert_eq!(unit.chart.name, "qovery-cluster-agent");
         assert_eq!(unit.chart.version, "0.1.0");
+        assert_eq!(unit.apply_strategy, None);
         assert!(unit.values_yaml.contains("CLUSTER_JWT_TOKEN"));
         assert_eq!(unit.images.len(), 1);
         assert_eq!(unit.images[0].tag, "0.1.0-poc");
@@ -451,6 +470,17 @@ mod tests {
         let json = Q_CORE_UNIT_JSON.replace("\"CREATE\"", "\"DESTROY\"");
         let unit: PlatformHelmUnit = serde_json::from_str(&json).unwrap();
         assert_eq!(unit.action, PlatformHelmUnitAction::Unknown);
+    }
+
+    #[test]
+    fn server_side_apply_crds_strategy_deserializes_from_q_core_wire_value() {
+        let json = Q_CORE_UNIT_JSON.replace(
+            "\"values_yaml\"",
+            "\"apply_strategy\": \"SERVER_SIDE_APPLY_CRDS\",\n        \"values_yaml\"",
+        );
+        let unit: PlatformHelmUnit = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(unit.apply_strategy, Some(PlatformHelmApplyStrategy::ServerSideApplyCrds));
     }
 
     #[test]

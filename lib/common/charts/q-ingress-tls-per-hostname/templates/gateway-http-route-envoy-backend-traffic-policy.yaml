@@ -107,13 +107,13 @@ spec:
         {{- end }}
       {{- end }}
   {{- end }}
-  {{- if (and (hasKey $.Values.advanced_settings "network_gateway_api_custom_http_errors") $.Values.advanced_settings.network_gateway_api_custom_http_errors) }}
+  {{- if $.Values.gateway_custom_http_error_pages }}
   responseOverride:
-    {{- range $index8, $code := (splitList "," $.Values.advanced_settings.network_gateway_api_custom_http_errors) }}
+    {{- range $index8, $error_page := $.Values.gateway_custom_http_error_pages }}
     - match:
         statusCodes:
           - type: Value
-            value: {{ (trim $code) }}
+            value: {{ $error_page.status_code }}
       response:
         contentType: text/html
         body:
@@ -121,9 +121,9 @@ spec:
           valueRef:
             group: ""
             kind: ConfigMap
-            name: {{ $.Values.sanitized_name }}-error-pages
-            key: {{ (trim $code) }}.html
-    {{- end }}
+            name: {{ $.Values.sanitized_name }}-error-pages-{{ $error_page.status_code }}
+            key: response.body
+            {{- end }}
   {{- else if $.Values.cluster_envoy_custom_http_errors_default }}
   responseOverride:
     {{- range $index9, $code := $.Values.cluster_envoy_custom_http_errors_default }}
