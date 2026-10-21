@@ -4,7 +4,7 @@ use crate::environment::models::domain::ToHelmString;
 use crate::errors::CommandError;
 use crate::helm::{
     ChartInfo, ChartInfoUpgradeRetry, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError,
-    HelmChartNamespaces,
+    HelmChartNamespaces, HelmWaitStrategy,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -775,6 +775,9 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 values_files: vec![self.chart_values_path.to_string()],
                 values,
                 values_string,
+                // Helm 4's watcher treats Karpenter's transient EC2NodeClass conditions as a deployment failure.
+                // Preserve the Helm 3 polling behavior until Karpenter reports a stable ready condition during bootstrap.
+                wait_strategy: HelmWaitStrategy::Legacy,
                 // Retry helm install in case CRDs are not yet fully propagated in the API server
                 upgrade_retry: Some(ChartInfoUpgradeRetry {
                     nb_retry: 3,
@@ -826,7 +829,7 @@ mod tests {
 
     use crate::cmd::helm::Helm;
     use crate::constants::AWS_APN_ID_TAG_KEY;
-    use crate::helm::{CommonChart, HelmChartError};
+    use crate::helm::{CommonChart, HelmChartError, HelmWaitStrategy};
     use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -983,6 +986,32 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    #[test]
+    fn karpenter_configuration_uses_legacy_helm_wait_strategy() {
+        let chart = create_chart(
+            KUBERNETES_VERSION,
+            true,
+            KarpenterNodePool {
+                requirements: vec![],
+                stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: None,
+                    budgets: vec![],
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                },
+                default_override: None,
+                gpu_override: None,
+                cronjob_override: None,
+                default_public_override: None,
+                default_private_override: None,
+            },
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+
+        assert_eq!(common_chart.chart_info.wait_strategy, HelmWaitStrategy::Legacy);
     }
 
     #[test]

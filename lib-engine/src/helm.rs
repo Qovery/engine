@@ -425,6 +425,45 @@ pub struct ChartInfoUpgradeRetry {
     pub delay_in_milli_sec: u64,
 }
 
+/// Selects Helm 4's resource-apply mechanism for a chart.
+///
+/// `Client` is the default because it preserves Helm 3's update semantics for resources whose
+/// fields remain managed by an external Kubernetes controller. `Auto` is reserved for an
+/// explicitly reviewed chart that must keep Helm's release-aware default.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum HelmApplyMode {
+    /// Apply updates client-side.
+    #[default]
+    Client,
+    /// Let Helm choose based on the release's recorded apply mode.
+    Auto,
+    /// Apply updates server-side.
+    Server,
+}
+
+/// Selects Helm 4's resource readiness implementation for a chart.
+///
+/// Helm 4's watcher provides detailed Kubernetes status reporting and is the default. `Legacy`
+/// retains Helm 3-compatible polling for charts with asynchronously reconciled custom resources
+/// that should not delay the chart deployment.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum HelmWaitStrategy {
+    /// Use Helm 4's resource watcher.
+    #[default]
+    Watcher,
+    /// Use Helm's legacy readiness polling for asynchronously reconciled custom resources.
+    Legacy,
+}
+
+impl HelmWaitStrategy {
+    pub(crate) fn cli_arg(self) -> &'static str {
+        match self {
+            Self::Watcher => "--wait",
+            Self::Legacy => "--wait=legacy",
+        }
+    }
+}
+
 /// Private ECR registry prefix used to mirror images from `public.ecr.aws`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicEcrImageMirror {
@@ -454,11 +493,16 @@ pub struct ChartInfo {
     pub atomic: bool,
     pub force_upgrade: bool,
     pub force_conflicts: bool,
+    /// Restart the Deployment named after the release after a successful Helm upgrade.
+    ///
+    /// Helm 4 removed `--recreate-pods`; Kubernetes owns this imperative rollout instead.
     pub recreate_pods: bool,
     pub reinstall_chart_if_installed_version_is_below_than: Option<Version>,
     pub timeout_in_seconds: i64,
     pub dry_run: bool,
     pub wait: bool,
+    /// Selects the readiness implementation when Helm waits for this chart.
+    pub wait_strategy: HelmWaitStrategy,
     /// Values used to override values set inside values files.
     pub values: Vec<ChartSetValue>,
     pub values_string: Vec<ChartSetValue>,
@@ -474,17 +518,24 @@ pub struct ChartInfo {
     pub skip_crds: bool,
     pub skip_if_already_installed: bool,
     pub upgrade_retry: Option<ChartInfoUpgradeRetry>,
-    /// This option to execute the chart server side apply instead of client side apply
-    /// until we rollout helm version 4 which will have server side apply by default
-    /// we use helm template + kubectl apply --server-side to mimic server side apply
+    /// Render the chart and apply it with `kubectl --server-side`, without creating a Helm release.
+    ///
+    /// Use this only when a Helm release cannot be stored in Kubernetes, such as a CRD bundle
+    /// exceeding the 1 MiB Secret/ConfigMap object limit. Helm 4 server-side apply still records
+    /// the rendered release, so it does not solve that storage limit.
     pub requires_server_side_apply: bool,
+    /// Wait until each rendered CRD is established after a server-side apply.
+    ///
+    /// This must be enabled only for charts whose dependent resources require their CRD APIs.
+    /// Non-CRD rendered resources are applied but not included in the readiness wait.
+    pub wait_for_crd_establishment: bool,
     /// Shared cache injected before parallel deployment to ensure `helm list` is called
     /// at most once per namespace across all chart threads in the same level.
     pub helm_list_cache: Option<HelmListCache>,
     pub history_max: HelmHistoryMax,
     /// Enables the engine post-renderer for this chart.
     /// When enabled, Helm commands add:
-    /// `--post-renderer <engine_post_renderer-binary>`
+    /// `--post-renderer qovery-engine-post-renderer`
     pub enable_engine_post_renderer_labels: bool,
     /// Rewrites `public.ecr.aws` container images through this private ECR mirror.
     pub public_ecr_image_mirror: Option<PublicEcrImageMirror>,
@@ -557,6 +608,7 @@ impl Default for ChartInfo {
             timeout_in_seconds: default_helm_timeout().as_secs() as i64,
             dry_run: false,
             wait: true,
+            wait_strategy: HelmWaitStrategy::Watcher,
             values: vec![],
             values_string: vec![], // values to force string usage
             values_files: vec![],
@@ -570,6 +622,7 @@ impl Default for ChartInfo {
             skip_if_already_installed: false,
             upgrade_retry: None,
             requires_server_side_apply: false,
+            wait_for_crd_establishment: false,
             helm_list_cache: None,
             history_max: HelmHistoryMax::default(),
             enable_engine_post_renderer_labels: false,
@@ -580,6 +633,14 @@ impl Default for ChartInfo {
 
 pub trait HelmChart: Send {
     fn clone_dyn(&self) -> Box<dyn HelmChart>;
+
+    /// Returns the Helm 4 apply mode required by this chart.
+    ///
+    /// Client-side apply is the compatibility default. Charts that intentionally adopt fields
+    /// owned by another manager must explicitly opt in to server-side apply.
+    fn helm_apply_mode(&self) -> HelmApplyMode {
+        HelmApplyMode::Client
+    }
 
     fn get_chart_installation_checker(&self) -> Option<&dyn ChartInstallationChecker> {
         None
@@ -752,7 +813,7 @@ pub trait HelmChart: Send {
                     Fixed::from_millis(0).take(0)
                 };
                 let result = retry::retry(attempts, || match chart_info.requires_server_side_apply {
-                    false => match helm.upgrade(chart_info, &[], cmd_killer) {
+                    false => match helm.upgrade_with_apply_mode(chart_info, &[], cmd_killer, self.helm_apply_mode()) {
                         Ok(_) => OperationResult::Ok(()),
                         Err(e) => {
                             warn!("Helm upgrade failed, retrying... error: {:?}", e);
@@ -1208,8 +1269,8 @@ pub fn client_side_engine_values_string() -> Vec<ChartSetValue> {
 mod tests {
     use crate::cmd::helm::HelmHistoryMax;
     use crate::helm::{
-        CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaControllerResources, VpaTargetRefApiVersion,
-        VpaTargetRefKind, client_side_engine_values_string,
+        CommonChart, CommonChartVpa, HelmApplyMode, HelmChart, VpaConfigHelmChart, VpaControllerResources,
+        VpaTargetRefApiVersion, VpaTargetRefKind, client_side_engine_values_string,
     };
 
     #[test]
@@ -1263,6 +1324,8 @@ mod tests {
         let common_chart_vpa = CommonChartVpa::new("./".to_string(), vec![vpa_config.clone()]);
         let common_chart = CommonChart::new(chart, None, Some(common_chart_vpa.clone()));
         let vpa_chart = common_chart.get_vpa_chart_info(Some(common_chart_vpa));
+
+        assert_eq!(common_chart.helm_apply_mode(), HelmApplyMode::Client);
 
         assert_eq!(vpa_chart.name, "vpa-vpa_test".to_string());
         assert_eq!(vpa_chart.path, "./common/charts/vertical-pod-autoscaler-configs");

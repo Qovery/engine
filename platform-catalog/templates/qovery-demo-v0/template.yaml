@@ -200,6 +200,7 @@ platformTemplateRelease:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: gateway-crds-helm
             version: v1.9.1
+          applyStrategy: SERVER_SIDE_APPLY_CRDS
           configRef:
             chart: envoy-gateway-crd
             version: v1

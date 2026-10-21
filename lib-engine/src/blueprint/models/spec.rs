@@ -365,7 +365,7 @@ mod tests {
             credentials: BlueprintCredentials::default(),
             backend: BlueprintBackend::default(),
             timeout: None,
-            arguments: vec!["--atomic".into()],
+            arguments: vec!["--rollback-on-failure".into()],
             allow_cluster_wide_resources: true,
             resources: None,
             engine_version: None,
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn helm_carries_arguments_and_cluster_wide() {
         let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &None));
-        assert_eq!(helm.arguments, vec!["--atomic"]);
+        assert_eq!(helm.arguments, vec!["--rollback-on-failure"]);
         assert!(helm.allow_cluster_wide_resources);
     }
 

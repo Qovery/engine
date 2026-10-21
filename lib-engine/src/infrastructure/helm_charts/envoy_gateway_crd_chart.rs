@@ -75,6 +75,7 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
             ],
             force_conflicts: true, // CRDs may already exist from previous installations, and we want to ensure they are updated if needed.
             requires_server_side_apply: true,
+            wait_for_crd_establishment: true,
             ..Default::default()
         };
 

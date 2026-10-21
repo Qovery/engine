@@ -1,6 +1,6 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
-image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2026-10-20T08-14-09
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2026-10-20T16-36-30
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -45,6 +45,14 @@ default:
     - cargo build --manifest-path app/Cargo.toml --bin engine_post_renderer
     - mkdir -p target/debug/deps
     - ln -sf ../engine_post_renderer target/debug/deps/engine_post_renderer
+    # Helm 4 resolves --post-renderer only through a postrenderer/v1 plugin.
+    # The test jobs run the locally-built engine binary, not the final engine image where this plugin is installed.
+    - |
+      helm_plugins_dir="$(helm env HELM_PLUGINS)"
+      test -n "$helm_plugins_dir"
+      install -Dm644 docker/helm-plugins/engine-post-renderer/plugin.yaml "$helm_plugins_dir/qovery-engine-post-renderer/plugin.yaml"
+      ln -sf "$CI_PROJECT_DIR/target/debug/engine_post_renderer" "$helm_plugins_dir/qovery-engine-post-renderer/engine_post_renderer"
+      helm plugin list | awk '$1 == "qovery-engine-post-renderer" && $3 == "postrenderer/v1" { found = 1 } END { exit !found }'
 
 # Reusable Cargo cache for Rust builds/tests
 .cargo-cache:

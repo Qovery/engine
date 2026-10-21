@@ -5,6 +5,7 @@
 idiomatic_version_file_enable_tools = ["rust"]
 
 [tools]
+"asdf:Antiarchitect/asdf-helm" = "4.3.0"
 python = "3.14"
 uv = "latest"
 
@@ -13,6 +14,9 @@ RUST_LOG = "info"
 WORKSPACE_ROOT_DIR = "{{config_root}}/lib-engine"
 LIB_ROOT_DIR = "{{config_root}}/lib-engine/lib"
 CI_PROJECT_TITLE = "test"
+# Helm 4 resolves the Engine post-renderer through this repository-local plugin directory.
+# Tasks that invoke Helm prepare the plugin in `test:prepare-post-renderer` or the local launcher.
+HELM_PLUGINS = "{{config_root}}/target/helm-plugins"
 
 [tasks."graph:install"]
 description = "Install code-review-graph via uv"
@@ -112,14 +116,33 @@ run = '''
 '''
 
 [tasks.single-test]
-description = "Run a single test by exact name"
-usage = 'arg "<name>" help="Exact test name"'
-depends = ["test:prepare-post-renderer"]
+description = "Run one integration test by feature and exact name"
+usage = '''
+arg "<feature>" help="Feature flag that enables the test"
+arg "<name>" help="Fully-qualified test name"
+'''
+depends = ["get-test-secrets", "test:prepare-post-renderer"]
 dir = "lib-engine"
 run = '''
   set -e
+
+  # dotenv does not replace inherited values. The decrypted file contains the complete test credential set.
+  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN
+  unset AWS_DEFAULT_REGION AWS_REGION AWS_PROFILE AWS_DEFAULT_PROFILE
+  unset AWS_CONFIG_FILE AWS_SHARED_CREDENTIALS_FILE
+
+  helm_bin="$(mise which helm)"
+  export PATH="$(dirname "$helm_bin"):$PATH"
+  export HELM_PLUGINS="{{config_root}}/target/helm-plugins"
+
+  feature="${usage_feature:?Provide the feature that enables the test}"
   test_name="${usage_name:?Provide a test name}"
-  cargo test --package qovery-engine --test lib "$test_name" -- --ignored --exact
+
+  cargo test --package qovery-engine --test lib \
+    --features "$feature" \
+    --no-default-features \
+    "$test_name" \
+    -- --include-ignored --exact
 '''
 
 [tasks."blueprint:run-local"]
@@ -130,14 +153,46 @@ run = '''
   json="${usage_json:?Provide a BlueprintEngineRequest JSON path, e.g.: mise run blueprint:run-local /tmp/req.json}"
   [ -f "$json" ] || { echo "ERROR: $json not found" >&2; exit 1; }
 
-  cargo build --manifest-path app/Cargo.toml --bin engine_post_renderer
-
   BIN_VERSION_FILE="{{config_root}}/docker/bin_versions" \
   DEPLOY_FROM_FILE_KIND=blueprint \
   DEPLOY_FROM_FILE="$json" \
   TEST_CLUSTER=true \
-    cargo run --bin engine
+    ./scripts/run-engine-local.sh
 '''
+
+[tasks."infra:run-local"]
+description = "Run Engine locally against a captured infrastructure request JSON"
+usage = 'arg "<json>" help="Path to an InfrastructureEngineRequest JSON"'
+run = '''
+  set -e
+  json="${usage_json:?Provide an infrastructure request JSON path, e.g.: mise run infra:run-local /tmp/request.json}"
+  [ -f "$json" ] || { echo "ERROR: $json not found" >&2; exit 1; }
+
+  BIN_VERSION_FILE="{{config_root}}/docker/bin_versions" \
+  DEPLOY_FROM_FILE_KIND=infra \
+  DEPLOY_FROM_FILE="$json" \
+  TEST_CLUSTER=true \
+    ./scripts/run-engine-local.sh
+'''
+
+[tasks."env:run-local"]
+description = "Run Engine locally against a captured environment request JSON"
+usage = 'arg "<json>" help="Path to an EnvironmentEngineRequest JSON"'
+run = '''
+  set -e
+  json="${usage_json:?Provide an environment request JSON path, e.g.: mise run env:run-local /tmp/request.json}"
+  [ -f "$json" ] || { echo "ERROR: $json not found" >&2; exit 1; }
+
+  BIN_VERSION_FILE="{{config_root}}/docker/bin_versions" \
+  DEPLOY_FROM_FILE_KIND=env \
+  DEPLOY_FROM_FILE="$json" \
+  TEST_CLUSTER=true \
+    ./scripts/run-engine-local.sh
+'''
+
+[tasks."engine:run-local"]
+description = "Run Engine locally with the Helm 4 post-renderer configured"
+run = "./scripts/run-engine-local.sh"
 
 [tasks.test-local-stack]
 description = "Run tests on a local k3d cluster"
@@ -191,12 +246,22 @@ description = "Print cargo version"
 run = "cargo --version"
 
 [tasks."test:prepare-post-renderer"]
-description = "Build the Helm post-renderer required by integration tests"
+description = "Build and register the Helm post-renderer required by integration tests"
 run = '''
   set -e
+
   cargo build --manifest-path app/Cargo.toml --bin engine_post_renderer
   mkdir -p target/debug/deps
   ln -sfn ../engine_post_renderer target/debug/deps/engine_post_renderer
+
+  helm_bin="$(mise which helm)"
+  export PATH="$(dirname "$helm_bin"):$PATH"
+  export HELM_PLUGINS="{{config_root}}/target/helm-plugins"
+  plugin_dir="$HELM_PLUGINS/qovery-engine-post-renderer"
+  mkdir -p "$plugin_dir"
+  cp docker/helm-plugins/engine-post-renderer/plugin.yaml "$plugin_dir/plugin.yaml"
+  ln -sfn "{{config_root}}/target/debug/engine_post_renderer" "$plugin_dir/engine_post_renderer"
+  "$helm_bin" plugin list | awk '$1 == "qovery-engine-post-renderer" && $3 == "postrenderer/v1" { found = 1 } END { exit !found }'
 '''
 
 # Cloud provider test aliases

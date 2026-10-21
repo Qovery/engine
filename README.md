@@ -70,10 +70,14 @@ export WORKSPACE_ROOT_DIR="<up-to-your-preferences>"
 - `LIB_ROOT_DIR`: The absolute path of the engine's lib folder
 - WORKSPACE_ROOT_DIR: The absolute path to the location where `.qovery-workspace` folder will be located, this folder contains the rendered config
 
-3. Run cargo
+3. Start Engine through the local launcher.
+
+   It builds and registers the Helm 4 post-renderer in a repository-local plugin directory. This is required
+   because Helm 4 resolves `--post-renderer` through a `postrenderer/v1` plugin. The launcher does not modify your
+   global Helm plugins.
 
 ```shell
-cargo run --package app --bin engine
+./scripts/run-engine-local.sh
 ```
 
 - You can find the terraform version in [bin_versions](docker/bin_versions) under `TERRAFORM_VERSION`.
@@ -229,12 +233,16 @@ How to add a test in a fast or long process? Simply add "#[ignore]" as a test an
 
 # Debug
 
-If you have a json context, and you want to deploy for investigation, you need to set 2 environment variables:
+To replay a captured request locally, use one of these commands:
 
 ```bash
-DEPLOY_FROM_FILE=<path_tojson_file>
-DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deployment) and env (environment deployment)
+mise run infra:run-local /absolute/path/to/infrastructure-request.json
+mise run env:run-local /absolute/path/to/environment-request.json
 ```
+
+Each command builds and registers the repository-local Helm 4 post-renderer before starting Engine. A replay can
+create, modify, or delete cloud resources; use a dedicated test account and a request whose credentials you
+understand.
 
 ## FAQ
 

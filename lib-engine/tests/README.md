@@ -16,6 +16,8 @@ In order to perform functional tests, you must run the following command in orde
 1. `mise get-test-secrets`: This will export your secret in `/tmp/engine_test_secrets.env` and will be loaded in `FuncTestsSecrets::new()`
 2. `mise your-test-suite`
 
+Run one integration test with `mise run single-test <feature> <fully-qualified-test-name>`.
+
 ### TTL
 By default, all deployed tests resources are going to be tagged with a TTL, to be automatically cleaned with [Pleco](https://github.com/Qovery/pleco) if a test fail for some reasons.
 
@@ -40,4 +42,3 @@ In order to perform it, you need the variable `forced_upgrade` to `true` to ensu
 
 The advantage of having it set to `false` by default, is the deployment speed. Only helm changes are going to be applied. The drawback is you can't
 be 100% sure of what you've deployed is what you asked for on your infra.
-

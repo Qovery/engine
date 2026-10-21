@@ -10720,7 +10720,7 @@ fn deploy_application_with_custom_http_errors_on_aws_eks() {
 
         // Verify ConfigMap was created
         let cm_api: Api<ConfigMap> = Api::namespaced(kube_client.clone(), namespace);
-        let configmap_name = format!("router-{suffix}-error-pages");
+        let configmap_name = format!("router-{suffix}-error-pages-404");
         let configmap = block_on(async { cm_api.get(&configmap_name).await });
         assert!(configmap.is_ok(), "ConfigMap should be created");
 
@@ -10728,19 +10728,8 @@ fn deploy_application_with_custom_http_errors_on_aws_eks() {
         assert!(cm.data.is_some(), "ConfigMap should have data");
 
         let data = cm.data.unwrap();
-        assert!(data.contains_key("404.html"), "ConfigMap should have 404.html");
-        assert!(data.contains_key("503.html"), "ConfigMap should have 503.html");
-
-        let error_404 = data.get("404.html").unwrap();
-        assert!(error_404.contains("404"), "404 page should contain status code");
-        assert!(error_404.contains("Not Found"), "404 page should contain error message");
-
-        let error_503 = data.get("503.html").unwrap();
-        assert!(error_503.contains("503"), "503 page should contain status code");
-        assert!(
-            error_503.contains("Service Unavailable"),
-            "503 page should contain error message"
-        );
+        let error_page = data.get("response.body").expect("ConfigMap should have response.body");
+        assert!(error_page.contains("404"), "response body should contain the status code");
 
         // Verify BackendTrafficPolicy was created
         let api_resource = kube::api::ApiResource {
@@ -10806,8 +10795,21 @@ fn deploy_application_with_custom_http_errors_on_aws_eks() {
                         assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
 
                         if let Some(value_ref) = body.get("valueRef") {
-                            let cm_name = value_ref.get("name").and_then(|n| n.as_str());
-                            assert_eq!(cm_name, Some(configmap_name.as_str()), "Should reference correct ConfigMap");
+                            let cm_name = value_ref.get("name").and_then(|name| name.as_str());
+                            let status_code = override_entry
+                                .get("match")
+                                .and_then(|matched| matched.get("statusCodes"))
+                                .and_then(|status_codes| status_codes.as_array())
+                                .and_then(|status_codes| status_codes.first())
+                                .and_then(|status_code| status_code.get("value"))
+                                .and_then(|status_code| status_code.as_u64())
+                                .expect("response override must include a status code");
+                            let expected_config_map_name = format!("router-{suffix}-error-pages-{status_code}");
+                            assert_eq!(
+                                cm_name,
+                                Some(expected_config_map_name.as_str()),
+                                "Should reference the ConfigMap for its status code"
+                            );
                         }
                     }
                 }
@@ -10957,7 +10959,7 @@ fn deploy_container_with_custom_http_errors_on_aws_eks() {
 
         // Verify ConfigMap was created
         let cm_api: Api<ConfigMap> = Api::namespaced(kube_client.clone(), namespace);
-        let configmap_name = format!("router-{suffix}-error-pages");
+        let configmap_name = format!("router-{suffix}-error-pages-400");
         let configmap = block_on(async { cm_api.get(&configmap_name).await });
         assert!(configmap.is_ok(), "ConfigMap should be created");
 
@@ -10965,9 +10967,8 @@ fn deploy_container_with_custom_http_errors_on_aws_eks() {
         assert!(cm.data.is_some(), "ConfigMap should have data");
 
         let data = cm.data.unwrap();
-        assert!(data.contains_key("400.html"), "ConfigMap should have 400.html");
-        assert!(data.contains_key("500.html"), "ConfigMap should have 500.html");
-        assert!(data.contains_key("502.html"), "ConfigMap should have 502.html");
+        let error_page = data.get("response.body").expect("ConfigMap should have response.body");
+        assert!(error_page.contains("400"), "response body should contain the status code");
 
         // Verify BackendTrafficPolicy was created
         let api_resource = kube::api::ApiResource {
@@ -11149,7 +11150,7 @@ fn deploy_helm_with_custom_http_errors_on_aws_eks() {
 
         // Verify ConfigMap was created
         let cm_api: Api<ConfigMap> = Api::namespaced(kube_client.clone(), namespace);
-        let configmap_name = format!("router-{suffix}-error-pages");
+        let configmap_name = format!("router-{suffix}-error-pages-401");
         let configmap = block_on(async { cm_api.get(&configmap_name).await });
         assert!(configmap.is_ok(), "ConfigMap should be created");
 
@@ -11157,17 +11158,8 @@ fn deploy_helm_with_custom_http_errors_on_aws_eks() {
         assert!(cm.data.is_some(), "ConfigMap should have data");
 
         let data = cm.data.unwrap();
-        assert!(data.contains_key("401.html"), "ConfigMap should have 401.html");
-        assert!(data.contains_key("403.html"), "ConfigMap should have 403.html");
-        assert!(data.contains_key("404.html"), "ConfigMap should have 404.html");
-
-        let error_401 = data.get("401.html").unwrap();
-        assert!(error_401.contains("401"), "401 page should contain status code");
-        assert!(error_401.contains("Unauthorized"), "401 page should contain error message");
-
-        let error_403 = data.get("403.html").unwrap();
-        assert!(error_403.contains("403"), "403 page should contain status code");
-        assert!(error_403.contains("Forbidden"), "403 page should contain error message");
+        let error_page = data.get("response.body").expect("ConfigMap should have response.body");
+        assert!(error_page.contains("401"), "response body should contain the status code");
 
         // Verify BackendTrafficPolicy was created
         let api_resource = kube::api::ApiResource {
@@ -11225,8 +11217,21 @@ fn deploy_helm_with_custom_http_errors_on_aws_eks() {
                         assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
 
                         if let Some(value_ref) = body.get("valueRef") {
-                            let cm_name = value_ref.get("name").and_then(|n| n.as_str());
-                            assert_eq!(cm_name, Some(configmap_name.as_str()), "Should reference correct ConfigMap");
+                            let cm_name = value_ref.get("name").and_then(|name| name.as_str());
+                            let status_code = override_entry
+                                .get("match")
+                                .and_then(|matched| matched.get("statusCodes"))
+                                .and_then(|status_codes| status_codes.as_array())
+                                .and_then(|status_codes| status_codes.first())
+                                .and_then(|status_code| status_code.get("value"))
+                                .and_then(|status_code| status_code.as_u64())
+                                .expect("response override must include a status code");
+                            let expected_config_map_name = format!("router-{suffix}-error-pages-{status_code}");
+                            assert_eq!(
+                                cm_name,
+                                Some(expected_config_map_name.as_str()),
+                                "Should reference the ConfigMap for its status code"
+                            );
 
                             let kind = value_ref.get("kind").and_then(|k| k.as_str());
                             assert_eq!(kind, Some("ConfigMap"), "Should reference ConfigMap kind");

@@ -6,8 +6,8 @@ use crate::cmd::kubectl::{
 use crate::errors::CommandError;
 use crate::helm::HelmAction::Deploy;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartError,
-    HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmApplyMode, HelmChart,
+    HelmChartError, HelmChartNamespaces,
 };
 use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath};
 use crate::runtime::block_on;
@@ -59,6 +59,7 @@ impl CoreDNSConfigChart {
                 action: HelmAction::Deploy,
                 atomic: false,
                 force_upgrade: false,
+                force_conflicts: true,
                 recreate_pods: false,
                 reinstall_chart_if_installed_version_is_below_than: None,
                 timeout_in_seconds: 600,
@@ -100,6 +101,13 @@ impl CoreDNSConfigChart {
 impl HelmChart for CoreDNSConfigChart {
     fn clone_dyn(&self) -> Box<dyn HelmChart> {
         Box::new(self.clone())
+    }
+
+    fn helm_apply_mode(&self) -> HelmApplyMode {
+        // The provider bootstrap creates `ConfigMap/coredns.data.Corefile` before this chart
+        // adopts it. CoreDNS is then managed exclusively by this chart, so Helm must claim the
+        // field rather than leaving a provider bootstrap as its server-side owner.
+        HelmApplyMode::Server
     }
 
     fn get_chart_info(&self) -> &ChartInfo {
@@ -443,7 +451,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::{CommonChart, HelmChartNamespaces};
+    use crate::helm::{CommonChart, HelmApplyMode, HelmChart, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -559,5 +567,20 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    #[test]
+    fn coredns_claims_server_side_ownership() {
+        let chart = CoreDNSConfigChart::new(
+            None,
+            false,
+            "managed.example".to_string(),
+            "1.1.1.1".to_string(),
+            None,
+            HelmChartNamespaces::KubeSystem,
+        );
+
+        assert_eq!(chart.helm_apply_mode(), HelmApplyMode::Server);
+        assert!(chart.chart_info.force_conflicts);
     }
 }

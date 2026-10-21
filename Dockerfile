@@ -1,15 +1,17 @@
-# To find the version do an `apt list -a xxxx` helm inside the CI image
+# Helm is supplied by the pinned Helm Debian repository configured in each image stage.
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
 ARG KUBECTL_VERSION="1.35.4"
-ARG HELM_VERSION="3.20.0-1"
+ARG HELM_VERSION="4.3.0-1"
 ARG TERRAFORM_VERSION="1.9.7"
 # Blueprint preview only. The default above is pinned to what the cluster and managed-database modules
 # require exactly, while catalog modules declare lower bounds, so the preview needs a newer binary to
 # plan them. Keep in step with BLUEPRINT_TERRAFORM_BINARY / BLUEPRINT_OPENTOFU_BINARY in cmd/terraform.rs.
 ARG BLUEPRINT_TERRAFORM_VERSION="1.13.3"
 ARG BLUEPRINT_OPENTOFU_VERSION="1.12.6"
-ARG HELM_DIFF_VERSION="v3.15.7"
+# Helm 4 rejects unverifiable VCS plugins; this pins Helm Diff's release-signing key.
+ARG HELM_DIFF_VERSION="v3.15.11"
+ARG HELM_DIFF_GPG_FINGERPRINT="C5645EF47482257A1F806D2BEA17A2A206AFF8CD"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
 ARG DOCKER_VERSION="5:29.5.0-1~debian.13~trixie"
@@ -44,6 +46,7 @@ ARG HELM_VERSION
 ARG KUBECTL_VERSION
 ARG TERRAFORM_VERSION
 ARG HELM_DIFF_VERSION
+ARG HELM_DIFF_GPG_FINGERPRINT
 ARG BUILDX_VERSION
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 ARG DOCKER_VERSION
@@ -70,7 +73,17 @@ RUN apt-get update && \
   printf '%s\n' '#!/bin/sh' 'exec /opt/krr/krr "$@"' > /usr/local/bin/krr && \
   chmod +x /usr/local/bin/krr && \
   rm -f /tmp/krr.zip && \
-  helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
+  curl -fsSL https://github.com/databus23.gpg | gpg --batch --import && \
+  gpg --batch --list-keys ${HELM_DIFF_GPG_FINGERPRINT} >/dev/null && \
+  HELM_DIFF_ARCHIVE="helm-diff-linux-$(dpkg --print-architecture).tgz" && \
+  curl -fsSL -o "/tmp/${HELM_DIFF_ARCHIVE}" "https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/${HELM_DIFF_ARCHIVE}" && \
+  curl -fsSL -o "/tmp/${HELM_DIFF_ARCHIVE}.prov" "https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/${HELM_DIFF_ARCHIVE}.prov" && \
+  helm verify "/tmp/${HELM_DIFF_ARCHIVE}" && \
+  HELM_PLUGINS_DIR="$(helm env HELM_PLUGINS)" && \
+  mkdir -p "$HELM_PLUGINS_DIR" && \
+  tar -xzf "/tmp/${HELM_DIFF_ARCHIVE}" -C "$HELM_PLUGINS_DIR" && \
+  helm diff version >/dev/null && \
+  rm -f "/tmp/${HELM_DIFF_ARCHIVE}" "/tmp/${HELM_DIFF_ARCHIVE}.prov" && \
   mkdir /build ${BIN_DEST_FOLDER} && \
   mkdir -p $TF_PLUGIN_CACHE_DIR && \
   mkdir -p -m 755 /etc/apt/keyrings && \
@@ -276,11 +289,13 @@ ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
 ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
+ENV HELM_PLUGINS=$HOME_DIR/.local/share/helm/plugins
 
 ARG HELM_VERSION
 ARG KUBECTL_VERSION
 ARG TERRAFORM_VERSION
 ARG HELM_DIFF_VERSION
+ARG HELM_DIFF_GPG_FINGERPRINT
 ARG AWS_IAM_AUTHENTICATOR_VERSION
 ARG DOCKER_VERSION
 ARG BUILDX_VERSION
@@ -359,12 +374,26 @@ WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_post_renderer .
+COPY docker/helm-plugins/engine-post-renderer/plugin.yaml $HELM_PLUGINS/qovery-engine-post-renderer/plugin.yaml
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
 COPY --from=build --chown=qovery:qovery /build/docker/bin_versions $HOME_DIR
 COPY --from=build --chown=qovery:qovery /root/.terraform.d $HOME_DIR/.terraform.d
 
+RUN ln -s $HOME_DIR/engine_post_renderer $HELM_PLUGINS/qovery-engine-post-renderer/engine_post_renderer && \
+  chown -R qovery:qovery $HELM_PLUGINS
+
 USER qovery
-RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
+RUN curl -fsSL https://github.com/databus23.gpg | gpg --batch --import && \
+  gpg --batch --list-keys ${HELM_DIFF_GPG_FINGERPRINT} >/dev/null && \
+  HELM_DIFF_ARCHIVE="helm-diff-linux-$(dpkg --print-architecture).tgz" && \
+  curl -fsSL -o "/tmp/${HELM_DIFF_ARCHIVE}" "https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/${HELM_DIFF_ARCHIVE}" && \
+  curl -fsSL -o "/tmp/${HELM_DIFF_ARCHIVE}.prov" "https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/${HELM_DIFF_ARCHIVE}.prov" && \
+  helm verify "/tmp/${HELM_DIFF_ARCHIVE}" && \
+  HELM_PLUGINS_DIR="$(helm env HELM_PLUGINS)" && \
+  mkdir -p "$HELM_PLUGINS_DIR" && \
+  tar -xzf "/tmp/${HELM_DIFF_ARCHIVE}" -C "$HELM_PLUGINS_DIR" && \
+  helm diff version >/dev/null && \
+  rm -f "/tmp/${HELM_DIFF_ARCHIVE}" "/tmp/${HELM_DIFF_ARCHIVE}.prov" && \
   echo "disable_checkpoint = true" > ~/.terraform.rc
 
 # for local use only
@@ -394,10 +423,12 @@ ENV HOME_DIR="/home/qovery"
 ENV BIN_DIR=$HOME_DIR/binaries
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
+ENV HELM_PLUGINS=$HOME_DIR/.local/share/helm/plugins
 
 ARG HELM_VERSION
 ARG KUBECTL_VERSION
 ARG HELM_DIFF_VERSION
+ARG HELM_DIFF_GPG_FINGERPRINT
 ARG DOCKER_VERSION
 ARG BUILDX_VERSION
 ARG CONTAINERD_VERSION
@@ -441,11 +472,25 @@ WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc_stripped engine_grpc 
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_post_renderer_stripped engine_post_renderer
+COPY docker/helm-plugins/engine-post-renderer/plugin.yaml $HELM_PLUGINS/qovery-engine-post-renderer/plugin.yaml
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
 COPY --from=build /build/docker/bin_versions $HOME_DIR
 
+RUN ln -s $HOME_DIR/engine_post_renderer $HELM_PLUGINS/qovery-engine-post-renderer/engine_post_renderer && \
+  chown -R qovery:qovery $HELM_PLUGINS
+
 USER qovery
-RUN helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff
+RUN curl -fsSL https://github.com/databus23.gpg | gpg --batch --import && \
+  gpg --batch --list-keys ${HELM_DIFF_GPG_FINGERPRINT} >/dev/null && \
+  HELM_DIFF_ARCHIVE="helm-diff-linux-$(dpkg --print-architecture).tgz" && \
+  curl -fsSL -o "/tmp/${HELM_DIFF_ARCHIVE}" "https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/${HELM_DIFF_ARCHIVE}" && \
+  curl -fsSL -o "/tmp/${HELM_DIFF_ARCHIVE}.prov" "https://github.com/databus23/helm-diff/releases/download/${HELM_DIFF_VERSION}/${HELM_DIFF_ARCHIVE}.prov" && \
+  helm verify "/tmp/${HELM_DIFF_ARCHIVE}" && \
+  HELM_PLUGINS_DIR="$(helm env HELM_PLUGINS)" && \
+  mkdir -p "$HELM_PLUGINS_DIR" && \
+  tar -xzf "/tmp/${HELM_DIFF_ARCHIVE}" -C "$HELM_PLUGINS_DIR" && \
+  helm diff version >/dev/null && \
+  rm -f "/tmp/${HELM_DIFF_ARCHIVE}" "/tmp/${HELM_DIFF_ARCHIVE}.prov"
 
 # for local use only
 ENV LOCAL_DEPLOY=false
@@ -474,7 +519,7 @@ RUN packages_to_remove="" && \
   done && \
   govc_arch="$(dpkg --print-architecture | sed -e 's/amd64/x86_64/' -e 's/arm64/arm64/')" && \
   if [ -n "$packages_to_remove" ]; then \
-    apt-get update && apt-get purge -y $packages_to_remove; \
+  apt-get update && apt-get purge -y $packages_to_remove; \
   fi && \
   rm -rf /var/lib/apt/lists/* /opt/az /usr/lib/google-cloud-cli /usr/lib/google-cloud-sdk && \
   curl -sSL "https://github.com/vmware/govmomi/releases/download/v${GOVC_VERSION}/govc_Linux_${govc_arch}.tar.gz" | \

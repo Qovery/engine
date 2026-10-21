@@ -18,7 +18,7 @@ use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::helm::{ChartInfo, HelmChartError};
+use crate::helm::{ChartInfo, HelmApplyMode, HelmChartError};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::variable_utils::VariableInfo;
@@ -97,6 +97,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                     self.helm_release_name(),
                     self.chart_workspace_directory(),
                     target.environment.namespace(),
+                    HelmApplyMode::Client,
                     &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
                     &[],
                     &CommandKiller::from(self.helm_timeout(), target.abort),
@@ -1224,7 +1225,7 @@ spec:
 
     #[test]
     fn should_return_empty_when_no_namespace_args() {
-        let args = vec![Cow::Borrowed("--atomic")];
+        let args = vec![Cow::Borrowed("--rollback-on-failure")];
 
         let namespace = extract_namespace_from_helm_args(args.into_iter());
 
@@ -1234,7 +1235,7 @@ spec:
     #[test]
     fn should_extract_namespace_with_short_option_format() {
         let args = vec![
-            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--rollback-on-failure"),
             Cow::Borrowed("-n"),
             Cow::Borrowed("my-namespace"),
         ];
@@ -1246,7 +1247,7 @@ spec:
 
     #[test]
     fn should_ignore_incomplete_namespace_flag() {
-        let args = vec![Cow::Borrowed("--atomic"), Cow::Borrowed("-n")];
+        let args = vec![Cow::Borrowed("--rollback-on-failure"), Cow::Borrowed("-n")];
 
         let namespace = extract_namespace_from_helm_args(args.into_iter());
 
@@ -1255,7 +1256,10 @@ spec:
 
     #[test]
     fn should_extract_namespace_with_equals_syntax() {
-        let args = vec![Cow::Borrowed("--atomic"), Cow::Borrowed("--namespace=production")];
+        let args = vec![
+            Cow::Borrowed("--rollback-on-failure"),
+            Cow::Borrowed("--namespace=production"),
+        ];
 
         let namespace = extract_namespace_from_helm_args(args.into_iter());
 
@@ -1265,7 +1269,7 @@ spec:
     #[test]
     fn should_extract_namespace_with_long_option_format() {
         let args = vec![
-            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--rollback-on-failure"),
             Cow::Borrowed("--namespace"),
             Cow::Borrowed("staging"),
         ];
@@ -1278,7 +1282,7 @@ spec:
     #[test]
     fn should_extract_namespace_with_several_namespaces() {
         let args = vec![
-            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--rollback-on-failure"),
             Cow::Borrowed("--namespace"),
             Cow::Borrowed("staging"),
             Cow::Borrowed("-n"),

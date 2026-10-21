@@ -108,13 +108,13 @@ spec:
         {%- endif %}
       {%- endif %}
   {%- endif %}
-  {%- if advanced_settings.network_gateway_api_custom_http_errors is defined and advanced_settings.network_gateway_api_custom_http_errors %}
+  {%- if gateway_custom_http_error_pages %}
   responseOverride:
-    {%- for code in advanced_settings.network_gateway_api_custom_http_errors | split(pat=",") %}
+    {%- for error_page in gateway_custom_http_error_pages %}
     - match:
         statusCodes:
           - type: Value
-            value: {{ code | trim }}
+            value: {{ error_page.status_code | yaml_encode }}
       response:
         contentType: text/html
         body:
@@ -122,8 +122,8 @@ spec:
           valueRef:
             group: ""
             kind: ConfigMap
-            name: {{ sanitized_name }}-error-pages
-            key: {{ code | trim }}.html
+            name: {{ sanitized_name }}-error-pages-{{ error_page.status_code }}
+            key: response.body
     {%- endfor %}
   {%- elif cluster_envoy_custom_http_errors_default %}
   responseOverride:

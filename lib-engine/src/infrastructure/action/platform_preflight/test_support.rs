@@ -128,6 +128,7 @@ pub(super) fn unit(namespace: &str) -> PlatformHelmUnit {
             name: "qovery-cluster-agent".to_string(),
             version: "1.0.0".to_string(),
         },
+        apply_strategy: None,
         values_yaml: "{}".to_string(),
         images: Vec::new(),
         preflight_requirements: BTreeSet::new(),

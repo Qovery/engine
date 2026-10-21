@@ -457,7 +457,7 @@ spec:
       repository: "https://charts.bitnami.com/bitnami"
       name: "redis"
       version: "20.11.3"
-    arguments: ["--atomic", "--wait"]
+    arguments: ["--rollback-on-failure", "--wait"]
     allowClusterWideResources: true
   outputs:
     - name: redis_host
@@ -470,7 +470,7 @@ spec:
         assert_eq!(chart.name, "redis");
         assert_eq!(chart.repository, "https://charts.bitnami.com/bitnami");
         assert_eq!(chart.version, "20.11.3");
-        assert_eq!(manifest.spec.arguments, vec!["--atomic", "--wait"]);
+        assert_eq!(manifest.spec.arguments, vec!["--rollback-on-failure", "--wait"]);
         assert!(manifest.spec.allow_cluster_wide_resources);
         assert_eq!(outputs.len(), 1);
         assert!(ports.is_empty(), "no ports block means no ports");

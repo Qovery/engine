@@ -251,7 +251,7 @@ mod tests {
             description: DEFAULT_BLUEPRINT_DESCRIPTION.into(),
             credential_mode: CredentialMode::Cluster,
             timeout_sec: 600,
-            arguments: vec!["--atomic".into()],
+            arguments: vec!["--rollback-on-failure".into()],
             allow_cluster_wide_resources: false,
             outputs: vec![],
             ports: vec![],
@@ -298,7 +298,7 @@ mod tests {
         assert!(result.contains("source = {"));
         assert!(result.contains("helm_repository = {"));
         assert!(result.contains("values_override = {"));
-        assert!(result.contains(r#""--atomic""#));
+        assert!(result.contains(r#""--rollback-on-failure""#));
         assert!(!result.contains("import {"));
     }
 

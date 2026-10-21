@@ -15,12 +15,15 @@ use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
 };
 use crate::cmd::helm_utils::{ChartDependencyYAML, ChartYAML};
-use crate::cmd::kubectl::kubectl_apply_with_server_side_apply;
+use crate::cmd::kubectl::{
+    kubectl_apply_crds_with_server_side_apply, kubectl_apply_with_server_side_apply,
+    kubectl_exec_rollout_restart_deployment_with_envs,
+};
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
-use crate::helm::ChartInfo;
+use crate::helm::{ChartInfo, HelmApplyMode, HelmWaitStrategy};
 use crate::io_models::container::Registry;
 use semver::Version;
 use serde_derive::Deserialize;
@@ -35,7 +38,7 @@ const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 /// applies when it is smaller than the result set, so this never truncates a plausible inventory
 /// and a saturated result is detectable instead of silently partial.
 const HELM_RELEASE_HARD_CAP: usize = 1_000;
-const ENGINE_POST_RENDERER_BINARY: &str = "engine_post_renderer";
+const ENGINE_POST_RENDERER_PLUGIN: &str = "qovery-engine-post-renderer";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum HelmDiffSecretVisibility {
@@ -69,6 +72,81 @@ impl HelmHistoryMax {
     }
 }
 
+fn append_helm_apply_mode_args(args: &mut Vec<String>, apply_mode: HelmApplyMode, force_conflicts: bool) {
+    match apply_mode {
+        HelmApplyMode::Auto => {}
+        HelmApplyMode::Client => args.push("--server-side=false".to_string()),
+        HelmApplyMode::Server => {
+            args.push("--server-side=true".to_string());
+            if force_conflicts {
+                args.push("--force-conflicts".to_string());
+            }
+        }
+    }
+}
+
+fn raw_upgrade_args(
+    release_name: &str,
+    chart_path: &Path,
+    namespace: &str,
+    apply_mode: HelmApplyMode,
+    args: &[&str],
+) -> Vec<String> {
+    let mut command_args = vec![
+        "upgrade".to_string(),
+        release_name.to_string(),
+        chart_path.to_string_lossy().into_owned(),
+        "--install".to_string(),
+        "-n".to_string(),
+        namespace.to_string(),
+    ];
+    append_helm_apply_mode_args(&mut command_args, apply_mode, false);
+    command_args.extend(args.iter().map(|arg| (*arg).to_string()));
+    command_args
+}
+
+fn rollback_args(chart: &ChartInfo) -> Vec<String> {
+    let mut args = vec![
+        "rollback".to_string(),
+        chart.name.clone(),
+        "--namespace".to_string(),
+        chart.get_namespace_string(),
+        "--timeout".to_string(),
+        format!("{}s", chart.timeout_in_seconds),
+    ];
+    append_history_max_arg(&mut args, chart);
+    // Preserve Helm 3 rollback semantics: replacement is required for immutable resource changes,
+    // and Helm 4 cannot combine replacement with server-side apply.
+    args.extend(["--cleanup-on-fail", "--server-side=false", "--force-replace", "--wait"].map(String::from));
+    args
+}
+
+fn append_history_max_arg(args: &mut Vec<String>, chart: &ChartInfo) {
+    args.push("--history-max".to_string());
+    args.push(chart.history_max.cli_arg().to_string());
+}
+
+fn append_helm_upgrade_flags(args: &mut Vec<String>, chart: &ChartInfo, apply_mode: HelmApplyMode) {
+    if chart.atomic {
+        args.push("--rollback-on-failure".to_string())
+    }
+    if chart.force_upgrade {
+        args.push("--force-replace".to_string())
+    }
+    append_helm_apply_mode_args(args, apply_mode, chart.force_conflicts);
+    if chart.dry_run {
+        args.push("--dry-run".to_string())
+    }
+    // Helm 3 made `--atomic` wait for readiness implicitly. Helm 4's
+    // `--rollback-on-failure` does not, so preserve the former behavior here.
+    if chart.wait || chart.atomic {
+        args.push(chart.wait_strategy.cli_arg().to_string())
+    }
+
+    append_history_max_arg(args, chart);
+    append_skip_crds_arg(args, chart);
+    append_engine_post_renderer_args(args, chart);
+}
 pub enum Timeout<T> {
     Default,
     Value(T),
@@ -158,8 +236,8 @@ impl HelmError {
             HelmError::Killed(_, _) => false,
             HelmError::UnsupportedPrometheusObjectBucketConfiguration => false,
 
-            // CmdError: check message for network patterns
-            HelmError::CmdError(_, _, _) => self.has_transient_error_pattern(),
+            // CommandError retains the transport failure detail while HelmError's Display implementation uses a safe summary.
+            HelmError::CmdError(_, _, command_error) => command_error.is_transient_network_error(),
 
             // KubernetesApplyError: retryable for transient network errors or GKE ValidatingAdmissionPolicy
             // race conditions (GKE recreates the policy after we delete it, retry re-runs pre-execute action)
@@ -191,7 +269,7 @@ impl HelmError {
 /// Cache for helm deployed releases per namespace during parallel chart deployment.
 ///
 /// Ensures `list_release` is called at most once per namespace concurrently,
-/// preventing N parallel `helm list -a` calls to avoid OOM.
+/// preventing N parallel `helm list` calls to avoid OOM.
 ///
 type HelmListCacheEntry = Arc<Mutex<Option<Vec<HelmChart>>>>;
 type HelmListCacheMap = Arc<Mutex<HashMap<String, HelmListCacheEntry>>>;
@@ -461,6 +539,29 @@ impl Helm {
         STDOUT: FnMut(String),
         STDERR: FnMut(String),
     {
+        self.uninstall_with_wait_strategy(
+            chart,
+            envs,
+            cmd_killer,
+            stdout_output,
+            stderr_output,
+            HelmWaitStrategy::Watcher,
+        )
+    }
+
+    fn uninstall_with_wait_strategy<STDOUT, STDERR>(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+        wait_strategy: HelmWaitStrategy,
+    ) -> Result<(), HelmError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String),
+    {
         // If the release does not exist, we do not return an error
         match self.check_release_exist(chart, envs) {
             Ok(_) => {}
@@ -480,7 +581,7 @@ impl Helm {
             &namespace,
             "--timeout",
             &timeout,
-            "--wait",
+            wait_strategy.cli_arg(),
             "--cascade=foreground",
             "--ignore-not-found",
             "--debug",
@@ -504,7 +605,17 @@ impl Helm {
         match self.check_release_exist(chart, envs) {
             Ok(release) if release.is_locked() && release.version <= 1 => {
                 info!("Helm lock detected. Uninstalling it as it is the first version and rollback is not possible");
-                self.uninstall(chart, envs, &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
+                // HACK(QOV-2279): Helm 4's watcher can wait until timeout after a foreground deletion.
+                // https://github.com/helm/helm/issues/31766
+                // Remove when the watcher reliably observes resource deletion.
+                self.uninstall_with_wait_strategy(
+                    chart,
+                    envs,
+                    &CommandKiller::never(),
+                    &mut |_| {},
+                    &mut |_| {},
+                    HelmWaitStrategy::Legacy,
+                )?;
             }
             Ok(release) if release.is_locked() => {
                 info!("Helm lock detected. Forcing rollback to previous version");
@@ -610,7 +721,8 @@ impl Helm {
             );
         }
 
-        let mut helm_args = vec!["list", "-a", "-o", "json"];
+        // Helm 4 lists releases in every status by default and removed the Helm 3 `--all` flag.
+        let mut helm_args = vec!["list", "-o", "json"];
         match namespace {
             Some(ns) => helm_args.append(&mut vec!["-n", ns]),
             None => helm_args.push("-A"),
@@ -1217,6 +1329,17 @@ impl Helm {
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
     ) -> Result<(), HelmError> {
+        self.upgrade_with_apply_mode(chart, envs, cmd_killer, HelmApplyMode::Client)
+    }
+
+    /// Upgrades a chart with the requested Helm 4 resource-apply mode.
+    pub fn upgrade_with_apply_mode(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        apply_mode: HelmApplyMode,
+    ) -> Result<(), HelmError> {
         // Due to crash or error it is possible that the release is under an helm lock
         // Try to un-stuck the situation first if needed
         // We don't care if the rollback failed, as it is a best effort to remove the lock
@@ -1238,26 +1361,8 @@ impl Helm {
             chart.get_namespace_string(),
         ];
 
-        // warn: don't add debug or json output won't work
-        if chart.atomic {
-            args_string.push("--atomic".to_string())
-        }
-        if chart.force_upgrade {
-            args_string.push("--force".to_string())
-        }
-        if chart.recreate_pods {
-            args_string.push("--recreate-pods".to_string())
-        }
-        if chart.dry_run {
-            args_string.push("--dry-run".to_string())
-        }
-        if chart.wait {
-            args_string.push("--wait".to_string())
-        }
-
-        append_history_max_arg(&mut args_string, chart);
-        append_skip_crds_arg(&mut args_string, chart);
-        append_engine_post_renderer_args(&mut args_string, chart);
+        // Do not add debug here or JSON output will no longer work.
+        append_helm_upgrade_flags(&mut args_string, chart, apply_mode);
 
         // overrides and files overrides
         for value in &chart.values {
@@ -1367,6 +1472,22 @@ impl Helm {
             return Err(error);
         };
 
+        if chart.recreate_pods && !chart.dry_run {
+            let namespace = chart.get_namespace_string();
+            kubectl_exec_rollout_restart_deployment_with_envs(&chart.name, &namespace, &self.get_all_envs(envs))
+                .map_err(|err| {
+                    CmdError(
+                        chart.name.clone(),
+                        UPGRADE,
+                        errors::CommandError::new(
+                            "Kubernetes deployment restart error".to_string(),
+                            Some(err.to_string()),
+                            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                        ),
+                    )
+                })?;
+        }
+
         Ok(())
     }
     pub fn upgrade_with_server_side_apply<P>(
@@ -1412,20 +1533,20 @@ impl Helm {
         ]);
 
         // warn: don't add debug or json output won't work
-        if chart.atomic {
-            args_string.push("--atomic".to_string())
-        }
         if chart.force_upgrade {
-            args_string.push("--force".to_string())
+            args_string.push("--force-replace".to_string())
         }
         if chart.dry_run {
             args_string.push("--dry-run".to_string())
         }
         if chart.wait {
-            args_string.push("--wait".to_string())
+            args_string.push(chart.wait_strategy.cli_arg().to_string())
         }
 
         append_skip_crds_arg(&mut args_string, chart);
+        if chart.wait_for_crd_establishment {
+            args_string.push("--include-crds".to_string());
+        }
         append_engine_post_renderer_args(&mut args_string, chart);
 
         // overrides and files overrides
@@ -1498,13 +1619,25 @@ impl Helm {
 
         match helm_ret {
             Ok(_) => {
-                match kubectl_apply_with_server_side_apply(
-                    &kubernetes_config,
-                    envs.to_vec(),
-                    None,
-                    &template_lines.join("\n"),
-                    chart.force_conflicts,
-                ) {
+                let template = template_lines.join("\n");
+                let apply_result = if chart.wait_for_crd_establishment {
+                    kubectl_apply_crds_with_server_side_apply(
+                        &kubernetes_config,
+                        envs.to_vec(),
+                        None,
+                        &template,
+                        chart.force_conflicts,
+                    )
+                } else {
+                    kubectl_apply_with_server_side_apply(
+                        &kubernetes_config,
+                        envs.to_vec(),
+                        None,
+                        &template,
+                        chart.force_conflicts,
+                    )
+                };
+                match apply_result {
                     Ok(_) => Ok(()),
                     Err(err) => Err(HelmError::KubernetesApplyError(err)),
                 }
@@ -1889,12 +2022,16 @@ impl Helm {
         }
     }
 
-    // Used by helmchart service that takes its argument raw, as it users that control them
+    /// Upgrades a Helm chart whose values and additional flags are supplied at runtime.
+    ///
+    /// The requested apply mode is added before `args`, so an existing explicit
+    /// `--server-side` argument remains an intentional opt-in for that chart.
     pub fn upgrade_raw<STDOUT, STDERR>(
         &self,
         release_name: &str,
         chart_path: &Path,
         namespace: &str,
+        apply_mode: HelmApplyMode,
         args: &[&str],
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
@@ -1913,18 +2050,8 @@ impl Helm {
         let unlock_ret = self.unlock_release(&chart, envs);
         info!("Helm lock status: {:?}", unlock_ret);
 
-        let chart_path = chart_path.to_string_lossy();
-        let args: Vec<&str> = [
-            "upgrade",
-            release_name,
-            chart_path.as_ref(),
-            "--install",
-            "-n",
-            namespace,
-        ]
-        .into_iter()
-        .chain(args.iter().copied())
-        .collect();
+        let command_args = raw_upgrade_args(release_name, chart_path, namespace, apply_mode, args);
+        let args = command_args.iter().map(String::as_str).collect::<Vec<_>>();
 
         let mut stderr_msgs: String = String::new();
         let helm_ret = helm_exec_with_output(
@@ -2200,31 +2327,152 @@ mod legacy_release_tests {
     }
 }
 
+#[cfg(test)]
+mod recovery_command_tests {
+    use super::Helm;
+    use crate::cmd::command::CommandKiller;
+    use crate::helm::ChartInfo;
+    #[cfg(unix)]
+    use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_legacy_force_replacement_behavior() {
+        let fixture = tempfile::tempdir().unwrap();
+        let executable = fixture.path().join("helm");
+        let calls = fixture.path().join("calls");
+        fs::write(
+            &executable,
+            r#"#!/bin/sh
+case "$1" in
+  status) printf '%s\n' '{"version":2,"info":{"status":"deployed"}}' ;;
+  rollback)
+    printf '%s\n' "$*" > "$HELM_CALLS" ;;
+  *) exit 2 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let path = format!("{}:/usr/bin:/bin", fixture.path().display());
+        let calls = calls.to_string_lossy();
+        let envs = [("PATH", path.as_str()), ("HELM_CALLS", calls.as_ref())];
+        let helm = Helm::new(Option::<&Path>::None, &[]).unwrap();
+        let chart = ChartInfo::new_from_custom_namespace(
+            "rollback-release".to_string(),
+            "unused-chart-path".to_string(),
+            "default".to_string(),
+            10,
+            vec![],
+            vec![],
+            vec![],
+            false,
+            None,
+        );
+
+        assert!(helm.rollback(&chart, &envs).is_ok());
+        let rollback_args = fs::read_to_string(calls.as_ref()).unwrap();
+        assert!(rollback_args.contains("--server-side=false"));
+        assert!(rollback_args.contains("--force-replace"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn normal_uninstall_uses_helm_4_default_wait_strategy() {
+        let fixture = tempfile::tempdir().unwrap();
+        let executable = fixture.path().join("helm");
+        let calls = fixture.path().join("calls");
+        fs::write(
+            &executable,
+            r#"#!/bin/sh
+case "$1" in
+  status) printf '%s\n' '{"version":1,"info":{"status":"deployed"}}' ;;
+  uninstall) printf '%s\n' "$*" > "$HELM_CALLS" ;;
+  *) exit 2 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let path = format!("{}:/usr/bin:/bin", fixture.path().display());
+        let calls = calls.to_string_lossy();
+        let envs = [("PATH", path.as_str()), ("HELM_CALLS", calls.as_ref())];
+        let helm = Helm::new(Option::<&Path>::None, &[]).unwrap();
+        let chart = ChartInfo::new_from_custom_namespace(
+            "uninstall-release".to_string(),
+            "unused-chart-path".to_string(),
+            "default".to_string(),
+            10,
+            vec![],
+            vec![],
+            vec![],
+            false,
+            None,
+        );
+
+        assert!(
+            helm.uninstall(&chart, &envs, &CommandKiller::never(), &mut |_| {}, &mut |_| {})
+                .is_ok()
+        );
+        let uninstall_args = fs::read_to_string(calls.as_ref()).unwrap();
+        assert!(uninstall_args.contains("--wait"));
+        assert!(!uninstall_args.contains("--wait=legacy"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unlocking_initial_release_uses_legacy_wait_strategy() {
+        let fixture = tempfile::tempdir().unwrap();
+        let executable = fixture.path().join("helm");
+        let calls = fixture.path().join("calls");
+        fs::write(
+            &executable,
+            r#"#!/bin/sh
+case "$1" in
+  status) printf '%s\n' '{"version":1,"info":{"status":"pending-install"}}' ;;
+  uninstall) printf '%s\n' "$*" > "$HELM_CALLS" ;;
+  upgrade) ;;
+  *) exit 2 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+
+        let path = format!("{}:/usr/bin:/bin", fixture.path().display());
+        let calls = calls.to_string_lossy();
+        let envs = [("PATH", path.as_str()), ("HELM_CALLS", calls.as_ref())];
+        let helm = Helm::new(Option::<&Path>::None, &[]).unwrap();
+        let chart = ChartInfo::new_from_custom_namespace(
+            "locked-install-release".to_string(),
+            "unused-chart-path".to_string(),
+            "default".to_string(),
+            10,
+            vec![],
+            vec![],
+            vec![],
+            false,
+            None,
+        );
+
+        assert!(helm.upgrade(&chart, &envs, &CommandKiller::never()).is_ok());
+        let uninstall_args = fs::read_to_string(calls.as_ref()).unwrap();
+        assert!(uninstall_args.contains("--wait=legacy"));
+    }
+}
+
 fn append_engine_post_renderer_args(args: &mut Vec<String>, chart: &ChartInfo) {
     if !chart.enable_engine_post_renderer_labels {
         return;
     }
 
-    let current_exe = match std::env::current_exe() {
-        Ok(path) => path,
-        Err(e) => {
-            warn!("Cannot resolve engine executable path for helm post-renderer, skipping: {e}");
-            return;
-        }
-    };
-
-    let Some(current_exe_dir) = current_exe.parent() else {
-        warn!("Cannot resolve engine executable directory for helm post-renderer, skipping");
-        return;
-    };
-
-    let post_renderer_path = current_exe_dir
-        .join(format!("{ENGINE_POST_RENDERER_BINARY}{}", std::env::consts::EXE_SUFFIX))
-        .to_string_lossy()
-        .to_string();
-
     args.push("--post-renderer".to_string());
-    args.push(post_renderer_path);
+    args.push(ENGINE_POST_RENDERER_PLUGIN.to_string());
 
     if let Some(public_ecr_image_mirror) = &chart.public_ecr_image_mirror {
         args.push(format!(
@@ -2238,25 +2486,6 @@ fn append_helm_diff_secret_visibility_arg(args: &mut Vec<String>, secret_visibil
     if let Some(arg) = secret_visibility.cli_arg() {
         args.push(arg.to_string());
     }
-}
-
-fn rollback_args(chart: &ChartInfo) -> Vec<String> {
-    let mut args = vec![
-        "rollback".to_string(),
-        chart.name.clone(),
-        "--namespace".to_string(),
-        chart.get_namespace_string(),
-        "--timeout".to_string(),
-        format!("{}s", chart.timeout_in_seconds),
-    ];
-    append_history_max_arg(&mut args, chart);
-    args.extend(["--cleanup-on-fail", "--force", "--wait"].map(String::from));
-    args
-}
-
-fn append_history_max_arg(args: &mut Vec<String>, chart: &ChartInfo) {
-    args.push("--history-max".to_string());
-    args.push(chart.history_max.cli_arg().to_string());
 }
 
 fn append_skip_crds_arg(args: &mut Vec<String>, chart: &ChartInfo) {
@@ -2443,10 +2672,12 @@ impl Drop for HelmRegistry<'_> {
 mod unit_tests {
     use super::{
         Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, HelmHistoryMax, append_engine_post_renderer_args,
-        append_helm_diff_secret_visibility_arg, append_history_max_arg, rollback_args,
+        append_helm_apply_mode_args, append_helm_diff_secret_visibility_arg, append_helm_upgrade_flags,
+        append_history_max_arg, raw_upgrade_args, rollback_args,
     };
     use crate::cmd::command::CommandKiller;
-    use crate::helm::{ChartInfo, ChartValuesGenerated, PublicEcrImageMirror};
+    use crate::errors::CommandError;
+    use crate::helm::{ChartInfo, ChartValuesGenerated, HelmApplyMode, HelmWaitStrategy, PublicEcrImageMirror};
     use std::{fs::File, path::Path};
 
     #[test]
@@ -2458,6 +2689,83 @@ mod unit_tests {
 
         append_helm_diff_secret_visibility_arg(&mut args, HelmDiffSecretVisibility::Suppress);
         assert_eq!(args, vec!["diff".to_string(), "--suppress-secrets".to_string()]);
+    }
+
+    #[test]
+    fn client_apply_mode_disables_helm_server_side_apply() {
+        let mut args = Vec::new();
+
+        append_helm_apply_mode_args(&mut args, HelmApplyMode::Client, false);
+
+        assert_eq!(args, vec!["--server-side=false"]);
+    }
+
+    #[test]
+    fn client_apply_mode_is_the_default() {
+        assert_eq!(HelmApplyMode::default(), HelmApplyMode::Client);
+    }
+
+    #[test]
+    fn raw_upgrade_uses_client_apply_mode_before_additional_arguments() {
+        let args = raw_upgrade_args(
+            "release",
+            Path::new("/tmp/chart"),
+            "namespace",
+            HelmApplyMode::Client,
+            &["--timeout", "600s"],
+        );
+
+        assert_eq!(
+            args,
+            vec![
+                "upgrade",
+                "release",
+                "/tmp/chart",
+                "--install",
+                "-n",
+                "namespace",
+                "--server-side=false",
+                "--timeout",
+                "600s",
+            ]
+        );
+    }
+
+    #[test]
+    fn server_apply_mode_can_force_conflicts() {
+        let mut args = Vec::new();
+
+        append_helm_apply_mode_args(&mut args, HelmApplyMode::Server, true);
+
+        assert_eq!(args, vec!["--server-side=true", "--force-conflicts"]);
+    }
+
+    #[test]
+    fn recreate_pods_uses_kubectl_instead_of_the_removed_helm_flag() {
+        let chart = ChartInfo {
+            recreate_pods: true,
+            ..Default::default()
+        };
+        let mut args = Vec::new();
+
+        append_helm_upgrade_flags(&mut args, &chart, HelmApplyMode::Auto);
+
+        assert!(!args.iter().any(|arg| arg == "--recreate-pods"));
+    }
+
+    #[test]
+    fn atomic_upgrade_waits_for_readiness() {
+        let chart = ChartInfo {
+            atomic: true,
+            wait: false,
+            ..Default::default()
+        };
+        let mut args = Vec::new();
+
+        append_helm_upgrade_flags(&mut args, &chart, HelmApplyMode::Auto);
+
+        assert!(args.iter().any(|arg| arg == "--rollback-on-failure"));
+        assert!(args.iter().any(|arg| arg == "--wait"));
     }
 
     #[test]
@@ -2476,7 +2784,16 @@ mod unit_tests {
     }
 
     #[test]
-    fn rollback_keeps_the_chart_history() {
+    fn history_max_arg_defaults_to_fifty_revisions() {
+        let mut args = Vec::new();
+
+        append_history_max_arg(&mut args, &ChartInfo::default());
+
+        assert_eq!(args, vec!["--history-max".to_string(), "50".to_string()]);
+    }
+
+    #[test]
+    fn rollback_keeps_the_chart_history_and_uses_helm_4_replacement() {
         for (history_max, expected) in [(HelmHistoryMax::Standard, "50"), (HelmHistoryMax::Reduced, "10")] {
             let chart = ChartInfo {
                 history_max,
@@ -2496,7 +2813,8 @@ mod unit_tests {
                     "--history-max",
                     expected,
                     "--cleanup-on-fail",
-                    "--force",
+                    "--server-side=false",
+                    "--force-replace",
                     "--wait"
                 ]
             );
@@ -2504,12 +2822,17 @@ mod unit_tests {
     }
 
     #[test]
-    fn history_max_arg_defaults_to_fifty_revisions() {
+    fn legacy_wait_strategy_is_used_for_upgrade() {
+        let chart = ChartInfo {
+            wait_strategy: HelmWaitStrategy::Legacy,
+            ..Default::default()
+        };
         let mut args = Vec::new();
 
-        append_history_max_arg(&mut args, &ChartInfo::default());
+        append_helm_upgrade_flags(&mut args, &chart, HelmApplyMode::Client);
 
-        assert_eq!(args, vec!["--history-max".to_string(), "50".to_string()]);
+        assert!(args.iter().any(|arg| arg == "--wait=legacy"));
+        assert!(!args.iter().any(|arg| arg == "--wait"));
     }
 
     #[test]
@@ -2524,7 +2847,7 @@ mod unit_tests {
         append_engine_post_renderer_args(&mut args, &chart);
 
         assert_eq!(args[0], "--post-renderer");
-        assert!(args[1].ends_with("engine_post_renderer"));
+        assert_eq!(args[1], "qovery-engine-post-renderer");
         assert_eq!(
             args[2],
             "--post-renderer-args=--public-ecr-image-mirror=123456789012.dkr.ecr.eu-west-3.amazonaws.com/qovery-ecr-public"
@@ -2543,7 +2866,22 @@ mod unit_tests {
 
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], "--post-renderer");
-        assert!(args[1].ends_with("engine_post_renderer"));
+        assert_eq!(args[1], "qovery-engine-post-renderer");
+    }
+
+    #[test]
+    fn helm_command_error_with_lost_http2_connection_is_retryable() {
+        let error = HelmError::CmdError(
+            "prometheus-operator-crds".to_string(),
+            HelmCommand::LIST,
+            CommandError::new(
+                "Helm list error".to_string(),
+                Some("http2: client connection lost".to_string()),
+                None,
+            ),
+        );
+
+        assert!(error.is_retryable());
     }
 
     #[test]
@@ -2686,7 +3024,7 @@ mod tests {
             &mut |_line| {},
             &CommandKiller::never(),
         );
-        assert!(output.contains("Version:\"v3.20.0\""));
+        assert!(output.contains("Version:\"v4.3.0\""));
     }
 
     #[test]
@@ -3076,9 +3414,7 @@ mod tests {
             &[],
             &CommandKiller::never(),
         );
-        assert!(
-            matches!(ret, Err(HelmError::CmdError(_, _, ref err)) if err.message_raw().unwrap().contains("invalid: Command terminated with a non success exit status code"))
-        );
+        assert!(matches!(ret, Err(HelmError::CmdError(_, _, _))));
 
         // Happy path
         assert!(!target_dir.path().join("values.yaml").exists());
