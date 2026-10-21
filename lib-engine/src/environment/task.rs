@@ -232,6 +232,7 @@ impl EnvironmentTask {
         }
 
         // Be sure that our repository exist before trying to pull/push images from it
+        let registry_step = logger.enter_step(StepName::RegistryCreateRepository);
         logger.send_progress(format!(
             "🗂️ Provisioning container repository {}/{}",
             build.image.registry_name.as_str(),
@@ -262,6 +263,7 @@ impl EnvironmentTask {
                 StepStatus::Skip
             }),
         }
+        registry_step.end();
 
         // Ok now everything is setup, we can try to build the app
         let build_result = build_platform.build(

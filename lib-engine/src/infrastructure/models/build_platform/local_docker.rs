@@ -17,7 +17,7 @@ use tempfile::TempDir;
 use time::Instant;
 use uuid::Uuid;
 
-use crate::cmd::buildkit_progress::BuildkitExportTimings;
+use crate::cmd::buildkit_progress::{BuildkitExportTimings, ExportStep};
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker;
 use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage, LayerCompression};
@@ -319,8 +319,10 @@ impl LocalDocker {
             .map(|arch| docker::Architecture::from(arch))
             .collect();
 
+        let builder_step = logger.enter_step(StepName::ProvisionBuilder);
         let builder_handle =
             self.provision_builder(build, |line| logger.send_progress(line), &CommandKiller::from_cancelable(abort))?;
+        builder_step.end();
 
         // Written as late as possible, and held only until the build returns: dropping it removes
         // the files, whatever ended the build, including a `CommandKiller` timeout or an abort that
@@ -348,7 +350,10 @@ impl LocalDocker {
                 true,
                 &arch,
                 &mut |line| logger.send_progress(line),
-                &mut |line| logger.send_progress(line),
+                &mut |line, export_step| match export_step {
+                    Some(export_step) => logger.send_progress_in(export_step.into(), line),
+                    None => logger.send_progress(line),
+                },
                 &CommandKiller::from(build.timeout, abort),
                 build
                     .git_repository()
@@ -369,6 +374,10 @@ impl LocalDocker {
         }
         build_record.set_builder_observation(builder, oom_killed);
         if let Err(err) = exit_status {
+            if let Some(failed_export) = export_timings.failed_step() {
+                // Not ended: the build error line is tagged with the push or cache export that failed
+                let _failed_export = logger.enter_step(failed_export.into());
+            }
             return Err(to_build_error(build.image.service_id.clone(), err));
         }
         build_record.stop(StepStatus::Success);
@@ -549,9 +558,9 @@ fn record_export_timings(
     service_long_id: Uuid,
     export_timings: &BuildkitExportTimings,
 ) {
-    for (step_name, timing) in [
-        (StepName::ImagePush, export_timings.image_push),
-        (StepName::CacheExport, export_timings.cache_export),
+    for (step, timing) in [
+        (ExportStep::ImagePush, export_timings.image_push),
+        (ExportStep::CacheExport, export_timings.cache_export),
     ] {
         let Some(timing) = timing else {
             continue;
@@ -559,7 +568,7 @@ fn record_export_timings(
         metrics_registry.record_completed(
             service_long_id,
             StepLabel::Service,
-            step_name,
+            step.into(),
             SystemTime::now() - timing.started_at.elapsed(),
             timing.duration,
             if timing.failed {
@@ -816,6 +825,7 @@ impl BuildPlatform for LocalDocker {
 
         // LOGGING
         let repository_root_path = self.get_repository_build_root_path(build)?;
+        let clone_step = logger.enter_step(StepName::GitClone);
         logger.send_progress(format!("📥 Cloning repository {}", git_repository.url));
 
         // Retrieve git credentials
@@ -912,6 +922,7 @@ impl BuildPlatform for LocalDocker {
             return Err(error.error);
         }
         git_clone_record.stop(StepStatus::Success);
+        clone_step.end();
 
         let _git_cleanup = scopeguard::guard(&repository_root_path, |path| {
             info!("Removing git repository at path: {:?}", path);
@@ -1069,7 +1080,7 @@ impl BuildPlatform for LocalDocker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cmd::buildkit_progress::ExportPhaseTiming;
+    use crate::cmd::buildkit_progress::ExportStepTiming;
     use crate::infrastructure::models::build_platform::Image;
     use crate::metrics_registry::StdMetricsRegistry;
     use std::cell::{Cell, RefCell};
@@ -1589,10 +1600,10 @@ RUN chmod +x entrypoint.sh"#;
     }
 
     #[test]
-    fn export_timings_are_recorded_once_per_measured_phase() {
+    fn export_timings_are_recorded_once_per_measured_step() {
         let metrics_registry = StdMetricsRegistry::default();
         let service_long_id = Uuid::new_v4();
-        let push = ExportPhaseTiming {
+        let push = ExportStepTiming {
             started_at: std::time::Instant::now(),
             duration: Duration::from_secs(12),
             failed: true,
@@ -1615,10 +1626,10 @@ RUN chmod +x entrypoint.sh"#;
     }
 
     #[test]
-    fn export_timings_record_both_phases_as_success() {
+    fn export_timings_record_both_steps_as_success() {
         let metrics_registry = StdMetricsRegistry::default();
         let service_long_id = Uuid::new_v4();
-        let timing = |secs| ExportPhaseTiming {
+        let timing = |secs| ExportStepTiming {
             started_at: std::time::Instant::now(),
             duration: Duration::from_secs(secs),
             failed: false,
@@ -1638,7 +1649,7 @@ RUN chmod +x entrypoint.sh"#;
             .into_iter()
             .map(|record| (record.step_name, record.duration, record.status))
             .collect();
-        records.sort_by(|a, b| a.0.cmp(&b.0));
+        records.sort_by_key(|record| record.0);
         assert_eq!(
             records,
             vec![

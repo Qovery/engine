@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::{
     errors::io::EngineError,
     events::{self, io},
+    metrics_registry::StepName,
 };
 
 #[derive(Deserialize, Serialize)]
@@ -178,6 +179,8 @@ pub struct EventDetails {
     execution_id: String,
     stage: Stage,
     transmitter: Transmitter,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    step_name: Option<StepName>,
 }
 
 impl From<events::EventDetails> for EventDetails {
@@ -188,6 +191,7 @@ impl From<events::EventDetails> for EventDetails {
             execution_id: details.execution_id.to_string(),
             stage: Stage::from(details.stage),
             transmitter: Transmitter::from(details.transmitter),
+            step_name: details.step_name,
         }
     }
 }
@@ -195,9 +199,12 @@ impl From<events::EventDetails> for EventDetails {
 mod test {
     use crate::errors::EngineError;
     use crate::events::io;
-    use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+    use crate::events::{
+        EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
+    };
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
+    use crate::metrics_registry::StepName;
     use uuid::Uuid;
 
     #[test]
@@ -250,5 +257,27 @@ mod test {
         let json = serde_json::to_string(&event_io).expect("event should serialize");
 
         assert!(json.contains(r#"{"type":"infrastructure","step":"PlatformExecutionResult"}"#));
+    }
+
+    #[test]
+    fn step_name_is_written_in_core_spelling_and_left_out_when_unset() {
+        let details = EventDetails::new(
+            None,
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random().to_string(),
+            Stage::Environment(EnvironmentStep::Build),
+            Transmitter::Application(Uuid::new_v4(), "api".to_string()),
+        );
+        let serialize = |details: EventDetails| {
+            let event = EngineEvent::Info(details, EventMessage::new_from_safe("#12 pushing layers".to_string()));
+            serde_json::to_value(io::EngineEvent::from(event)).expect("event should serialize")
+        };
+
+        let tagged = serialize(details.clone().with_step_name_if_unset(Some(StepName::ImagePush)));
+        let untagged = serialize(details);
+
+        assert_eq!(tagged["details"]["step_name"], "IMAGE_PUSH");
+        assert_eq!(untagged["details"].get("step_name"), None);
     }
 }

@@ -1,4 +1,4 @@
-use crate::cmd::buildkit_progress::{BuildkitExportProgress, BuildkitExportTimings};
+use crate::cmd::buildkit_progress::{BuildkitExportProgress, BuildkitExportTimings, ExportStep};
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::io_models::models::CpuArchitecture;
 use crate::utilities::{is_valid_k8s_label_value, is_valid_k8s_qualified_name};
@@ -1143,7 +1143,7 @@ impl Docker {
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
-        Stderr: FnMut(String),
+        Stderr: FnMut(String, Option<ExportStep>),
     {
         // Do some checks
         if !dockerfile.is_file() {
@@ -1197,7 +1197,7 @@ impl Docker {
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
-        Stderr: FnMut(String),
+        Stderr: FnMut(String, Option<ExportStep>),
     {
         info!("Docker buildkit build {:?}", image_to_build.image_name());
 
@@ -1453,7 +1453,7 @@ fn run_buildkit_attempts<Stderr, Attempt>(
     mut run_attempt: Attempt,
 ) -> Result<(), DockerError>
 where
-    Stderr: FnMut(String),
+    Stderr: FnMut(String, Option<ExportStep>),
     Attempt: FnMut(&mut dyn FnMut(String)) -> Result<(), DockerError>,
 {
     // buildx retries the TLS dial itself since v0.31 (docker/buildx#2668, #3493). 2026-09-07..2026-10-05: the error
@@ -1477,8 +1477,8 @@ where
                 {
                     transient_error = true;
                 }
-                export_progress.observe(&line, std::time::Instant::now());
-                stderr_output(line);
+                let export_step = export_progress.observe(&line, std::time::Instant::now());
+                stderr_output(line, export_step);
             };
             run_attempt(&mut stderr_output)
         };
@@ -1983,7 +1983,7 @@ mod tests {
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2003,7 +2003,7 @@ mod tests {
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2064,7 +2064,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2086,7 +2086,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2124,7 +2124,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2267,7 +2267,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2305,7 +2305,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             Some(&"build".to_string()),
             &mut BuildkitExportTimings::default(),
@@ -2325,7 +2325,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             Some(&"build".to_string()),
             &mut BuildkitExportTimings::default(),
@@ -2358,7 +2358,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             Some(&"build".to_string()),
             &mut BuildkitExportTimings::default(),
@@ -2385,7 +2385,7 @@ RUN --mount=type=secret,id=MY_BUILD_SECRET,required=true \
             true,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
-            &mut |msg| eprintln!("{msg}"),
+            &mut |msg, _| eprintln!("{msg}"),
             &CommandKiller::never(),
             None,
             &mut BuildkitExportTimings::default(),
@@ -2490,7 +2490,7 @@ mod buildkit_attempts_tests {
         let mut export_timings = BuildkitExportTimings::default();
 
         let ret = run_buildkit_attempts(
-            &mut |line| forwarded_lines.push(line),
+            &mut |line, _| forwarded_lines.push(line),
             &CommandKiller::never(),
             &mut export_timings,
             |stderr_output| {
@@ -2513,11 +2513,12 @@ mod buildkit_attempts_tests {
     fn export_timings_are_kept_when_the_build_fails_without_retry() {
         let mut export_timings = BuildkitExportTimings::default();
 
-        let ret = run_buildkit_attempts(&mut |_| {}, &CommandKiller::never(), &mut export_timings, |stderr_output| {
-            stderr_output("#9 exporting to image".to_string());
-            stderr_output("#9 ERROR: failed to push: unexpected status: 500".to_string());
-            Err(exit_failure())
-        });
+        let ret =
+            run_buildkit_attempts(&mut |_, _| {}, &CommandKiller::never(), &mut export_timings, |stderr_output| {
+                stderr_output("#9 exporting to image".to_string());
+                stderr_output("#9 ERROR: failed to push: unexpected status: 500".to_string());
+                Err(exit_failure())
+            });
 
         assert!(ret.is_err());
         assert!(export_timings.image_push.is_some_and(|timing| timing.failed));

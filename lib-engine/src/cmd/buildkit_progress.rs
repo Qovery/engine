@@ -1,8 +1,9 @@
+use crate::metrics_registry::StepName;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ExportPhaseTiming {
+pub struct ExportStepTiming {
     pub started_at: Instant,
     pub duration: Duration,
     pub failed: bool,
@@ -10,33 +11,55 @@ pub struct ExportPhaseTiming {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BuildkitExportTimings {
-    pub image_push: Option<ExportPhaseTiming>,
-    pub cache_export: Option<ExportPhaseTiming>,
+    pub image_push: Option<ExportStepTiming>,
+    pub cache_export: Option<ExportStepTiming>,
+}
+
+impl BuildkitExportTimings {
+    pub fn failed_step(&self) -> Option<ExportStep> {
+        let failed = |timing: Option<ExportStepTiming>| timing.is_some_and(|timing| timing.failed);
+        if failed(self.image_push) {
+            Some(ExportStep::ImagePush)
+        } else if failed(self.cache_export) {
+            Some(ExportStep::CacheExport)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ExportPhase {
+pub enum ExportStep {
     ImagePush,
     CacheExport,
 }
 
+impl From<ExportStep> for StepName {
+    fn from(step: ExportStep) -> Self {
+        match step {
+            ExportStep::ImagePush => StepName::ImagePush,
+            ExportStep::CacheExport => StepName::CacheExport,
+        }
+    }
+}
+
 struct ExportVertex {
-    phase: ExportPhase,
+    step: ExportStep,
     ended: bool,
 }
 
 #[derive(Default)]
-struct PhaseSpan {
+struct StepSpan {
     started_at: Option<Instant>,
     ended_at: Option<Instant>,
     running_vertices: usize,
     failed: bool,
 }
 
-impl PhaseSpan {
-    fn timing(&self) -> Option<ExportPhaseTiming> {
+impl StepSpan {
+    fn timing(&self) -> Option<ExportStepTiming> {
         match (self.started_at, self.ended_at) {
-            (Some(started_at), Some(ended_at)) if self.running_vertices == 0 => Some(ExportPhaseTiming {
+            (Some(started_at), Some(ended_at)) if self.running_vertices == 0 => Some(ExportStepTiming {
                 started_at,
                 duration: ended_at.saturating_duration_since(started_at),
                 failed: self.failed,
@@ -51,38 +74,37 @@ impl PhaseSpan {
 #[derive(Default)]
 pub struct BuildkitExportProgress {
     vertices: HashMap<u32, ExportVertex>,
-    image_push: PhaseSpan,
-    cache_export: PhaseSpan,
+    image_push: StepSpan,
+    cache_export: StepSpan,
 }
 
 impl BuildkitExportProgress {
-    pub fn observe(&mut self, line: &str, at: Instant) {
-        let Some((vertex_id, text)) = parse_vertex_line(line) else {
-            return;
-        };
+    /// Returns the export step the line belongs to, `None` for any other build output.
+    pub fn observe(&mut self, line: &str, at: Instant) -> Option<ExportStep> {
+        let (vertex_id, text) = parse_vertex_line(line)?;
 
         let Some(vertex) = self.vertices.get_mut(&vertex_id) else {
-            if let Some(phase) = export_phase(text) {
-                self.vertices.insert(vertex_id, ExportVertex { phase, ended: false });
-                let span = self.span_mut(phase);
-                span.started_at.get_or_insert(at);
-                span.running_vertices += 1;
-            }
-            return;
+            let step = export_step(text)?;
+            self.vertices.insert(vertex_id, ExportVertex { step, ended: false });
+            let span = self.span_mut(step);
+            span.started_at.get_or_insert(at);
+            span.running_vertices += 1;
+            return Some(step);
         };
 
+        let step = vertex.step;
         if vertex.ended {
-            return;
+            return Some(step);
         }
         let Some(failed) = vertex_outcome(text) else {
-            return;
+            return Some(step);
         };
         vertex.ended = true;
-        let phase = vertex.phase;
-        let span = self.span_mut(phase);
+        let span = self.span_mut(step);
         span.running_vertices -= 1;
         span.ended_at = Some(at);
         span.failed |= failed;
+        Some(step)
     }
 
     pub fn timings(&self) -> BuildkitExportTimings {
@@ -92,10 +114,10 @@ impl BuildkitExportProgress {
         }
     }
 
-    fn span_mut(&mut self, phase: ExportPhase) -> &mut PhaseSpan {
-        match phase {
-            ExportPhase::ImagePush => &mut self.image_push,
-            ExportPhase::CacheExport => &mut self.cache_export,
+    fn span_mut(&mut self, step: ExportStep) -> &mut StepSpan {
+        match step {
+            ExportStep::ImagePush => &mut self.image_push,
+            ExportStep::CacheExport => &mut self.cache_export,
         }
     }
 }
@@ -105,11 +127,11 @@ fn parse_vertex_line(line: &str) -> Option<(u32, &str)> {
     Some((vertex_id.parse().ok()?, text))
 }
 
-fn export_phase(vertex_name: &str) -> Option<ExportPhase> {
+fn export_step(vertex_name: &str) -> Option<ExportStep> {
     if vertex_name.starts_with("exporting to image") {
-        Some(ExportPhase::ImagePush)
+        Some(ExportStep::ImagePush)
     } else if vertex_name.starts_with("exporting cache") {
-        Some(ExportPhase::CacheExport)
+        Some(ExportStep::CacheExport)
     } else {
         None
     }
@@ -137,8 +159,8 @@ mod tests {
         (origin, progress.timings())
     }
 
-    fn timing(origin: Instant, start_secs: u64, end_secs: u64, failed: bool) -> Option<ExportPhaseTiming> {
-        Some(ExportPhaseTiming {
+    fn timing(origin: Instant, start_secs: u64, end_secs: u64, failed: bool) -> Option<ExportStepTiming> {
+        Some(ExportStepTiming {
             started_at: origin + Duration::from_secs(start_secs),
             duration: Duration::from_secs(end_secs - start_secs),
             failed,
@@ -224,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_push_ends_the_phase_as_failed() {
+    fn failed_push_ends_the_step_as_failed() {
         let (origin, timings) = feed(&[
             (2, "#9 exporting to image"),
             (4, "#9 pushing layers"),
@@ -251,7 +273,7 @@ mod tests {
     }
 
     #[test]
-    fn cached_vertex_ends_the_phase_successfully() {
+    fn cached_vertex_ends_the_step_successfully() {
         let (origin, timings) = feed(&[(4, "#10 exporting cache to registry"), (5, "#10 CACHED")]);
 
         assert_eq!(timings.cache_export, timing(origin, 4, 5, false));
@@ -285,5 +307,41 @@ mod tests {
         let (origin, timings) = feed(&[(2, "#9 exporting to image"), (5, "#9 DONE 3.0s"), (8, "#9 DONE 3.0s")]);
 
         assert_eq!(timings.image_push, timing(origin, 2, 5, false));
+    }
+
+    #[test]
+    fn each_line_is_attributed_to_the_export_step_of_its_vertex() {
+        let mut progress = BuildkitExportProgress::default();
+        let now = Instant::now();
+
+        let steps: Vec<Option<ExportStep>> = [
+            "#11 [3/5] RUN npm ci",
+            "#11 4.512 added 1204 packages",
+            "#12 exporting to image",
+            "#13 exporting cache to registry",
+            "#12 pushing layers 2.3s done",
+            "#12 DONE 4.1s",
+            "#12 pushing manifest for registry/api:sha",
+            "#13 DONE 1.0s",
+            "waiting for the builder",
+        ]
+        .into_iter()
+        .map(|line| progress.observe(line, now))
+        .collect();
+
+        assert_eq!(
+            steps,
+            vec![
+                None,
+                None,
+                Some(ExportStep::ImagePush),
+                Some(ExportStep::CacheExport),
+                Some(ExportStep::ImagePush),
+                Some(ExportStep::ImagePush),
+                Some(ExportStep::ImagePush),
+                Some(ExportStep::CacheExport),
+                None,
+            ]
+        );
     }
 }

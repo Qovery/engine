@@ -1,12 +1,16 @@
 use crate::events::{EngineMsg, EngineMsgPayload};
 use crate::msg_publisher::{MsgPublisher, StdMsgPublisher};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 use uuid::Uuid;
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
+/// Serialized in SCREAMING_SNAKE_CASE (`IMAGE_PUSH`) on log lines, the spelling core's step metrics
+/// use, so the console joins a log line to its step duration. Metrics still send `Display`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum StepName {
     Total,
     ProvisionBuilder,
@@ -19,6 +23,8 @@ pub enum StepName {
     MirrorImage,
     DeploymentQueueing,
     Deployment,
+    /// Log step of a router deployment; no metric is recorded under it yet.
+    RouterDeployment,
     Executing,
 }
 
@@ -36,6 +42,7 @@ impl Display for StepName {
             StepName::MirrorImage => "MirrorImage".to_string(),
             StepName::DeploymentQueueing => "DeploymentQueueing".to_string(),
             StepName::Deployment => "Deployment".to_string(),
+            StepName::RouterDeployment => "RouterDeployment".to_string(),
             StepName::Executing => "Executing".to_string(),
         };
         write!(f, "{str}")
@@ -177,23 +184,22 @@ impl<'a> StepRecordHandle<'a> {
     }
 
     pub fn is_stopped(&self) -> bool {
-        self.metrics_registry.record_is_stopped(self.id, self.name.clone())
+        self.metrics_registry.record_is_stopped(self.id, self.name)
     }
 
     pub fn stop(&self, status: StepStatus) {
-        self.metrics_registry.stop_record(self.id, self.name.clone(), status);
+        self.metrics_registry.stop_record(self.id, self.name, status);
     }
 
     /// Attach before `stop`: the stop message is the one that carries it.
     pub fn set_built_image(&self, built_image: BuiltImage) {
-        self.metrics_registry
-            .set_built_image(self.id, self.name.clone(), built_image);
+        self.metrics_registry.set_built_image(self.id, self.name, built_image);
     }
 
     /// Attach before `stop`, like `set_built_image`.
     pub fn set_builder_observation(&self, builder: BuilderObservation, builder_oom_killed: bool) {
         self.metrics_registry
-            .set_builder_observation(self.id, self.name.clone(), builder, builder_oom_killed);
+            .set_builder_observation(self.id, self.name, builder, builder_oom_killed);
     }
 }
 
@@ -243,8 +249,8 @@ impl MetricsRegistry for StdMetricsRegistry {
             error!("key {:#?} already exist", step_name);
         }
 
-        let deployment_step_record = StepRecord::new(step_name.clone(), label, id);
-        metrics_per_id.insert(step_name.clone(), deployment_step_record.clone());
+        let deployment_step_record = StepRecord::new(step_name, label, id);
+        metrics_per_id.insert(step_name, deployment_step_record.clone());
 
         let mut ongoing_step_record = deployment_step_record;
         ongoing_step_record.duration = Some(Duration::ZERO);
@@ -307,7 +313,7 @@ impl MetricsRegistry for StdMetricsRegistry {
             error!("key {:#?} already exist", step_name);
         }
 
-        let mut step_record = StepRecord::new(step_name.clone(), label, id);
+        let mut step_record = StepRecord::new(step_name, label, id);
         step_record.started_at = started_at;
         step_record.duration = Some(duration);
         step_record.status = Some(status);
@@ -415,8 +421,8 @@ mod tests {
 
         {
             // to trigger the record drop
-            metrics_registry.start_record(service_id, step_label, step_name.clone());
-            metrics_registry.stop_record(service_id, step_name.clone(), step_status.clone());
+            metrics_registry.start_record(service_id, step_label, step_name);
+            metrics_registry.stop_record(service_id, step_name, step_status.clone());
         }
 
         let records = metrics_registry.get_records(service_id);
@@ -437,7 +443,7 @@ mod tests {
 
         {
             // to trigger the record drop
-            let record = metrics_registry.start_record(service_id, step_label, step_name.clone());
+            let record = metrics_registry.start_record(service_id, step_label, step_name);
             record.stop(step_status.clone());
         }
 

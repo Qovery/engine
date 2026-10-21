@@ -214,6 +214,22 @@ pub fn mirror_image_if_necessary(
     event_details: EventDetails,
     metrics_registry: Arc<dyn MetricsRegistry>,
 ) -> Result<(), Box<EngineError>> {
+    let mirror_step = logger.enter_step(StepName::MirrorImage);
+    let result = mirror_image_in_step(service_id, source, target, logger, event_details, metrics_registry);
+    if result.is_ok() {
+        mirror_step.end();
+    }
+    result
+}
+
+fn mirror_image_in_step(
+    service_id: &Uuid,
+    source: &RegistryImageSource,
+    target: &DeploymentTarget,
+    logger: &EnvProgressLogger,
+    event_details: EventDetails,
+    metrics_registry: Arc<dyn MetricsRegistry>,
+) -> Result<(), Box<EngineError>> {
     let mirror_record = metrics_registry.start_record(*service_id, StepLabel::Service, StepName::MirrorImage);
 
     if source.is_pulled_from_source(
