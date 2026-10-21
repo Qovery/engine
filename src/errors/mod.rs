@@ -23,6 +23,7 @@ use crate::events::{EventDetails, Stage};
 use crate::infrastructure::models::cloud_provider::io::InputError;
 use crate::infrastructure::models::kubernetes::KubernetesError;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
+use crate::metrics_registry::StepName;
 use crate::services::kubernetes_api_deprecation_service::KubernetesDeprecationServiceError;
 use aws_sdk_docdb::error::SdkError as DocdbSdkError;
 use aws_sdk_docdb::operation::describe_db_clusters::DescribeDBClustersError;
@@ -1290,6 +1291,13 @@ pub struct EngineError {
 }
 
 impl EngineError {
+    pub fn with_step_name_if_unset(self, step_name: Option<StepName>) -> Self {
+        EngineError {
+            event_details: self.event_details.with_step_name_if_unset(step_name),
+            ..self
+        }
+    }
+
     pub fn obfuscate(&mut self, transformer: impl Fn(String) -> String) {
         self.hint_message = self.hint_message.take().map(&transformer);
         self.user_log_message = transformer(std::mem::take(&mut self.user_log_message));

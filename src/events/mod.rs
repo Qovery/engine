@@ -11,7 +11,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::infrastructure::models::cloud_provider::{Kind, service};
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::engine_request::BlueprintEngineRequest;
-use crate::metrics_registry::StepRecord;
+use crate::metrics_registry::{StepName, StepRecord};
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
@@ -87,6 +87,23 @@ impl EngineEvent {
             }
             EngineEvent::Error(engine_error, None) => {
                 engine_error.obfuscate(transformer);
+            }
+        }
+    }
+
+    pub fn with_step_name_if_unset(self, step_name: Option<StepName>) -> Self {
+        match self {
+            EngineEvent::Debug(details, message) => {
+                EngineEvent::Debug(details.with_step_name_if_unset(step_name), message)
+            }
+            EngineEvent::Info(details, message) => {
+                EngineEvent::Info(details.with_step_name_if_unset(step_name), message)
+            }
+            EngineEvent::Warning(details, message) => {
+                EngineEvent::Warning(details.with_step_name_if_unset(step_name), message)
+            }
+            EngineEvent::Error(engine_error, message) => {
+                EngineEvent::Error(engine_error.with_step_name_if_unset(step_name), message)
             }
         }
     }
@@ -740,6 +757,8 @@ pub struct EventDetails {
     stage: Stage,
     /// transmitter: source triggering the event.
     transmitter: Transmitter,
+    /// step_name: deployment step a log line belongs to, named like the metric that times it.
+    step_name: Option<StepName>,
 }
 impl From<BlueprintEngineRequest> for EventDetails {
     fn from(value: BlueprintEngineRequest) -> Self {
@@ -779,7 +798,20 @@ impl EventDetails {
             execution_id,
             stage,
             transmitter,
+            step_name: None,
         }
+    }
+
+    /// Keeps a step the event already carries; sets `step_name` otherwise.
+    pub fn with_step_name_if_unset(self, step_name: Option<StepName>) -> Self {
+        EventDetails {
+            step_name: self.step_name.or(step_name),
+            ..self
+        }
+    }
+
+    pub fn step_name(&self) -> Option<StepName> {
+        self.step_name
     }
 
     pub(super) fn mut_to_error_stage(&mut self) {
@@ -1126,6 +1158,7 @@ mod tests {
             execution_id: "ex".to_string(),
             stage: Stage::Environment(EnvironmentStep::Build),
             transmitter: Transmitter::Application(Uuid::new_v4(), "transmitter".to_string()),
+            step_name: None,
         };
 
         let mut engine_event = EngineEvent::Debug(event_details.clone(), event_message.clone());
@@ -1167,6 +1200,7 @@ mod tests {
             execution_id: "ex".to_string(),
             stage: Stage::Environment(EnvironmentStep::Build),
             transmitter: Transmitter::Application(Uuid::new_v4(), "transmitter".to_string()),
+            step_name: None,
         };
 
         let mut engine_event = EngineEvent::Info(event_details.clone(), event_message.clone());
@@ -1208,6 +1242,7 @@ mod tests {
             execution_id: "ex".to_string(),
             stage: Stage::Environment(EnvironmentStep::Build),
             transmitter: Transmitter::Application(Uuid::new_v4(), "transmitter".to_string()),
+            step_name: None,
         };
 
         let mut engine_event = EngineEvent::Warning(event_details.clone(), event_message.clone());
@@ -1249,6 +1284,7 @@ mod tests {
             execution_id: "ex".to_string(),
             stage: Stage::Environment(EnvironmentStep::BuiltError),
             transmitter: Transmitter::Application(Uuid::new_v4(), "transmitter".to_string()),
+            step_name: None,
         };
 
         let engine_error = EngineError::new_unknown(
