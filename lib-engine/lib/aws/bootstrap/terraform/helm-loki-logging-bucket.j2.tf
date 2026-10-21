@@ -103,9 +103,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "loki_bucket_logs_
   bucket = aws_s3_bucket.loki_bucket_logs.id
 
   rule {
+    blocked_encryption_types = ["SSE-C"]
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
+    bucket_key_enabled = false
   }
 }
 
