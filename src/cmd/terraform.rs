@@ -1124,8 +1124,8 @@ pub const DEFAULT_TERRAFORM_BINARY: &str = "terraform";
 /// Binaries the blueprint preview uses instead: catalog modules declare lower bounds only, so one
 /// sufficiently new binary per flavor plans them all. Kept in step with the Dockerfile ARGs of the
 /// same name.
-pub const BLUEPRINT_TERRAFORM_BINARY: &str = "terraform-1.13.3";
-pub const BLUEPRINT_OPENTOFU_BINARY: &str = "tofu-1.12.6";
+pub const BLUEPRINT_TERRAFORM_BINARY: &str = "terraform-1.16.6";
+pub const BLUEPRINT_OPENTOFU_BINARY: &str = "tofu-1.12.8";
 
 fn terraform_init_bounded(
     root_dir: &str,
