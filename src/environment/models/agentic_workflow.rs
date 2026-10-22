@@ -255,16 +255,21 @@ impl AgenticWorkflowConfig {
         ))
     }
 
-    /// Plain Claude Code gateway variables, base64-encoded for the Secret's `data:` block so
-    /// Kubernetes decodes them once and the CLI reads plaintext. Empty without a custom base URL.
-    /// The credential goes in `ANTHROPIC_AUTH_TOKEN` (bearer); `ANTHROPIC_API_KEY` stays empty so
-    /// the CLI never sends `x-api-key`.
+    /// Provider-specific process variables for the Secret's `data:` block, which Kubernetes decodes
+    /// once so the CLI reads plaintext. Each model type builds its own; Bedrock has none here, its
+    /// credentials go through [`Self::bedrock`].
     fn gateway_environment_variables(&self) -> Vec<EnvironmentVariable> {
-        let Some(base_url) = self
-            .model_base_url
-            .as_ref()
-            .filter(|_| self.model_type == AgenticWorkflowModelType::Claude)
-        else {
+        match self.model_type {
+            AgenticWorkflowModelType::Claude => self.claude_gateway_environment_variables(),
+            AgenticWorkflowModelType::Bedrock => vec![],
+        }
+    }
+
+    /// Claude Code variables for a custom Anthropic-compatible endpoint, base64-encoded for `data:`.
+    /// Empty without a custom base URL. The credential goes in `ANTHROPIC_AUTH_TOKEN` (bearer);
+    /// `ANTHROPIC_API_KEY` stays empty so the CLI never sends `x-api-key`.
+    fn claude_gateway_environment_variables(&self) -> Vec<EnvironmentVariable> {
+        let Some(base_url) = &self.model_base_url else {
             return vec![];
         };
         vec![
