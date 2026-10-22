@@ -13,6 +13,19 @@ local cidrPattern = Regex("^((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(
 
 rules: List<sdkRules.Rule> = List(
   new sdkRules.FieldRule {
+    code = sdkValidate.requiredFieldMissingCode
+    fieldPath = "envoy.hpa.max_number_instances"
+    message = "Envoy HPA maximum replicas is required when configuring a cluster Gateway HPA override"
+    operations = List(contract.validateOperation, contract.compileOperation)
+    violated = (scope) ->
+      scope.config.getOrNull("envoy.hpa.max_number_instances") == null
+        && List(
+          "envoy.hpa.min_number_instances",
+          "envoy.hpa.cpu_average_utilization_percentage_threshold",
+          "envoy.hpa.memory_average_utilization_percentage_threshold",
+        ).any((key) -> scope.config.getOrNull(key) != null)
+  },
+  new sdkRules.FieldRule {
     code = sdkValidate.valueOutOfRangeCode
     fieldPath = "envoy.hpa.max_number_instances"
     message = "Envoy HPA maximum replicas must be greater than or equal to minimum replicas"

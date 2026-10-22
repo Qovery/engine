@@ -66,14 +66,14 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
           }
           ["provider"] = new Mapping {
             ["kubernetes"] = new Mapping {
-              ["envoyHpa"] = new Mapping {
-                when (minReplicas != null) {
-                  ["minReplicas"] = minReplicas
-                }
-                when (maxReplicas != null) {
+              when (maxReplicas != null) {
+                ["envoyHpa"] = new Mapping {
+                  when (minReplicas != null) {
+                    ["minReplicas"] = minReplicas
+                  }
                   ["maxReplicas"] = maxReplicas
+                  ["metrics"] = hpaMetrics(profileConfig)
                 }
-                ["metrics"] = hpaMetrics(profileConfig)
               }
             }
           }

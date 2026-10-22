@@ -165,6 +165,74 @@ fn gateway_api_stack_renders_the_qovery_controller_and_public_gateway() {
 }
 
 #[test]
+fn cluster_gateway_hpa_renders_only_when_configured() {
+    for (profile, expected_hpa) in [
+        (json!({}), None),
+        (
+            json!({"envoy.hpa.max_number_instances": 5}),
+            Some(json!({"maxReplicas": 5, "metrics": []})),
+        ),
+        (
+            json!({
+                "envoy.hpa.min_number_instances": 2,
+                "envoy.hpa.max_number_instances": 5,
+                "envoy.hpa.cpu_average_utilization_percentage_threshold": 60,
+            }),
+            Some(json!({
+                "minReplicas": 2,
+                "maxReplicas": 5,
+                "metrics": [{
+                    "type": "Resource",
+                    "resource": {
+                        "name": "cpu",
+                        "target": {"type": "Utilization", "averageUtilization": 60},
+                    },
+                }],
+            })),
+        ),
+    ] {
+        let request = json!({
+            "operation": "COMPILE",
+            "profileConfig": profile,
+            "clusterInputs": {"dns.managedDomain": "example.com"},
+            "clusterContext": null,
+            "enabledComponents": [],
+        });
+        let output = assert_success(
+            Command::new(env::var_os("PKL_BIN").unwrap_or_else(|| "pkl".into()))
+                .arg("eval")
+                .arg("-p")
+                .arg(format!("request={request}"))
+                .arg(repository_path(
+                    "platform-catalog/components/qovery-cluster-gateway/config/runtime-values/model.pkl",
+                )),
+        );
+        let result: JsonValue = serde_json::from_slice(&output.stdout).expect("catalog must render valid JSON");
+        assert_eq!(result["violations"], json!([]));
+        let runtime_values = write_runtime_values(&result["helmValues"].to_string());
+        let documents = render(
+            "qovery-cluster-gateway",
+            "lib-engine/lib/common/bootstrap/charts/qovery-cluster-gateway",
+            "qovery",
+            &[
+                values("platform-catalog/components/qovery-cluster-gateway/config/static-values/base.yaml"),
+                runtime_values.path().to_path_buf(),
+            ],
+            &[],
+        );
+        let proxy = document_by_kind_and_name(&documents, "EnvoyProxy", "qovery-cluster-public-gateway-envoy-proxy")
+            .expect("the public cluster EnvoyProxy must render");
+        let expected_hpa = expected_hpa.map(|hpa| serde_yaml::to_value(hpa).expect("expected HPA must be valid YAML"));
+        assert_eq!(
+            yaml_path(proxy, &["spec", "provider", "kubernetes", "envoyHpa"]),
+            expected_hpa.as_ref(),
+            "unexpected rendered HPA for profile {}",
+            request["profileConfig"],
+        );
+    }
+}
+
+#[test]
 fn cluster_agent_does_not_receive_the_legacy_loki_url() {
     let documents = render(
         "cluster-agent",

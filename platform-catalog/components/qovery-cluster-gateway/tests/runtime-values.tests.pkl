@@ -16,6 +16,39 @@ facts {
         && (((result.helmValues as Mapping)["dns"] as Mapping)["domain"] == "*.example.com")
   }
 
+  ["COMPILE leaves the cluster Gateway HPA omitted when no override is configured"] {
+    let (result = evaluate(contract.compileOperation, new Mapping {}, new Mapping { ["dns.managedDomain"] = "example.com" }))
+      result.violations.isEmpty
+        && !(((((result.helmValues as Mapping)["envoyProxy"] as Mapping)["qoveryPublic"] as Mapping)["provider"] as Mapping)["kubernetes"] as Mapping).containsKey("envoyHpa")
+  }
+
+  ["COMPILE accepts an HPA maximum without an explicit minimum"] {
+    let (result = evaluate(
+      contract.compileOperation,
+      new Mapping { ["envoy.hpa.max_number_instances"] = 5 },
+      new Mapping { ["dns.managedDomain"] = "example.com" },
+    ))
+      result.violations.isEmpty
+        && ((((((result.helmValues as Mapping)["envoyProxy"] as Mapping)["qoveryPublic"] as Mapping)["provider"] as Mapping)["kubernetes"] as Mapping)["envoyHpa"] as Mapping)["maxReplicas"] == 5
+  }
+
+  ["VALIDATE and COMPILE require a maximum for partial HPA overrides"] {
+    List(
+      new Mapping { ["envoy.hpa.min_number_instances"] = 2 },
+      new Mapping { ["envoy.hpa.cpu_average_utilization_percentage_threshold"] = 60 },
+      new Mapping { ["envoy.hpa.memory_average_utilization_percentage_threshold"] = 70 },
+    ).every((config) ->
+      List(contract.validateOperation, contract.compileOperation).every((operation) ->
+        let (result = evaluate(operation, config, new Mapping { ["dns.managedDomain"] = "example.com" }))
+          result.helmValues == null
+            && result.violations.any((violation) ->
+              violation.code == "REQUIRED_FIELD_MISSING"
+                && violation.fieldPath == "envoy.hpa.max_number_instances"
+            )
+      )
+    )
+  }
+
   ["COMPILE requires the managed root domain"] {
     let (result = evaluate(contract.compileOperation, new Mapping {}, new Mapping {}))
       result.helmValues == null
