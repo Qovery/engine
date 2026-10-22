@@ -28,6 +28,7 @@ pub(super) struct PlannedKubernetesResource {
     pub(super) name: Option<String>,
     pub(super) generate_name: Option<String>,
     pub(super) namespace: Option<String>,
+    /// Native Helm CRDs and server-side applied CRDs do not receive release ownership metadata.
     pub(super) installed_without_helm_ownership: bool,
     pub(super) helm_hook: Option<PlannedHelmHook>,
     pub(super) role_reference: Option<PlannedRoleReference>,

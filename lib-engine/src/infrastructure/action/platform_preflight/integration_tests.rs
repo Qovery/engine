@@ -16,8 +16,8 @@ use super::test_support::{check, mock_kubernetes_client, plan_with_cluster_role,
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{Helm, HelmInventoryError};
 use crate::io_models::platform_components::{
-    PlatformPreflightCheckId, PlatformPreflightCheckSeverity, PlatformPreflightCheckStatus, PlatformPreflightMode,
-    PlatformPreflightReasonCode,
+    PlatformHelmApplyStrategy, PlatformPreflightCheckId, PlatformPreflightCheckSeverity, PlatformPreflightCheckStatus,
+    PlatformPreflightMode, PlatformPreflightReasonCode,
 };
 use serde_json::{Value, json};
 use std::fs;
@@ -137,7 +137,7 @@ data:
 }
 
 #[test]
-fn crd_source_is_preserved_across_documents_and_reset_for_templates() {
+fn crd_ownership_and_upgrade_inventory_match_the_apply_strategy_with_real_helm() {
     let chart = tempfile::tempdir().unwrap();
     fs::create_dir(chart.path().join("crds")).unwrap();
     fs::create_dir(chart.path().join("templates")).unwrap();
@@ -173,12 +173,32 @@ fn crd_source_is_preserved_across_documents_and_reset_for_templates() {
             &mut |_| {},
         )
         .unwrap();
-    let resources = parse_rendered_resources(&unit("qovery"), &yaml, HelmRenderMode::Install).unwrap();
-    assert_eq!(resources.len(), 4);
-    for resource in resources {
-        let raw_crd = matches!(resource.name.as_deref(), Some("first.example.com" | "second.example.com"));
-        assert_eq!(resource.installed_without_helm_ownership, raw_crd, "{:?}", resource.name);
-        assert_eq!(has_foreign_cluster_resource_owner(&resource, None, None, None, None), !raw_crd);
+    let mut unit = unit("qovery");
+    for strategy in [
+        None,
+        Some(PlatformHelmApplyStrategy::HelmRelease),
+        Some(PlatformHelmApplyStrategy::ServerSideApplyCrds),
+    ] {
+        unit.apply_strategy = strategy;
+        let server_side_apply = strategy == Some(PlatformHelmApplyStrategy::ServerSideApplyCrds);
+        for mode in [HelmRenderMode::Install, HelmRenderMode::Upgrade] {
+            let resources = parse_rendered_resources(&unit, &yaml, mode).unwrap();
+            let expected_count = if mode == HelmRenderMode::Upgrade && !server_side_apply {
+                2
+            } else {
+                4
+            };
+            assert_eq!(resources.len(), expected_count, "{strategy:?}, {mode:?}");
+            for resource in resources {
+                let raw_crd = matches!(resource.name.as_deref(), Some("first.example.com" | "second.example.com"));
+                assert_eq!(
+                    has_foreign_cluster_resource_owner(&resource, None, None, None, None),
+                    !(raw_crd || server_side_apply),
+                    "{strategy:?}, {mode:?}: {}",
+                    resource.display_name(),
+                );
+            }
+        }
     }
 }
 
