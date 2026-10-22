@@ -30,6 +30,10 @@ spec:
         app.kubernetes.io/component: "agentic-workflow"
         app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
         app.kubernetes.io/managed-by: "qovery"
+      annotations:
+        # Karpenter consolidation would otherwise evict a running agent as "Underutilized",
+        # and with backoffLimit 0 the run fails instead of retrying.
+        karpenter.sh/do-not-disrupt: "true"
     spec:
       restartPolicy: Never
       {{- if and $.Values.registry $.Values.registry.docker_json_config }}

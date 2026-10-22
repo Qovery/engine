@@ -1036,6 +1036,45 @@ mod tests {
     }
 
     #[test]
+    fn job_pod_cannot_be_disrupted_by_karpenter() {
+        let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
+        let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");
+
+        // Karpenter reads the annotation on the pod, not on the Job object.
+        assert_eq!(
+            job["spec"]["template"]["metadata"]["annotations"]["karpenter.sh/do-not-disrupt"].as_str(),
+            Some("true"),
+            "consolidation must not evict a running agent:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn pdb_blocks_eviction_of_the_job_pod() {
+        let context = build_agentic_workflow_tera_context();
+        let service_id = context.service.long_id.to_string();
+        let job: serde_yaml::Value = serde_yaml::from_str(&render_template(job_template(), context.clone()))
+            .expect("rendered job must parse as YAML");
+        let rendered = render_template("pdb", context);
+        let pdb: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered PDB must parse as YAML");
+
+        assert_eq!(pdb["kind"].as_str(), Some("PodDisruptionBudget"), "got:\n{rendered}");
+        assert_eq!(pdb["spec"]["minAvailable"].as_u64(), Some(1), "got:\n{rendered}");
+        let selector = &pdb["spec"]["selector"]["matchLabels"]["qovery.com/service-id"];
+        assert_eq!(selector.as_str(), Some(service_id.as_str()), "got:\n{rendered}");
+        // The PDB only protects the pod if its selector matches the pod's labels.
+        assert_eq!(
+            &job["spec"]["template"]["metadata"]["labels"]["qovery.com/service-id"], selector,
+            "the PDB selector must match the Job pod"
+        );
+        // A running pod that is not Ready (e.g. its sidecar is not ready) must not block a drain.
+        assert_eq!(
+            pdb["spec"]["unhealthyPodEvictionPolicy"].as_str(),
+            Some("AlwaysAllow"),
+            "got:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn job_without_a_built_image_has_no_architecture_affinity() {
         let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
         let job: serde_yaml::Value = serde_yaml::from_str(&rendered).expect("rendered job must parse as YAML");

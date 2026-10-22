@@ -1,0 +1,23 @@
+# Blocks API evictions (node drain, cluster-autoscaler scale-down) while the agent runs.
+# The Job's activeDeadlineSeconds bounds how long a drain can wait on it.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $.Values.service.kube_name }}
+  labels:
+    qovery.com/service-id: {{ $.Values.service.long_id | quote }}
+    qovery.com/service-type: "agentic-workflow"
+    qovery.com/environment-id: {{ $.Values.environment_long_id | quote }}
+    qovery.com/project-id: {{ $.Values.project_long_id | quote }}
+    qovery.com/deployment-id: {{ $.Values.deployment_id | quote }}
+    app.kubernetes.io/name: {{ $.Values.service.kube_name | quote }}
+    app.kubernetes.io/instance: {{ $.Values.service.long_id | quote }}
+    app.kubernetes.io/component: "agentic-workflow"
+    app.kubernetes.io/part-of: {{ $.Values.namespace | quote }}
+    app.kubernetes.io/managed-by: "qovery"
+spec:
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  minAvailable: 1
+  selector:
+    matchLabels:
+      qovery.com/service-id: {{ $.Values.service.long_id | quote }}
