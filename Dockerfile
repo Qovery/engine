@@ -1,16 +1,16 @@
 # Helm is supplied by the pinned Helm Debian repository configured in each image stage.
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
-ARG KUBECTL_VERSION="1.35.4"
+ARG KUBECTL_VERSION="1.35.9"
 ARG HELM_VERSION="4.3.0-1"
 ARG TERRAFORM_VERSION="1.9.7"
 # Blueprint preview only. The default above is pinned to what the cluster and managed-database modules
 # require exactly, while catalog modules declare lower bounds, so the preview needs a newer binary to
 # plan them. Keep in step with BLUEPRINT_TERRAFORM_BINARY / BLUEPRINT_OPENTOFU_BINARY in cmd/terraform.rs.
-ARG BLUEPRINT_TERRAFORM_VERSION="1.13.3"
-ARG BLUEPRINT_OPENTOFU_VERSION="1.12.6"
+ARG BLUEPRINT_TERRAFORM_VERSION="1.16.6"
+ARG BLUEPRINT_OPENTOFU_VERSION="1.12.8"
 # Helm 4 rejects unverifiable VCS plugins; this pins Helm Diff's release-signing key.
-ARG HELM_DIFF_VERSION="v3.15.11"
+ARG HELM_DIFF_VERSION="v3.15.15"
 ARG HELM_DIFF_GPG_FINGERPRINT="C5645EF47482257A1F806D2BEA17A2A206AFF8CD"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
@@ -18,7 +18,7 @@ ARG DOCKER_VERSION="5:29.5.0-1~debian.13~trixie"
 ARG BUILDX_VERSION="0.34.0-1~debian.13~trixie"
 ARG CONTAINERD_VERSION="2.2.3-1~debian.13~trixie"
 ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
-ARG PLUTO_VERSION=5.24.0
+ARG PLUTO_VERSION=5.24.4
 ARG KRR_VERSION=1.27.0
 ARG PKL_VERSION=0.32.0
 ARG EKSCTL_VERSION=0.220.0
@@ -56,7 +56,12 @@ ARG PLUTO_VERSION
 ARG KRR_VERSION
 ARG PKL_VERSION
 
+# The upgrade brings in the Debian security fixes the rust image is missing (linux-libc-dev, expat...).
+# kubectl is held because google-cloud-cli's repository would otherwise replace the base image's kubectl
+# package with its multi-version bundle; the kubectl this stage installs in /usr/local/bin shadows it anyway.
 RUN apt-get update && \
+  apt-mark hold kubectl && \
+  apt-get -y dist-upgrade && \
   apt-get -y --allow-downgrades install \
   make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc cmake protobuf-compiler libprotobuf-dev git-lfs python3 apt-transport-https ca-certificates gnupg binutils openssl \
   skopeo=$SKOPEO_VERSION \
@@ -105,7 +110,11 @@ RUN PKL_VERSION=${PKL_VERSION} bash /usr/local/bin/install-pkl
 RUN curl -fsSLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \
   unzip -o terraform.zip terraform && \
   mv terraform /usr/bin/ && \
-  rm -rf terraform.zip 
+  rm -rf terraform.zip
+
+# The rust image keeps the crate sources its `cargo install` steps downloaded. CI jobs use their own
+# CARGO_HOME, and image scanners report the lockfiles shipped in those sources as vulnerable dependencies.
+RUN rm -rf /root/.cargo/registry
 
 WORKDIR /build
 
