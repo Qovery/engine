@@ -7,7 +7,7 @@ use crate::environment::report::application::reporter::ApplicationDeploymentRepo
 use crate::environment::report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
-use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
+use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces, HelmWaitStrategy};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 
@@ -49,6 +49,9 @@ where
                 namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
                 k8s_selector: Some(self.kube_label_selector()),
+                // HACK(QOV-2279): Helm 4's watcher can time out despite a healthy q-container rollout.
+                // Remove when the watcher reliably observes the PDB readiness transition.
+                wait_strategy: HelmWaitStrategy::Legacy,
                 ..Default::default()
             };
 
