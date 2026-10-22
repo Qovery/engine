@@ -782,7 +782,9 @@ fn apply_platform_helm_unit(
 }
 
 fn platform_helm_diff_line(line: &str) -> Option<String> {
-    (!line.trim().is_empty()).then(|| format!("│ {line}"))
+    // Platform progress uses `Create -`, while diff events use the two-columns-shorter `Diff -`
+    // prefix in the Console. Offset the diff guide without changing its stage or YAML indentation.
+    (!line.trim().is_empty()).then(|| format!("  │ {line}"))
 }
 
 pub(super) fn write_platform_values_to_temporary_file(unit: &PlatformHelmUnit) -> std::io::Result<NamedTempFile> {
@@ -1024,8 +1026,27 @@ mod tests {
         assert_eq!(platform_helm_diff_line(" \t"), None);
         assert_eq!(
             platform_helm_diff_line("  - replicas: 1"),
-            Some("│   - replicas: 1".to_string())
+            Some("  │   - replicas: 1".to_string())
         );
+    }
+
+    #[test]
+    fn platform_helm_diff_aligns_with_the_create_log_tree() {
+        let create_line = format!("Create - {}", PlatformHelmDeploymentEvent::ShowingDiff);
+        for line in [
+            "spec.template.spec.containers.0.image",
+            "± value change",
+            "- old-image",
+            "+ new-image",
+        ] {
+            let diff_line = format!("Diff - {}", platform_helm_diff_line(line).unwrap());
+            assert_eq!(
+                diff_line.chars().position(|character| character == '│'),
+                create_line.chars().position(|character| character == '│'),
+                "diff tree must align with deployment progress: {diff_line}",
+            );
+            assert!(diff_line.ends_with(&format!("│ {line}")));
+        }
     }
 
     #[test]
