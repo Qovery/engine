@@ -177,8 +177,8 @@ pub(super) fn has_foreign_cluster_resource_owner(
     managed_by: Option<&str>,
     current_hook: Option<&str>,
 ) -> bool {
-    // Helm installs files under a chart's `crds/` directory without ownership annotations.
-    // Their mere presence is therefore not proof that another release owns them.
+    // Native Helm CRDs and server-side applied CRDs omit release ownership metadata.
+    // Accept their presence without claiming resources that declare another owner.
     if planned.installed_without_helm_ownership
         && current_release.is_none()
         && current_namespace.is_none()
@@ -310,6 +310,7 @@ mod tests {
         release_ownership_from,
     };
     use crate::cmd::structs::HelmListItem;
+    use crate::io_models::platform_components::PlatformHelmApplyStrategy;
     use semver::Version;
     use std::collections::BTreeMap;
     use std::slice;
@@ -574,7 +575,7 @@ mod tests {
     }
 
     #[test]
-    fn only_crds_directory_resources_may_exist_without_helm_ownership() {
+    fn helm_release_only_exempts_crds_directory_resources_from_ownership() {
         let crds_directory_resource = parse_rendered_resources(
             &unit("qovery"),
             r#"
@@ -670,6 +671,62 @@ spec:
             None,
             None
         ));
+    }
+
+    #[test]
+    fn server_side_applied_crds_accept_unmanaged_resources_but_reject_foreign_owners() {
+        let mut unit = unit("qovery");
+        unit.apply_strategy = Some(PlatformHelmApplyStrategy::ServerSideApplyCrds);
+        let yaml = r#"
+# Source: envoy-gateway-crd/templates/standard-gatewayapi-crds.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: tcproutes.gateway.networking.k8s.io
+spec:
+  group: gateway.networking.k8s.io
+  scope: Namespaced
+  names:
+    kind: TCPRoute
+    plural: tcproutes
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gateway
+"#;
+        for mode in [HelmRenderMode::Install, HelmRenderMode::Upgrade] {
+            let resources = parse_rendered_resources(&unit, yaml, mode).unwrap();
+            assert_eq!(resources.len(), 2, "{mode:?}");
+            for resource in resources {
+                assert_eq!(
+                    has_foreign_cluster_resource_owner(&resource, None, None, None, None),
+                    resource.kind != "CustomResourceDefinition",
+                    "{mode:?}: {}",
+                    resource.display_name(),
+                );
+                assert!(!has_foreign_cluster_resource_owner(
+                    &resource,
+                    Some(&unit.release_name),
+                    Some(&unit.namespace),
+                    Some("Helm"),
+                    None,
+                ));
+                for (release, namespace, manager) in [
+                    (Some("foreign"), Some(unit.namespace.as_str()), Some("Helm")),
+                    (Some(unit.release_name.as_str()), Some("foreign"), Some("Helm")),
+                    (Some("foreign"), None, None),
+                    (None, Some("foreign"), None),
+                    (None, None, Some("another-manager")),
+                ] {
+                    assert!(has_foreign_cluster_resource_owner(&resource, release, namespace, manager, None,));
+                }
+            }
+        }
     }
 
     #[test]

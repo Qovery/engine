@@ -14,7 +14,9 @@ use crate::infrastructure::action::platform_components::{
     download_platform_chart, write_platform_values_to_temporary_file,
 };
 use crate::infrastructure::infrastructure_context::{InfrastructureContext, KubeClientAuthMode};
-use crate::io_models::platform_components::{PlatformHelmUnit, PlatformPreflightCheckId, PlatformPreflightRequest};
+use crate::io_models::platform_components::{
+    PlatformHelmApplyStrategy, PlatformHelmUnit, PlatformPreflightCheckId, PlatformPreflightRequest,
+};
 use kube::core::GroupVersionKind;
 use kube::discovery::Discovery;
 use semver::Version;
@@ -396,9 +398,12 @@ pub(super) fn parse_rendered_resources(
             .map_err(|_| "cannot parse rendered chart".to_string())?;
         collect_rendered_value(unit, &value, installed_without_helm_ownership, &mut resources)?;
     }
-    // Helm does not execute test/opposite-phase hooks, or install raw CRDs during upgrades.
+    // Helm skips raw CRDs during upgrades, but SSA reapplies them on every execution.
+    let skip_raw_crds =
+        mode == HelmRenderMode::Upgrade && unit.apply_strategy != Some(PlatformHelmApplyStrategy::ServerSideApplyCrds);
+    // Helm does not execute test/opposite-phase hooks.
     resources.retain(|resource| {
-        !(mode == HelmRenderMode::Upgrade && resource.installed_without_helm_ownership)
+        !(skip_raw_crds && resource.installed_without_helm_ownership)
             && resource
                 .helm_hook
                 .as_ref()
@@ -484,7 +489,9 @@ fn collect_rendered_value(
         name,
         generate_name,
         namespace: metadata_string("namespace").map(str::to_string),
-        installed_without_helm_ownership,
+        installed_without_helm_ownership: installed_without_helm_ownership
+            || (kind == "CustomResourceDefinition"
+                && unit.apply_strategy == Some(PlatformHelmApplyStrategy::ServerSideApplyCrds)),
         helm_hook,
         role_reference,
         custom_resource_definition,
