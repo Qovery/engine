@@ -30,6 +30,8 @@ spec:
         app.kubernetes.io/component: "agentic-workflow"
         app.kubernetes.io/part-of: "{{ namespace }}"
         app.kubernetes.io/managed-by: "qovery"
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
     spec:
       restartPolicy: Never
       {%- if registry.docker_json_config %}
