@@ -250,6 +250,29 @@ fn self_managed_template_renders_from_the_verified_publication_outputs() {
     assert!(!rendered_source.contains("__PUBLISHED_CONFIG_DIGEST__"));
     let rendered = parse_yaml_file(&fixture.destination);
     assert_config_references_preserved("platform-catalog/templates/qovery-self-managed-v0/template.yaml", &rendered);
+    let crds = yaml_path(&rendered, &["platformTemplateRelease", "layers"])
+        .and_then(YamlValue::as_sequence)
+        .expect("template layers must be a sequence")
+        .iter()
+        .flat_map(|layer| {
+            layer["components"]
+                .as_sequence()
+                .expect("layer components must be a sequence")
+        })
+        .find(|component| yaml_string(component, &["key"]) == Some("envoy-gateway-crd"))
+        .expect("the BYOK template must include Envoy Gateway CRDs");
+    assert_eq!(
+        yaml_string(crds, &["applyStrategy"]),
+        Some("SERVER_SIDE_APPLY_CRDS"),
+        "large CRD bundles must be applied without a Helm release Secret"
+    );
+    for field in ["minRequestSchemaVersion", "requestSchemaVersion"] {
+        assert_eq!(
+            yaml_string(&rendered, &["platformTemplateRelease", "bootstrap", "compatibility", field]),
+            Some("3"),
+            "the BYOK template requires the Engine v2 CRD application contract"
+        );
+    }
     assert_eq!(
         yaml_string(&rendered, &["platformTemplateRelease", "status"]),
         Some("PUBLISHED")

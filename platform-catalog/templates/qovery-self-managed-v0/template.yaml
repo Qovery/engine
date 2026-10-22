@@ -70,8 +70,8 @@ platformTemplateRelease:
     compatibility:
       minControllerVersion: 0.1.0
       minOperatorVersion: 0.1.0
-      minRequestSchemaVersion: "1"
-      requestSchemaVersion: "1"
+      minRequestSchemaVersion: "3"
+      requestSchemaVersion: "3"
   layers:
     - key: qovery-stack
       applicability:
@@ -296,6 +296,7 @@ platformTemplateRelease:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: gateway-crds-helm
             version: v1.9.1
+          applyStrategy: SERVER_SIDE_APPLY_CRDS
           configRef:
             chart: envoy-gateway-crd
             version: v1
