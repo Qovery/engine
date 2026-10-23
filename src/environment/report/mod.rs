@@ -8,6 +8,7 @@ use std::time::Duration;
 pub mod agentic_workflow;
 pub mod application;
 pub mod database;
+pub(crate) mod failure_diagnostics;
 pub mod helm_chart;
 pub mod job;
 pub mod logger;

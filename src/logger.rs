@@ -5,6 +5,12 @@ use tracing;
 
 pub trait Logger: Send + Sync {
     fn log(&self, event: EngineEvent);
+    /// Masks the secrets this logger would mask in an event, for text that is cut or reshaped before it is logged.
+    /// The default hides the whole text: a logger that does not say how it masks secrets can not be trusted with
+    /// text that is about to be cut, since a secret cut in two is not recognized by a later masking.
+    fn obfuscate_secrets(&self, _text: String) -> String {
+        "xxx".to_string()
+    }
     fn clone_dyn(&self) -> Box<dyn Logger>;
     fn with_secrets(&self, secrets: Vec<String>) -> Box<dyn Logger>;
 }
@@ -61,6 +67,10 @@ impl Logger for StdIoLogger {
         });
     }
 
+    fn obfuscate_secrets(&self, text: String) -> String {
+        text
+    }
+
     fn clone_dyn(&self) -> Box<dyn Logger> {
         Box::new(self.clone())
     }
@@ -99,6 +109,10 @@ impl Logger for UnboundedSenderLogger {
                 error!("Unable to send engine event to logger channel");
             }
         }
+    }
+
+    fn obfuscate_secrets(&self, text: String) -> String {
+        self.obfuscation_service.obfuscate_secrets(text)
     }
 
     fn clone_dyn(&self) -> Box<dyn Logger> {
