@@ -1,5 +1,7 @@
 use crate::environment::report::application::renderer::render_app_deployment_report;
-use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
+use crate::environment::report::failure_diagnostics::{
+    Target, WorkloadKind, report_failure, report_observed_failure, with_failure_diagnostics,
+};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
@@ -132,7 +134,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             }
         };
 
-        report_observed_failure(
+        let diagnostics = report_observed_failure(
             &Target {
                 kube: &self.kube_client,
                 namespace: &self.namespace,
@@ -154,6 +156,8 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 return;
             }
         };
+
+        let rendered_report = with_failure_diagnostics(rendered_report, diagnostics);
 
         // don't spam log same report unless it has been too long time elapsed without one
         if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
@@ -341,8 +345,9 @@ mod tests {
     use crate::environment::report::execute_long_deployment;
     use crate::environment::report::failure_diagnostics::tests::*;
     use crate::environment::report::logger::EnvProgressLogger;
-    use crate::events::EngineEvent;
+    use crate::events::{EngineEvent, EnvironmentStep, EventMessageVerbosity, Stage};
     use crate::metrics_registry::StdMetricsRegistry;
+    use serde_json::json;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     fn reporter(logger: EnvLogger, kube_client: kube::Client) -> ApplicationDeploymentReporter<()> {
@@ -406,12 +411,18 @@ mod tests {
             let mut state = reporter.new_state();
             if observed {
                 reporter.deployment_in_progress(&mut state);
-                assert!(!block(&sent(&mut receiver)).is_empty());
+                let events = sent(&mut receiver);
+                assert!(
+                    events
+                        .iter()
+                        .any(|event| { event.message(EventMessageVerbosity::SafeOnly).contains("┃ 💭") })
+                );
+                assert!(block(&events).is_empty());
                 requests.lock().unwrap().clear();
             }
             let result = if cancel {
                 Err(Box::new(EngineError::new_task_cancellation_requested(event_details(
-                    crate::events::EnvironmentStep::DeployedError,
+                    EnvironmentStep::DeployedError,
                 ))))
             } else {
                 Ok(())
@@ -435,8 +446,11 @@ mod tests {
         let mut reporter = reporter(logger, kube);
         let mut state = reporter.new_state();
         reporter.deployment_in_progress(&mut state);
-        let lines = block(&sent(&mut receiver));
-        assert!(lines[0].starts_with("Failure observed") && lines.last().unwrap().contains("Error boom"));
+        assert!(sent(&mut receiver).iter().any(|event| {
+            event
+                .message(EventMessageVerbosity::SafeOnly)
+                .contains("┃ 💭 Error boom")
+        }));
 
         // The rollback removed the pod: the final recap must retain the earlier observation.
         gone.store(true, Ordering::SeqCst);
@@ -446,14 +460,21 @@ mod tests {
         let _ = reporter.deployment_terminated(&result, state);
         let events = sent(&mut receiver);
         let replay = block(&events);
-        assert!(replay[0].contains("earlier deployment observation") && replay[0].contains("final cause unconfirmed"));
-        assert_eq!(&replay[1..], &lines[1..]);
-        assert_eq!(replay.iter().filter(|line| line.starts_with("Why it failed:")).count(), 1);
+        assert_eq!(replay[0], "Failure observed before rollback:");
+        assert!(replay[1].contains("CrashLoopBackOff"));
+        assert_eq!(replay[2], "💭 Error boom");
+        assert_eq!(
+            replay
+                .iter()
+                .filter(|line| line.as_str() == "Failure observed before rollback:")
+                .count(),
+            1
+        );
         assert!(
             matches!(events.last().unwrap(), EngineEvent::Error(error, _) if error.tag() == result.as_ref().unwrap_err().tag())
         );
         assert_eq!(
-            events[events.len() - 2].message(crate::events::EventMessageVerbosity::SafeOnly),
+            events[events.len() - 2].message(EventMessageVerbosity::SafeOnly),
             *replay.last().unwrap()
         );
         assert_eq!(
@@ -465,5 +486,77 @@ mod tests {
                 .count(),
             1
         );
+    }
+    #[test]
+    fn observed_diagnostics_are_inside_the_status_report_without_separate_recap_events() {
+        let (kube, _) = mock_client(|path, _| match path {
+            "pods" => list(vec![pod_json(crash())]),
+            "log" => Reply::Bytes(b"Error: deployment failed\n".to_vec()),
+            _ => list(vec![]),
+        });
+        let (logger, mut receiver) = test_logger();
+        let mut reporter = reporter(logger, kube);
+        let mut state = reporter.new_state();
+        reporter.deployment_in_progress(&mut state);
+        let events = sent(&mut receiver);
+        assert!(
+            events
+                .iter()
+                .all(|event| event.get_details().stage() != &Stage::Environment(EnvironmentStep::Recap,))
+        );
+        let lines: Vec<_> = events
+            .iter()
+            .map(|event| event.message(EventMessageVerbosity::SafeOnly))
+            .collect();
+        let heading = lines
+            .iter()
+            .position(|line| line.contains("Deployment Status Report"))
+            .unwrap();
+        let cause = lines
+            .iter()
+            .position(|line| line.contains("┃") && line.contains("Error: deployment failed"))
+            .unwrap();
+        let closing = lines.iter().position(|line| line.starts_with('┗')).unwrap();
+        assert!(heading < cause && cause < closing);
+        reporter.deployment_in_progress(&mut state);
+        assert!(
+            sent(&mut receiver).is_empty(),
+            "Unchanged diagnostics must not repeat the status report"
+        );
+    }
+
+    #[test]
+    fn recovered_pods_do_not_show_retained_failure_in_the_current_report() {
+        let recovered = Arc::new(AtomicBool::new(false));
+        let ready = Arc::clone(&recovered);
+        let (kube, _) = mock_client(move |path, _| match path {
+            "pods" if ready.load(Ordering::SeqCst) => list(vec![pod_json(json!({
+                "phase": "Running", "conditions": [{"type": "Ready", "status": "True"}],
+            }))]),
+            "pods" => list(vec![pod_json(crash())]),
+            "log" => Reply::Bytes(b"Error: recovered failure\n".to_vec()),
+            _ => list(vec![]),
+        });
+        let (logger, mut receiver) = test_logger();
+        let mut reporter = reporter(logger, kube);
+        let mut state = reporter.new_state();
+        reporter.deployment_in_progress(&mut state);
+        let events = sent(&mut receiver);
+        assert!(events.iter().any(|event| {
+            event
+                .message(EventMessageVerbosity::SafeOnly)
+                .contains("┃ 💭 Error: recovered failure")
+        }));
+        recovered.store(true, Ordering::SeqCst);
+        reporter.deployment_in_progress(&mut state);
+        assert!(
+            state.failure.is_some(),
+            "Keep historical evidence for a possible terminal failure"
+        );
+        assert!(sent(&mut receiver).iter().all(|event| {
+            !event
+                .message(EventMessageVerbosity::SafeOnly)
+                .contains("recovered failure")
+        }));
     }
 }

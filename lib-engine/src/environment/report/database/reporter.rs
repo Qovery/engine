@@ -1,6 +1,8 @@
 use crate::environment::models::database::DatabaseService;
 use crate::environment::report::database::renderer::render_database_deployment_report;
-use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
+use crate::environment::report::failure_diagnostics::{
+    Target, WorkloadKind, report_failure, report_observed_failure, with_failure_diagnostics,
+};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use crate::environment::report::utils::get_kube_events;
@@ -188,7 +190,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             }
         };
 
-        report_observed_failure(
+        let diagnostics = report_observed_failure(
             &Target {
                 kube: &self.kube_client,
                 namespace: &self.namespace,
@@ -210,6 +212,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
                 return;
             }
         };
+
+        let rendered_report = with_failure_diagnostics(rendered_report, diagnostics);
 
         // Managed database don't make any progress, so display the message from time to time
         if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {

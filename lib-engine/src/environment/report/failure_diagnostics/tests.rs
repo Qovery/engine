@@ -148,14 +148,14 @@ fn collect_test(kube: &kube::Client, kind: WorkloadKind<'_>) -> Vec<String> {
 #[test]
 fn live_causes_are_printed_with_status_details() {
     let mut cases = vec![
-        (crash(), vec!["CrashLoopBackOff", "exit code 1", "restarts 3"]),
+        (crash(), vec!["CrashLoopBackOff", "exit code 1"]),
         (
             container(
                 json!({"terminated": {"reason": "OOMKilled", "exitCode": 137, "signal": 9}}),
                 json!({}),
                 2,
             ),
-            vec!["OOMKilled", "exit code 137", "signal 9"],
+            vec!["OOMKilled", "exited with code 137", "signal 9"],
         ),
     ];
     cases[0].0["containerStatuses"][0]["state"]["waiting"]["message"] = json!("界".repeat(500));
@@ -188,7 +188,7 @@ fn live_causes_are_printed_with_status_details() {
     successful["state"] = json!({"terminated": {"exitCode": 0}});
     init["initContainerStatuses"] = json!([successful, init["containerStatuses"][0]]);
     init["containerStatuses"][0]["name"] = json!("qovery-wait-container-output");
-    cases.push((init, vec!["init container 'api'", "CrashLoopBackOff"]));
+    cases.push((init, vec!["Init container 'api'", "CrashLoopBackOff"]));
     for (status, expected) in cases {
         let (kube, _) = mock_client(move |path, query| match path {
             "pods" => {
@@ -288,18 +288,9 @@ fn failed_job_uses_live_owner_and_current_or_previous_logs() {
         });
         let lines = collect_test(&kube, WorkloadKind::Job);
         assert_eq!(lines[0].contains("BackoffLimitExceeded"), restarts >= 0);
-        assert!(
-            lines
-                .iter()
-                .any(|l| l.contains(&format!("{reason} (exit code {exit_code}")))
-        );
+        assert!(lines.iter().any(|l| l.contains(&format!("code {exit_code}"))));
         let run = if terminated { "current" } else { "previous" };
-        assert!(
-            lines
-                .iter()
-                .any(|l| l.contains("Pod/api,") && l.ends_with(&format!("eRrOr: {run} job failed"))),
-            "{lines:?}"
-        );
+        assert!(lines.iter().any(|l| l == &format!("💭 eRrOr: {run} job failed")), "{lines:?}");
         assert!(!lines.join("\n").contains("unrelated"));
         let requests = requests.lock().unwrap();
         let (path, query) = requests.iter().find(|(p, _)| p.ends_with("/log")).unwrap();
@@ -367,7 +358,7 @@ fn complete_redaction_strict_last_thirty_physical_lines_and_output_bounds() {
     assert!(text.contains("eRrOr xxx") && !text.contains("TOKEN") && !text.contains("SECRET"));
     assert!(!text.contains("excluded") && !text.contains("SPEC-SECRET"));
     assert!(text.find("eRrOr").unwrap() < text.find("Fatal").unwrap());
-    assert_eq!(lines.len(), 50);
+    assert_eq!(lines.len(), 3);
     assert!(lines.iter().all(|l| l.chars().count() <= 300));
     assert!(
         lines
@@ -381,7 +372,7 @@ fn complete_redaction_strict_last_thirty_physical_lines_and_output_bounds() {
             .iter()
             .filter(|(p, _)| p.ends_with("/log"))
             .count(),
-        4
+        1
     );
     let mut last = None;
     let observed = observe(&kube, &[pod(crash())], &mut last);
@@ -399,16 +390,13 @@ fn complete_redaction_strict_last_thirty_physical_lines_and_output_bounds() {
     );
     logger.send_error(deployment_error());
     let replay = block(&sent(&mut receiver));
-    assert_eq!(replay.len(), 50);
-    assert_eq!(&replay[1..], &observed[1..]);
-    assert!(replay[0].contains("final cause unconfirmed"));
+    assert_eq!(replay.len(), 4);
+    assert_eq!(&replay[1..], without_heading(observed.clone()));
+    assert_eq!(replay[0], "Failure observed before rollback:");
     assert!(replay.iter().all(|line| line.chars().count() <= 300));
     assert!(!replay.join("\n").contains("SECRET") && !replay.join("\n").contains("TOKEN"));
     assert!(error_excerpt("info\nWARNING\n").is_empty());
-    assert_eq!(
-        error_excerpt("terror\nnot fatal\npAnIc\nException"),
-        ["    | terror", "    | not fatal", "    | pAnIc", "    | Exception"]
-    );
+    assert_eq!(error_excerpt("terror\nnot fatal\npAnIc\nException"), ["terror", "not fatal"]);
 }
 
 #[test]
@@ -427,7 +415,7 @@ fn incomplete_or_capped_streams_never_expose_secret_prefixes() {
     let (logger, _) = test_logger();
     assert_eq!(
         error_excerpt(&logger.obfuscate(String::from_utf8(bytes).unwrap())),
-        ["    | error xxx"]
+        ["error xxx"]
     );
     for secret in ["SECRET\nTOKEN", "sec\u{1b}[31mret-token"] {
         let at_cut = safe_line(&logger, format!("{}{secret}", "界".repeat(296)));
@@ -475,13 +463,14 @@ fn observe(kube: &kube::Client, pods: &[Pod], last: &mut Option<ObservedFailure>
         selector: "service=svc",
         kind: WorkloadKind::Deployment("v2"),
     };
-    report_observed_failure(&target, &logger, None, pods, last);
+    let lines = report_observed_failure(&target, &logger, None, pods, last);
     logger.send_error(deployment_error());
-    block(&sent(&mut receiver))
+    assert!(block(&sent(&mut receiver)).is_empty());
+    lines
 }
 
 #[test]
-fn observed_failure_is_printed_once_until_its_signature_changes() {
+fn observed_failure_is_cached_until_its_signature_changes() {
     let (kube, requests) = mock_client(|path, _| match path {
         "pods" => list(vec![pod_json(crash())]),
         "log" => Reply::Bytes(b"Error SECRET\nTOKEN\n".to_vec()),
@@ -492,7 +481,7 @@ fn observed_failure_is_printed_once_until_its_signature_changes() {
     assert!(lines[0].starts_with("Failure observed during deployment:") && lines[0].contains("CrashLoopBackOff"));
     assert!(lines.last().unwrap().contains("Error xxx"), "{lines:?}");
     let calls = requests.lock().unwrap().len();
-    assert!(observe(&kube, &[pod(crash())], &mut last).is_empty());
+    assert_eq!(observe(&kube, &[pod(crash())], &mut last), lines);
     assert_eq!(requests.lock().unwrap().len(), calls);
     let mut restarted = crash();
     restarted["containerStatuses"][0]["restartCount"] = json!(4);
@@ -521,7 +510,7 @@ fn observed_failure_is_printed_once_until_its_signature_changes() {
     );
     logger.send_error(deployment_error());
     let replay = block(&sent(&mut receiver));
-    assert_eq!(&replay[1..], &latest[1..]);
+    assert_eq!(&replay[1..], without_heading(latest));
     assert!(replay.last().unwrap().contains("latest observation"));
     assert!(!replay.join("\n").contains("Error xxx"));
 }
@@ -568,16 +557,17 @@ fn a_stale_job_pod_cannot_trigger_a_block_for_the_live_job() {
         stale["metadata"]["ownerReferences"][0][field] = json!(value);
         let stale = serde_json::from_value(stale).unwrap();
         let (logger, mut receiver) = test_logger();
-        report_observed_failure(&target, &logger, Some(&job), &[stale], &mut last);
+        assert!(report_observed_failure(&target, &logger, Some(&job), &[stale], &mut last).is_empty());
         logger.send_error(deployment_error());
         assert!(block(&sent(&mut receiver)).is_empty() && last.is_none(), "{field}");
         assert!(requests.lock().unwrap().is_empty());
     }
 
     let (logger, mut receiver) = test_logger();
-    report_observed_failure(&target, &logger, Some(&job), &[pod(crash())], &mut last);
+    let lines = report_observed_failure(&target, &logger, Some(&job), &[pod(crash())], &mut last);
     logger.send_error(deployment_error());
-    assert!(block(&sent(&mut receiver))[0].starts_with("Failure observed"));
+    assert!(lines[0].starts_with("Failure observed"));
+    assert!(block(&sent(&mut receiver)).is_empty());
     assert!(last.is_some());
 }
 
@@ -615,17 +605,23 @@ fn final_failure_prefers_live_details_and_otherwise_replays_the_latest_observati
         let lines = block(&events);
         assert!(!requests.lock().unwrap().is_empty(), "{final_state}");
         assert!(!lines.is_empty(), "{final_state}");
-        assert_eq!(lines.iter().filter(|line| line.starts_with("Why it failed:")).count(), 1);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(
+                    |line| line.starts_with("Why it failed:") || line.as_str() == "Failure observed before rollback:"
+                )
+                .count(),
+            1
+        );
         assert!(matches!(events.last().unwrap(), EngineEvent::Error(..)));
         if final_state == "changed" {
             let text = lines.join("\n");
             assert!(text.contains("OOMKilled") && text.contains("Fatal final B"));
             assert!(!text.contains("observed A") && !text.contains("final cause unconfirmed"));
         } else {
-            assert!(
-                lines[0].contains("earlier deployment observation") && lines[0].contains("final cause unconfirmed")
-            );
-            assert_eq!(&lines[1..], &observed[1..]);
+            assert_eq!(lines[0], "Failure observed before rollback:");
+            assert_eq!(&lines[1..], without_heading(observed.clone()));
         }
     }
 }
@@ -665,4 +661,171 @@ fn failed_collection_preserves_observed_evidence_and_retries_a_changed_signature
         last.as_ref().map(|last| last.signature.as_str()),
         Some("pod-uid/api/4/CrashLoopBackOff")
     );
+}
+
+#[test]
+fn terminated_container_recap_is_concise_and_does_not_repeat_the_cause() {
+    let (kube, _) = mock_client(|path, _| match path {
+        "pods" => list(vec![pod_json(container(
+            json!({"terminated": {"exitCode": 1, "reason": "Error", "signal": 0}}),
+            json!({}),
+            0,
+        ))]),
+        "log" => Reply::Bytes(b"Error: Database is uninitialized and superuser password is not specified.\n".to_vec()),
+        _ => list(vec![event_json(
+            "pod-uid",
+            "Pod",
+            "Back-off restarting failed container",
+            "2026-01-01T00:00:01Z",
+        )]),
+    });
+    assert_eq!(
+        collect_test(&kube, WorkloadKind::Pods),
+        [
+            "Why it failed: Container 'api' exited with code 1.",
+            "💭 Error: Database is uninitialized and superuser password is not specified.",
+        ]
+    );
+}
+
+#[test]
+fn rollback_recap_keeps_the_cause_without_an_uncertainty_suffix() {
+    let (kube, _) = mock_client(|path, _| match path {
+        "pods" => list(vec![pod_json(crash())]),
+        "log" => Reply::Bytes(b"Error: original failure\n".to_vec()),
+        _ => list(vec![]),
+    });
+    let mut last = None;
+    observe(&kube, &[pod(crash())], &mut last);
+    let (gone, _) = mock_client(|_, _| list(vec![]));
+    let (logger, mut receiver) = test_logger();
+    report_failure(
+        &Target {
+            kube: &gone,
+            namespace: "ns",
+            selector: "service=svc",
+            kind: WorkloadKind::Pods,
+        },
+        &logger,
+        last,
+    );
+    logger.send_error(deployment_error());
+    let lines: Vec<_> = sent(&mut receiver)
+        .iter()
+        .filter(|event| event.get_details().stage() == &Stage::Environment(EnvironmentStep::Recap))
+        .map(|event| event.message(EventMessageVerbosity::SafeOnly))
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Failure observed before rollback:",
+            "Container 'api' is in CrashLoopBackOff (last exit code 1).",
+            "💭 Error: original failure",
+        ]
+    );
+}
+
+#[test]
+fn compact_excerpt_belongs_to_the_container_named_in_the_cause() {
+    let (kube, requests) = mock_client(|path, query| match path {
+        "pods" => {
+            let mut status = crash();
+            let mut sidecar = status["containerStatuses"][0].clone();
+            sidecar["name"] = json!("sidecar");
+            status["containerStatuses"].as_array_mut().unwrap().push(sidecar);
+            list(vec![pod_json(status)])
+        }
+        "log" => Reply::Bytes(if query.contains("container=sidecar") {
+            b"Error: sidecar failure\n".to_vec()
+        } else {
+            b"Error: primary failure\n".to_vec()
+        }),
+        _ => list(vec![]),
+    });
+    assert_eq!(
+        collect_test(&kube, WorkloadKind::Pods),
+        [
+            "Why it failed: Container 'api' is in CrashLoopBackOff (last exit code 1).",
+            "💭 Error: primary failure",
+        ]
+    );
+    assert_eq!(
+        requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/log"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn previous_oom_cause_survives_when_container_logs_are_unavailable() {
+    let (kube, _) = mock_client(|path, _| match path {
+        "pods" => list(vec![pod_json(container(
+            json!({"waiting": {"reason": "CrashLoopBackOff", "message": "Back-off restarting failed container"}}),
+            json!({"terminated": {"exitCode": 137, "reason": "OOMKilled", "signal": 9, "message": "Container exceeded its memory limit"}}),
+            1,
+        ))]),
+        "log" => denied(),
+        _ => list(vec![]),
+    });
+    let lines = collect_test(&kube, WorkloadKind::Pods);
+    assert_eq!(lines.len(), 1);
+    assert!(!lines[0].contains("Back-off restarting"));
+    for detail in [
+        "CrashLoopBackOff",
+        "last exit code 137",
+        "OOMKilled",
+        "signal 9",
+        "Container exceeded its memory limit",
+    ] {
+        assert!(lines[0].contains(detail), "Missing {detail}: {lines:?}");
+    }
+}
+
+#[test]
+fn diagnostics_are_appended_when_the_report_has_no_closing_border() {
+    for report in ["Deployment status", ""] {
+        let rendered = with_failure_diagnostics(
+            report.to_string(),
+            vec![
+                "Failure observed during deployment: Container 'api' exited with code 1.".to_string(),
+                "💭 Error: startup failed".to_string(),
+            ],
+        );
+        assert_eq!(
+            rendered,
+            format!("{report}\n┃ ⚠️ Container 'api' exited with code 1.\n┃ 💭 Error: startup failed")
+        );
+    }
+}
+
+#[test]
+fn uninformative_waiting_states_preserve_previous_oom_details() {
+    for waiting in [
+        json!({}),
+        json!({"reason": "PodInitializing"}),
+        json!({"reason": "Unknown"}),
+    ] {
+        let (kube, _) = mock_client(move |path, _| match path {
+            "pods" => list(vec![pod_json(container(
+                json!({"waiting": waiting}),
+                json!({"terminated": {
+                    "exitCode": 137, "reason": "OOMKilled", "signal": 9,
+                    "message": "Container exceeded its memory limit",
+                }}),
+                1,
+            ))]),
+            "log" => denied(),
+            _ => list(vec![]),
+        });
+        assert_eq!(
+            collect_test(&kube, WorkloadKind::Pods),
+            [
+                "Why it failed: Container 'api' last exited with code 137, OOMKilled, signal 9. Container exceeded its memory limit",
+            ]
+        );
+    }
 }

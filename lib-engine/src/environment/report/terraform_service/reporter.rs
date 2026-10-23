@@ -1,6 +1,5 @@
 use crate::environment::models::terraform_service::TerraformServiceTrait;
 use crate::environment::report::DeploymentReporter;
-use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure};
 use crate::environment::report::logger::EnvLogger;
 use crate::errors::EngineError;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
@@ -98,8 +97,6 @@ pub struct ReporterState {
     pod_recv: Option<mpsc::Receiver<Pod>>,
     log_lines: Option<BoxStream<'static, Result<String, std::io::Error>>>,
     metrics_registry: Arc<dyn MetricsRegistry>,
-    // Pod of the terraform job, once the deployer sent it: where the failure diagnostics look.
-    pod_name: Option<String>,
 }
 
 impl ReporterState {
@@ -117,7 +114,6 @@ impl ReporterState {
                 follow: true,
                 ..Default::default()
             };
-            self.pod_name = Some(pod.name_any()).filter(|name| !name.is_empty());
             if let Some(long_id) = long_id_opt.take() {
                 self.metrics_registry
                     .stop_record(long_id, StepName::Deployment, StepStatus::Success);
@@ -150,7 +146,6 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
             log_lines: None,
             pod_recv: self.pod_recv.take().and_then(|m| m.into_inner().ok()),
             metrics_registry: self.metrics_registry.clone(),
-            pod_name: None,
         }
     }
 
@@ -223,23 +218,6 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
         }
         self.stop_record(StepStatus::Error);
 
-        // Say why before the errors. The job logs were streamed, but the last lines belong next to the cause.
-        if let Some(pod_name) = reporter_state
-            .pod_name
-            .as_deref()
-            .filter(|_| !self.skip_terraform_job_execution)
-        {
-            report_failure(
-                &Target {
-                    kube: &self.kube_client,
-                    namespace: &self.namespace,
-                    selector: pod_name,
-                    kind: WorkloadKind::NamedPod,
-                },
-                &self.logger,
-                None,
-            );
-        }
         self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
@@ -272,23 +250,11 @@ mod tests {
     use crate::environment::report::failure_diagnostics::tests::*;
     use crate::events::{EngineEvent, EventMessageVerbosity};
     use crate::metrics_registry::StdMetricsRegistry;
-    use serde_json::json;
 
     #[test]
-    fn terraform_after_streamed_logs_verifies_live_job_uid_and_keeps_terminal_order() {
-        for uid in ["job-uid", "replaced-uid"] {
-            let (kube, requests) = mock_client(move |path, _| match path {
-                "pods" => list(vec![pod_json(crash())]),
-                "job" => Reply::Json(
-                    200,
-                    json!({
-                        "metadata": {"name": "job", "uid": uid},
-                        "status": {"conditions": [{"type": "Failed", "status": "True", "reason": "JobFailed"}]},
-                    }),
-                ),
-                "log" => Reply::Bytes(b"Error: apply failed\n".to_vec()),
-                _ => list(vec![event_json("job-uid", "Job", "owner failure", "2026-01-01T00:00:01Z")]),
-            });
+    fn terraform_streams_remaining_logs_without_fetching_extra_diagnostics() {
+        for skip in [false, true] {
+            let (kube, requests) = mock_client(|_, _| denied());
             let (logger, mut receiver) = test_logger();
             let mut reporter = TerraformServiceDeploymentReporter::<()> {
                 long_id: Uuid::new_v4(),
@@ -298,30 +264,33 @@ mod tests {
                 namespace: "ns".to_string(),
                 kube_client: kube,
                 pod_recv: None,
-                skip_terraform_job_execution: false,
+                skip_terraform_job_execution: skip,
                 _phantom: Default::default(),
             };
             let mut state = reporter.new_state();
-            state.pod_name = Some("api".to_string());
-            state.log_lines = Some(stream::iter(vec![Ok("already streamed".to_string())]).boxed());
+            state.log_lines = Some(stream::iter(vec![Ok("Error: apply failed".to_string())]).boxed());
             let _ = reporter.deployment_terminated(&Err(Box::new(deployment_error())), state);
             let events = sent(&mut receiver);
-            assert_eq!(events[0].message(EventMessageVerbosity::SafeOnly), "already streamed");
-            let lines = block(&events);
-            assert!(lines.last().unwrap().contains("Error: apply failed"));
-            assert_eq!(lines[0].contains("JobFailed"), uid == "job-uid");
-            assert_eq!(lines.iter().any(|line| line.contains("owner failure")), uid == "job-uid");
+            let messages: Vec<_> = events
+                .iter()
+                .map(|event| event.message(EventMessageVerbosity::SafeOnly))
+                .collect();
+            assert_eq!(
+                messages
+                    .iter()
+                    .filter(|line| line.as_str() == "Error: apply failed")
+                    .count(),
+                usize::from(!skip)
+            );
+            if !skip {
+                assert_eq!(messages[0], "Error: apply failed");
+            }
+            assert!(block(&events).is_empty());
+            assert!(requests.lock().unwrap().is_empty());
             assert!(
                 events[events.len() - 2..]
                     .iter()
-                    .all(|e| matches!(e, EngineEvent::Error(..)))
-            );
-            assert!(
-                requests
-                    .lock()
-                    .unwrap()
-                    .iter()
-                    .any(|(_, q)| q.contains("metadata.name%3Dapi"))
+                    .all(|event| matches!(event, EngineEvent::Error(..)))
             );
         }
     }

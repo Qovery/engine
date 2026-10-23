@@ -1,4 +1,6 @@
-use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
+use crate::environment::report::failure_diagnostics::{
+    Target, WorkloadKind, report_failure, report_observed_failure, with_failure_diagnostics,
+};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
@@ -195,7 +197,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             }
         };
 
-        report_observed_failure(
+        let diagnostics = report_observed_failure(
             &Target {
                 kube: &self.kube_client,
                 namespace: &self.namespace,
@@ -217,6 +219,8 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
                 return;
             }
         };
+
+        let rendered_report = with_failure_diagnostics(rendered_report, diagnostics);
 
         // don't spam log same report unless it has been too long time elapsed without one
         if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {
@@ -422,6 +426,7 @@ async fn fetch_job_deployment_report(
 mod tests {
     use super::*;
     use crate::environment::report::failure_diagnostics::tests::*;
+    use crate::events::EventMessageVerbosity;
     use crate::metrics_registry::StdMetricsRegistry;
     use serde_json::{Value, json};
 
@@ -474,7 +479,14 @@ mod tests {
             .iter()
             .filter(|(path, _)| path.ends_with("/log"))
             .count();
-        (block(&sent(&mut receiver)), logs)
+        (
+            sent(&mut receiver)
+                .iter()
+                .map(|event| event.message(EventMessageVerbosity::SafeOnly))
+                .filter(|line| line.starts_with("┃ ⚠️ ") || line.starts_with("┃ 💭 "))
+                .collect(),
+            logs,
+        )
     }
 
     #[test]
@@ -485,6 +497,9 @@ mod tests {
             pod_of("old-job-uid", "2026-01-01T00:00:00Z"),
             pod_of("job-uid", "2026-01-02T00:00:00Z"),
         ]);
-        assert!(lines[0].starts_with("Failure observed") && logs == 1, "{lines:?}");
+        assert!(
+            lines[0].contains("CrashLoopBackOff") && lines.last().unwrap().contains("Error boom") && logs == 1,
+            "{lines:?}"
+        );
     }
 }
