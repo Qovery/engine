@@ -1,3 +1,4 @@
+use crate::deployment_manager::log_step_timeline::LogStepTimeline;
 use crate::grpc::engine::StepRecord as GrpcStepRecord;
 use crate::grpc::engine::{EngineMessageTx, Metrics, engine_message_tx};
 use chrono::{DateTime, Utc};
@@ -36,6 +37,7 @@ pub struct EngineLogStreamContext {
     log_receiver: UnboundedReceiver<EngineEvent>,
     log_buffer: Vec<EngineEventIo>,
     log_buffer_duration: Duration,
+    log_step_timeline: LogStepTimeline,
     should_stop: Option<watch::Receiver<()>>,
 }
 
@@ -45,8 +47,14 @@ impl EngineLogStreamContext {
             log_receiver,
             log_buffer: Vec::with_capacity(1024),
             log_buffer_duration: buffer_duration,
+            log_step_timeline: LogStepTimeline::default(),
             should_stop: None,
         }
+    }
+
+    fn buffer(&mut self, engine_event: EngineEvent) {
+        let engine_event = self.log_step_timeline.place(engine_event);
+        self.log_buffer.push(EngineEventIo::from(engine_event));
     }
 }
 
@@ -163,7 +171,7 @@ impl EngineMessageStream {
                     let deadline = Instant::now() + ctx.log_buffer_duration;
                     // Buffer msg to avoid flooding the gateway
                     ctx.log_buffer.clear();
-                    ctx.log_buffer.push(EngineEventIo::from(engine_event));
+                    ctx.buffer(engine_event);
 
                     while ctx.log_buffer.len() < ctx.log_buffer.capacity() {
                         let engine_event = match ctx.log_receiver.try_recv() {
@@ -178,7 +186,7 @@ impl EngineMessageStream {
                             Err(TryRecvError::Disconnected) => break,
                         };
 
-                        ctx.log_buffer.push(EngineEventIo::from(engine_event));
+                        ctx.buffer(engine_event);
                     }
 
                     Some(Self::convert_logs_to_grpc_message(&ctx.log_buffer))

@@ -187,10 +187,8 @@ impl<'a> EnvironmentDeployment<'a> {
             HashSet::new()
         };
 
-        self.logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel deployment(s)")),
-        ));
+        self.logger
+            .log(proceeding_event(&event_details, parallel_deploys, "deployment(s)"));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
         let router_tasks = Self::services_without_routers_iter(target.environment)
@@ -262,10 +260,8 @@ impl<'a> EnvironmentDeployment<'a> {
         let services_to_pause = Self::services_without_routers_iter(target.environment).rev();
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
-        self.logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel pause(s)")),
-        ));
+        self.logger
+            .log(proceeding_event(&event_details, parallel_deploys, "pause(s)"));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
         deployment_threads_pool.run(
@@ -332,10 +328,8 @@ impl<'a> EnvironmentDeployment<'a> {
 
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
-        self.logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel delete(s)")),
-        ));
+        self.logger
+            .log(proceeding_event(&event_details, parallel_deploys, "delete(s)"));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
         deployment_threads_pool.run(
@@ -389,10 +383,8 @@ impl<'a> EnvironmentDeployment<'a> {
 
         let parallel_deploys = max(target.environment.max_parallel_deploy as usize, 1);
 
-        self.logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel restart(s)")),
-        ));
+        self.logger
+            .log(proceeding_event(&event_details, parallel_deploys, "restart(s)"));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
         deployment_threads_pool.run(
@@ -596,6 +588,16 @@ impl DeploymentThreadsPool {
     }
 }
 
+/// Opens the services' deployment, so it is logged under that step rather than the one before it.
+fn proceeding_event(event_details: &EventDetails, parallel_deploys: usize, actions: &str) -> EngineEvent {
+    EngineEvent::Info(
+        event_details
+            .clone()
+            .with_step_name_if_unset(Some(StepName::Deployment)),
+        EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel {actions}")),
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -603,6 +605,26 @@ mod test {
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
     use std::time::Duration;
+
+    #[test]
+    fn the_proceeding_line_opens_the_deployment_step() {
+        let details = EventDetails::new(
+            None,
+            crate::io_models::QoveryIdentifier::new_random(),
+            crate::io_models::QoveryIdentifier::new_random(),
+            crate::io_models::QoveryIdentifier::new_random().to_string(),
+            crate::events::Stage::Environment(EnvironmentStep::Deploy),
+            crate::events::Transmitter::Environment(uuid::Uuid::new_v4(), "staging".to_string()),
+        );
+
+        let event = proceeding_event(&details, 7, "deployment(s)");
+
+        assert_eq!(event.get_details().step_name(), Some(StepName::Deployment));
+        assert_eq!(
+            event.message(crate::events::EventMessageVerbosity::SafeOnly),
+            "🎡 Proceeding with up to 7 parallel deployment(s)"
+        );
+    }
 
     #[test]
     fn only_shared_routers_with_missing_peer_namespaces_are_deferred() {
