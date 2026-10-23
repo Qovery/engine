@@ -1,0 +1,12 @@
+{
+  "project_name": "engine",
+  "tag": "v1.393.1",
+  "previous_tag": "v1.393.0",
+  "version": "1.393.1",
+  "commit": "b84fc67dc98fbc2dbd593ffff7ce8de879aef6ce",
+  "date": "2026-10-23T14:46:14.460649324Z",
+  "runtime": {
+    "goos": "linux",
+    "goarch": "amd64"
+  }
+}
