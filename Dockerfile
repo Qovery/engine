@@ -3,11 +3,11 @@
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
 ARG KUBECTL_VERSION="1.35.9"
 ARG HELM_VERSION="4.3.0-1"
-ARG TERRAFORM_VERSION="1.9.7"
+ARG TERRAFORM_VERSION="1.16.7"
 # Blueprint preview only. The default above is pinned to what the cluster and managed-database modules
-# require exactly, while catalog modules declare lower bounds, so the preview needs a newer binary to
-# plan them. Keep in step with BLUEPRINT_TERRAFORM_BINARY / BLUEPRINT_OPENTOFU_BINARY in cmd/terraform.rs.
-ARG BLUEPRINT_TERRAFORM_VERSION="1.16.6"
+# require exactly, while catalog modules declare lower bounds, so the preview keeps its own binary, recent
+# enough to plan them. Keep in step with BLUEPRINT_TERRAFORM_BINARY / BLUEPRINT_OPENTOFU_BINARY in cmd/terraform.rs.
+ARG BLUEPRINT_TERRAFORM_VERSION="1.16.7"
 ARG BLUEPRINT_OPENTOFU_VERSION="1.12.8"
 # Helm 4 rejects unverifiable VCS plugins; this pins Helm Diff's release-signing key.
 ARG HELM_DIFF_VERSION="v3.15.15"

@@ -590,8 +590,8 @@ mod tests {
 
     #[test]
     fn diff_uses_a_binary_new_enough_for_catalog_modules() {
-        // Not the engine default: that one is pinned to 1.9.7 for the infrastructure modules, and
-        // catalog modules requiring >= 1.11 cannot be planned with it.
+        // Not the engine default: that one moves only with the infrastructure modules' exact
+        // `required_version`, while catalog modules just need a binary new enough for their lower bounds.
         assert_eq!(diff_binary(TerraformFlavor::Terraform), BLUEPRINT_TERRAFORM_BINARY);
         assert_ne!(diff_binary(TerraformFlavor::Terraform), DEFAULT_TERRAFORM_BINARY);
     }

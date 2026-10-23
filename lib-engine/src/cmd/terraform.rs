@@ -1117,14 +1117,14 @@ fn terraform_init(
 
 /// `bounds` caps the whole init — provider lock, init, retries included — not each attempt.
 /// Binary every terraform invocation spawns unless a caller overrides it. Pinned to the version the
-/// cluster and managed-database modules require exactly (`required_version = "1.9.7"`), so it must not
-/// move without migrating their state.
+/// cluster and managed-database modules require exactly (`required_version`), so the image binary and
+/// those modules must move together.
 pub const DEFAULT_TERRAFORM_BINARY: &str = "terraform";
 
 /// Binaries the blueprint preview uses instead: catalog modules declare lower bounds only, so one
 /// sufficiently new binary per flavor plans them all. Kept in step with the Dockerfile ARGs of the
 /// same name.
-pub const BLUEPRINT_TERRAFORM_BINARY: &str = "terraform-1.16.6";
+pub const BLUEPRINT_TERRAFORM_BINARY: &str = "terraform-1.16.7";
 pub const BLUEPRINT_OPENTOFU_BINARY: &str = "tofu-1.12.8";
 
 fn terraform_init_bounded(
@@ -2055,8 +2055,8 @@ mod tests {
         );
     }
 
-    /// The infra modules pin `required_version = "1.9.7"` exactly, so the default must keep matching
-    /// what `docker/bin_versions` asserts at boot — moving it means migrating cluster state.
+    /// The infra modules pin `required_version` exactly, so the default must keep matching what
+    /// `docker/bin_versions` asserts at boot — a module left behind fails `init` on that cloud only.
     #[test]
     fn default_binary_is_the_one_bin_versions_pins() {
         assert_eq!(DEFAULT_TERRAFORM_BINARY, "terraform");
@@ -2067,6 +2067,36 @@ mod tests {
             .expect("TERRAFORM_VERSION in docker/bin_versions")
             .trim_matches('"');
         assert_eq!(pinned, dockerfile_arg("TERRAFORM_VERSION"));
+
+        let modules = [
+            (
+                "aws/bootstrap",
+                include_str!("../../lib/aws/bootstrap/terraform/tf-providers-aws.j2.tf"),
+            ),
+            ("aws/services", include_str!("../../lib/aws/services/common/providers.j2.tf")),
+            (
+                "azure/bootstrap",
+                include_str!("../../lib/azure/bootstrap/terraform/tf-providers.j2.tf"),
+            ),
+            (
+                "gcp/bootstrap",
+                include_str!("../../lib/gcp/bootstrap/terraform/tf-providers-google.j2.tf"),
+            ),
+            (
+                "scaleway/bootstrap",
+                include_str!("../../lib/scaleway/bootstrap/terraform/tf-providers.j2.tf"),
+            ),
+            (
+                "scaleway/services",
+                include_str!("../../lib/scaleway/services/common/providers.j2.tf"),
+            ),
+        ];
+        for (module, providers_tf) in modules {
+            assert!(
+                providers_tf.contains(&format!("required_version = \"{pinned}\"")),
+                "{module} must pin required_version = \"{pinned}\""
+            );
+        }
     }
 
     #[test]
