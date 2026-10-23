@@ -1,12 +1,12 @@
-//! Diagnostics emitted when a periodic reporter sees a failing pod and before the terminal deployment error.
+//! Concise diagnostics included in periodic status reports and before the terminal deployment error.
 //! Only the latest rendered observation and its deduplication signature are retained for final replay.
 use crate::environment::report::logger::EnvLogger;
-use crate::environment::report::utils::{QPodExt, exit_code_to_msg};
+use crate::environment::report::utils::QPodExt;
 use crate::runtime::block_on;
 use futures::{AsyncReadExt, future::join_all};
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::batch::v1::Job;
-use k8s_openapi::api::core::v1::{ContainerState, Event, Pod};
+use k8s_openapi::api::core::v1::{ContainerState, ContainerStateTerminated, Event, Pod};
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
 use kube::api::{ListParams, LogParams};
@@ -25,13 +25,11 @@ pub(crate) enum WorkloadKind<'a> {
     Deployment(&'a str),
     Job,
     Pods,
-    NamedPod,
 }
 
 impl WorkloadKind<'_> {
     fn list_params(&self, selector: &str) -> ListParams {
         match self {
-            Self::NamedPod => ListParams::default().fields(&format!("metadata.name={selector}")),
             Self::Deployment(_) | Self::Job | Self::Pods => ListParams::default().labels(selector),
         }
     }
@@ -39,23 +37,15 @@ impl WorkloadKind<'_> {
     fn service_version(&self) -> Option<&str> {
         match self {
             Self::Deployment(version) => Some(version),
-            Self::Job | Self::Pods | Self::NamedPod => None,
+            Self::Job | Self::Pods => None,
         }
     }
 
-    /// Whether Jobs are listed by selector; named pods verify their owner with a separate GET.
+    /// Whether the current Job must be listed to verify pod ownership.
     fn reads_jobs(&self) -> bool {
         match self {
             Self::Job => true,
-            Self::Deployment(_) | Self::Pods | Self::NamedPod => false,
-        }
-    }
-
-    fn trusts_owner_references(&self) -> bool {
-        match self {
-            // A named pod's Job must instead be verified by a live GET and UID check.
-            Self::NamedPod => false,
-            Self::Deployment(_) | Self::Job | Self::Pods => true,
+            Self::Deployment(_) | Self::Pods => false,
         }
     }
 
@@ -69,7 +59,7 @@ impl WorkloadKind<'_> {
                             && job.metadata.name.as_deref() == Some(&owner.name)
                     })
             }),
-            Self::Pods | Self::NamedPod => true,
+            Self::Pods => true,
         }
     }
 }
@@ -81,7 +71,7 @@ pub(crate) struct Target<'a> {
     pub kind: WorkloadKind<'a>,
 }
 
-/// The latest redacted, bounded block emitted during deployment and its deduplication signature.
+/// The latest redacted, bounded observation and its deduplication signature.
 pub(crate) struct ObservedFailure {
     signature: String,
     lines: Vec<String>,
@@ -89,7 +79,7 @@ pub(crate) struct ObservedFailure {
 
 #[derive(Default)]
 struct CollectedDiagnostics {
-    /// Customer recap lines mixing status/cause details, supporting warnings and filtered log excerpts.
+    /// Concise cause details and filtered log excerpts; supporting warnings only when no live cause exists.
     /// Already redacted, sanitized and bounded; these are ready to emit, not raw container log lines.
     lines: Vec<String>,
     /// Live Job or pod status supplied details. Warnings and log excerpts do not set this flag.
@@ -104,13 +94,8 @@ pub(crate) fn report_failure(target: &Target<'_>, logger: &EnvLogger, last: Opti
     if !collected.has_workload_details
         && let Some(observed) = last
     {
-        lines = observed.lines;
-        if let Some(heading) = lines.first_mut() {
-            *heading = safe_line(
-                logger,
-                "Why it failed: earlier deployment observation (final cause unconfirmed)".to_string(),
-            );
-        }
+        lines = vec!["Failure observed before rollback:".to_string()];
+        lines.extend(without_heading(observed.lines));
     }
     if lines.is_empty() {
         lines.push(safe_line(
@@ -121,9 +106,9 @@ pub(crate) fn report_failure(target: &Target<'_>, logger: &EnvLogger, last: Opti
     lines.into_iter().for_each(|line| logger.send_recap(line));
 }
 
-/// Called by a periodic reporter with the pods it just listed. A failure seen on a live pod is printed at once,
-/// before a rollback can delete the pod. The deployment may still succeed, so the block only says what was observed.
-/// `last` holds only the signature and rendered block of the last printed failure.
+/// Collect a failure for inclusion in the periodic status report before rollback can delete the pod.
+/// Retain the latest evidence for the terminal recap, without emitting a separate recap event.
+/// Reuse the rendered evidence while the live failure signature is unchanged.
 /// `job` is the live Job of a `WorkloadKind::Job` target: only its own pods can trigger a block.
 pub(crate) fn report_observed_failure(
     target: &Target<'_>,
@@ -131,7 +116,7 @@ pub(crate) fn report_observed_failure(
     job: Option<&Job>,
     pods: &[Pod],
     last: &mut Option<ObservedFailure>,
-) {
+) -> Vec<String> {
     let mut pods: Vec<&Pod> = pods
         .iter()
         .filter(|pod| pod.metadata.deletion_timestamp.is_none() && target.kind.is_current(pod, job))
@@ -145,11 +130,11 @@ pub(crate) fn report_observed_failure(
             .collect();
     }
     let Some(signature) = pods.into_iter().find_map(failure_signature) else {
-        return;
+        return vec![];
     };
     // A block that could not be read is retried at the next observation.
-    if last.as_ref().is_some_and(|last| last.signature == signature) {
-        return;
+    if let Some(last) = last.as_ref().filter(|last| last.signature == signature) {
+        return last.lines.clone();
     }
     let collected = block_on(collect(
         target,
@@ -159,12 +144,41 @@ pub(crate) fn report_observed_failure(
     ));
     // A read without workload facts must not replace earlier evidence or suppress a retry.
     if collected.has_workload_details {
-        collected.lines.iter().for_each(|line| logger.send_recap(line.clone()));
+        let lines = collected.lines;
         *last = Some(ObservedFailure {
             signature,
-            lines: collected.lines,
+            lines: lines.clone(),
         });
+        return lines;
     }
+    vec![]
+}
+
+/// Insert already sanitized diagnostics into the existing report frame without re-evaluating templates.
+pub(crate) fn with_failure_diagnostics(mut report: String, lines: Vec<String>) -> String {
+    if lines.is_empty() {
+        return report;
+    }
+    let border = report.rfind("\n┗").unwrap_or(report.len());
+    let mut diagnostics = String::new();
+    for (index, line) in without_heading(lines).into_iter().enumerate() {
+        diagnostics.push_str("\n┃ ");
+        if index == 0 {
+            diagnostics.push_str("⚠️ ");
+        }
+        diagnostics.push_str(&line);
+    }
+    report.insert_str(border, &diagnostics);
+    report
+}
+
+fn without_heading(mut lines: Vec<String>) -> Vec<String> {
+    if let Some(first) = lines.first_mut()
+        && let Some((_, cause)) = first.split_once(": ")
+    {
+        *first = cause.to_string();
+    }
+    lines
 }
 
 /// `pod uid/container/restart count/reason` of the first concrete failure: unschedulable, image or config error,
@@ -222,7 +236,7 @@ async fn read<T>(deadline: Instant, query: impl Future<Output = Result<T, kube::
 /// Gather diagnostics for the namespace, selector and workload kind in `target` within one absolute `deadline`.
 /// Read live pod/Job status, warnings attributed through pod/ReplicaSet/Job UIDs, and bounded container
 /// log excerpts matching error/fatal/panic/exception. Scope deployments to their revision and Job pods to
-/// the newest live Job; a named pod's Job owner must be verified by a live read.
+/// the newest live Job.
 /// Return customer report lines under `heading`, redacted with `logger`, plus live-workload-detail metadata;
 /// this function does not emit them. Independent read failures preserve any other available evidence.
 async fn collect(target: &Target<'_>, logger: &EnvLogger, deadline: Instant, heading: &str) -> CollectedDiagnostics {
@@ -269,17 +283,6 @@ async fn collect(target: &Target<'_>, logger: &EnvLogger, deadline: Instant, hea
             owners.extend(warning_uids(&rs.metadata));
         }
     }
-    // Terraform has only a pod address. Its Job is trusted only after a live GET verifies the referenced UID.
-    if !target.kind.trusts_owner_references()
-        && let Some(owner) = pods
-            .first()
-            .and_then(|pod| pod.metadata.owner_references.as_ref())
-            .and_then(|owners| owners.iter().find(|owner| owner.kind == "Job"))
-        && let Some(job) = read(deadline, jobs_api.get(&owner.name)).await
-        && job.metadata.uid.as_deref() == Some(&owner.uid)
-    {
-        jobs.push(job);
-    }
     jobs.sort_by(|a, b| b.metadata.creation_timestamp.cmp(&a.metadata.creation_timestamp));
     jobs.truncate(1);
     pods.retain(|pod| target.kind.is_current(pod, jobs.first()));
@@ -288,10 +291,9 @@ async fn collect(target: &Target<'_>, logger: &EnvLogger, deadline: Instant, hea
     pods.sort_by(|a, b| b.metadata.creation_timestamp.cmp(&a.metadata.creation_timestamp));
     let mut pending = Vec::new();
     for pod in pods.iter().filter(|pod| !ready(pod)).take(4) {
+        let previous_details = details.len();
         owners.extend(pod.metadata.uid.clone());
-        if target.kind.trusts_owner_references() {
-            owners.extend(warning_uids(&pod.metadata));
-        }
+        owners.extend(warning_uids(&pod.metadata));
         let name = pod.metadata.name.as_deref().unwrap_or("?");
         let Some(status) = &pod.status else {
             continue;
@@ -323,34 +325,45 @@ async fn collect(target: &Target<'_>, logger: &EnvLogger, deadline: Instant, hea
         {
             let current = container.state.as_ref();
             let last = container.last_state.as_ref();
-            // Keep state and exit facts ahead of potentially long messages.
-            details.push(format!(
-                "{} '{}' in Pod/{name}: {}; previous: {}; restarts {}; {} {}",
-                if init { "init container" } else { "container" },
-                container.name,
-                describe(current),
-                describe(last),
-                container.restart_count,
-                message(current),
-                message(last)
-            ));
+            let Some(description) = describe(current, last, container.restart_count) else {
+                continue;
+            };
+            let kind = if init { "Init container" } else { "Container" };
+            let detail = format!("{kind} '{}' {description}.", container.name);
+            let previous_message =
+                if current.is_none_or(|state| state.terminated.is_none()) && container.restart_count > 0 {
+                    message(last)
+                } else {
+                    ""
+                };
+            let crash_loop = current
+                .and_then(|state| state.waiting.as_ref())
+                .is_some_and(|waiting| waiting.reason.as_deref() == Some("CrashLoopBackOff"));
+            let state_message = if crash_loop || message(current).is_empty() {
+                previous_message
+            } else {
+                message(current)
+            };
+            details.push(if state_message.is_empty() {
+                detail
+            } else {
+                format!("{detail} {state_message}")
+            });
             let terminated = current.and_then(|s| s.terminated.as_ref());
             let previous = terminated.is_none() && container.restart_count > 0;
             let exit = terminated.or_else(|| last.and_then(|s| s.terminated.as_ref()).filter(|_| previous));
-            if let Some(exit) = exit.filter(|exit| exit.exit_code != 0) {
-                if let Some(hint) = exit_code_to_msg(exit.exit_code) {
-                    details.push(format!("💭 {hint}"));
-                }
-                if pending.len() < 4 {
-                    pending.push(log_excerpt(&pods_api, name, &container.name, previous, logger, deadline));
-                }
+            if exit.is_some_and(|exit| exit.exit_code != 0) && details.len() <= 2 {
+                pending.push(log_excerpt(&pods_api, name, &container.name, previous, logger, deadline));
             }
+            // Keep the compact cause and excerpt tied to the same container.
+            break;
         }
-        details.push(format!(
-            "Pod/{name}: {} {}",
-            status.phase.as_deref().unwrap_or("Unknown"),
-            reason_message(&status.reason, &status.message)
-        ));
+        if details.len() == previous_details && (status.reason.is_some() || status.message.is_some()) {
+            details.push(format!("Pod/{name}: {}", reason_message(&status.reason, &status.message)));
+        }
+        if details.len() > previous_details {
+            break;
+        }
     }
     let unavailable = if !workload_read {
         "live workload evidence could not be read; cause unavailable"
@@ -362,8 +375,12 @@ async fn collect(target: &Target<'_>, logger: &EnvLogger, deadline: Instant, hea
     let has_workload_details = !details.is_empty();
     let summary = details.first().map(String::as_str).unwrap_or(unavailable);
     let mut lines = vec![format!("{heading}: {summary}")];
-    lines.extend(details.into_iter().map(|line| format!("⚠️ {line}")));
-    append_supporting_warnings(events.map(|list| list.items).unwrap_or_default(), &owners, &mut lines);
+    // The heading already contains the primary cause; retain at most one additional cause.
+    let mut seen = BTreeSet::from([summary.to_string()]);
+    lines.extend(details.into_iter().filter(|line| seen.insert(line.clone())).take(1));
+    if !has_workload_details {
+        append_supporting_warnings(events.map(|list| list.items).unwrap_or_default(), &owners, &mut lines);
+    }
     lines.extend(join_all(pending).await.into_iter().flatten());
     CollectedDiagnostics {
         lines: lines.into_iter().take(50).map(|line| safe_line(logger, line)).collect(),
@@ -450,21 +467,45 @@ fn reason_message(reason: &Option<String>, message: &Option<String>) -> String {
     )
 }
 
-fn describe(state: Option<&ContainerState>) -> String {
-    if let Some(waiting) = state.and_then(|s| s.waiting.as_ref()) {
-        format!("waiting {}", waiting.reason.as_deref().unwrap_or("unknown"))
-    } else if let Some(exit) = state.and_then(|s| s.terminated.as_ref()) {
-        format!(
-            "{} (exit code {}, signal {})",
-            exit.reason.as_deref().unwrap_or("terminated"),
-            exit.exit_code,
-            exit.signal.unwrap_or_default()
-        )
-    } else if state.is_some_and(|s| s.running.is_some()) {
-        "running, not ready".to_string()
-    } else {
-        "unknown".to_string()
+fn describe(current: Option<&ContainerState>, last: Option<&ContainerState>, restarts: i32) -> Option<String> {
+    if let Some(exit) = current
+        .and_then(|state| state.terminated.as_ref())
+        .filter(|exit| exit.exit_code != 0)
+    {
+        return Some(format!("exited with code {}", termination_details(exit)));
     }
+    let previous = last
+        .and_then(|state| state.terminated.as_ref())
+        .filter(|exit| restarts > 0 && exit.exit_code != 0);
+    if let Some(waiting) = current.and_then(|state| state.waiting.as_ref())
+        && let Some(reason) = waiting.reason.as_deref()
+        && [
+            "CrashLoopBackOff",
+            "ErrImagePull",
+            "ImagePullBackOff",
+            "InvalidImageName",
+            "CreateContainerConfigError",
+            "CreateContainerError",
+        ]
+        .contains(&reason)
+    {
+        return Some(match previous {
+            Some(exit) => format!("is in {reason} (last exit code {})", termination_details(exit)),
+            None => format!("is in {reason}"),
+        });
+    }
+    previous.map(|exit| format!("last exited with code {}", termination_details(exit)))
+}
+
+fn termination_details(exit: &ContainerStateTerminated) -> String {
+    let mut detail = exit.exit_code.to_string();
+    if let Some(reason) = exit.reason.as_deref().filter(|reason| *reason != "Error") {
+        detail.push_str(&format!(", {reason}"));
+    }
+    if let Some(signal) = exit.signal.filter(|signal| *signal != 0) {
+        detail.push_str(&format!(", signal {signal}"));
+    }
+    detail
 }
 
 fn message(state: Option<&ContainerState>) -> &str {
@@ -518,10 +559,9 @@ async fn log_excerpt(
     };
     // Redact the complete stream before splitting, matching, sanitizing or truncating any part of it.
     let text = logger.obfuscate(String::from_utf8_lossy(&bytes).into_owned());
-    let run = if previous { "previous" } else { "current" };
     error_excerpt(&text)
         .into_iter()
-        .map(|line| format!("💭 Pod/{pod}, container '{container}', {run}: {line}"))
+        .map(|line| format!("💭 {line}"))
         .collect()
 }
 
@@ -547,7 +587,12 @@ fn error_excerpt(text: &str) -> Vec<String> {
                 .iter()
                 .any(|marker| lower.contains(marker))
         })
-        .map(|line| format!("    | {line}"))
+        .map(|line| line.trim().to_string())
+        .filter({
+            let mut seen = BTreeSet::new();
+            move |line| seen.insert(line.clone())
+        })
+        .take(2)
         .collect()
 }
 

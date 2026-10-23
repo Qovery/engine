@@ -1,6 +1,8 @@
 use crate::environment::models::agentic_workflow::AgenticWorkflowService;
 use crate::environment::report::agentic_workflow::renderer::render_agentic_workflow_deployment_report;
-use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
+use crate::environment::report::failure_diagnostics::{
+    Target, WorkloadKind, report_failure, report_observed_failure, with_failure_diagnostics,
+};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use crate::environment::report::utils::get_kube_events;
@@ -93,7 +95,7 @@ impl DeploymentReporter for AgenticWorkflowDeploymentReporter {
             }
         };
 
-        report_observed_failure(
+        let diagnostics = report_observed_failure(
             &Target {
                 kube: &self.kube_client,
                 namespace: &self.namespace,
@@ -114,6 +116,8 @@ impl DeploymentReporter for AgenticWorkflowDeploymentReporter {
                 return;
             }
         };
+
+        let rendered_report = with_failure_diagnostics(rendered_report, diagnostics);
 
         // don't spam log same report unless it has been too long time elapsed without one
         if rendered_report == last_report.report && last_report.timestamp.elapsed() < MAX_ELAPSED_TIME_WITHOUT_REPORT {

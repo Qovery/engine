@@ -137,7 +137,7 @@ mod tests {
     use crate::metrics_registry::StdMetricsRegistry;
 
     #[test]
-    fn helm_failure_recaps_live_pods_and_warnings_before_both_errors() {
+    fn helm_failure_recaps_the_live_cause_without_redundant_warnings_before_both_errors() {
         let (kube_client, _) = mock_client(|path, _| match path {
             "pods" => list(vec![pod_json(crash())]),
             "events" => list(vec![
@@ -159,11 +159,9 @@ mod tests {
         let _ = reporter.deployment_terminated(&Err(Box::new(deployment_error())), ());
         let events = sent(&mut receiver);
         let lines = block(&events);
-        assert!(lines[0].contains("CrashLoopBackOff") && lines.last().unwrap().contains("not ready"));
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains("Job/job") && line.contains("owner failure"))
+        assert_eq!(
+            lines,
+            ["Why it failed: Container 'api' is in CrashLoopBackOff (last exit code 1)."]
         );
         assert_eq!(events.len(), lines.len() + 2);
         assert!(
