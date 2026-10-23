@@ -5,6 +5,7 @@ use crate::grpc::GrpcEngineClient;
 use crate::grpc::engine::{DeploymentInfo, EngineMessageRx, EngineMessageTx, engine_message_tx};
 use crate::logger::composite_logger::CompositeLogger;
 use futures_util::{StreamExt, stream};
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::events::{EngineEvent, EngineMsg, EnvironmentStep, EventDetails, EventMessage, Stage};
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::{Logger, StdIoLogger, UnboundedSenderLogger};
@@ -40,7 +41,14 @@ pub struct DeploymentContext {
 }
 
 impl DeploymentContext {
-    pub fn new(deployment_info: DeploymentInfo, log_buffer_duration: Duration, log_file_writer: LogFileWriter) -> Self {
+    pub fn new(
+        mut deployment_info: DeploymentInfo,
+        log_buffer_duration: Duration,
+        deployed_engine_version: DeployedEngineVersion,
+        log_file_writer: LogFileWriter,
+    ) -> Self {
+        deployment_info.deployed_engine_version = Some(deployed_engine_version.to_string());
+
         let (log_engine_tx, log_engine_rx) = mpsc::unbounded_channel::<EngineEvent>();
         let (msg_engine_tx, msg_engine_rx) = mpsc::unbounded_channel::<EngineMsg>();
         Self {

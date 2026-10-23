@@ -487,6 +487,7 @@ pub fn main() -> io::Result<()> {
         } else {
             DeploymentRequestLog::Full
         };
+        let deployed_engine_version_for_tasks = deployed_engine_version.clone();
         let payload_to_engine_task = move |payload: String,
                                            deployment_info: &DeploymentInfo,
                                            grpc_client: &GrpcEngineClient,
@@ -502,7 +503,7 @@ pub fn main() -> io::Result<()> {
                 &cli.workspace_root_dir,
                 &cli.lib_root_dir,
                 &aws_apn_id,
-                &deployed_engine_version,
+                &deployed_engine_version_for_tasks,
                 {
                     let docker = docker.clone();
                     Box::new(move || Arc::new(docker.as_ref().clone()))
@@ -568,6 +569,7 @@ For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster ins
             is_connected_to_gtw,
             Box::new(payload_to_engine_task),
             log_file_writer,
+            deployed_engine_version,
             if cli.run_once {
                 DeploymentManagerRunMode::RunOnce
             } else {

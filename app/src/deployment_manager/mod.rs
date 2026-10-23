@@ -14,6 +14,7 @@ use crate::metrics::METRICS_NB_RUNNING_TASKS;
 use crate::models::TaskSelector;
 use futures_util::StreamExt;
 use qovery_engine::engine_task::Task;
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::events::EngineEvent;
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
@@ -127,6 +128,7 @@ pub struct DeploymentManager {
     is_connected_to_gtw: Arc<AtomicBool>,
     mk_engine_task: MkEngineTask,
     log_file_writer: LogFileWriter,
+    deployed_engine_version: DeployedEngineVersion,
     run_mode: DeploymentManagerRunMode,
     request_log: DeploymentRequestLog,
 }
@@ -139,6 +141,7 @@ impl DeploymentManager {
         is_connected_to_gtw: Arc<AtomicBool>,
         mk_engine_task: MkEngineTask,
         log_file_writer: LogFileWriter,
+        deployed_engine_version: DeployedEngineVersion,
         run_mode: DeploymentManagerRunMode,
         request_log: DeploymentRequestLog,
     ) -> Self {
@@ -167,6 +170,7 @@ impl DeploymentManager {
             is_connected_to_gtw,
             mk_engine_task,
             log_file_writer,
+            deployed_engine_version,
             run_mode,
             request_log,
         }
@@ -273,7 +277,12 @@ impl DeploymentManager {
         self.is_connected_to_gtw.store(true, Ordering::Relaxed);
         info!("Got new deployment for: {:?}", deployment_info);
         let next_state = DeploymentManagerState::ExecutingDeployment {
-            deployment: DeploymentContext::new(deployment_info, Duration::from_secs(1), self.log_file_writer.clone()),
+            deployment: DeploymentContext::new(
+                deployment_info,
+                Duration::from_secs(1),
+                self.deployed_engine_version.clone(),
+                self.log_file_writer.clone(),
+            ),
         };
 
         (next_state, None, DeploymentManagerRunOutcome::Continue)
@@ -565,7 +574,7 @@ mod test {
     use crate::grpc::engine::{
         ClusterFailureContextRequest, ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx,
         EngineMessageTx, GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse,
-        TerraformResourcesRequest, engine_message_rx,
+        TerraformResourcesRequest, engine_message_rx, engine_message_tx,
     };
     use crate::grpc::test::new_engine_client_test;
     use crate::models::TaskSelector;
@@ -840,6 +849,7 @@ mod test {
             is_connected_to_gtw.clone(),
             Box::new(mk_engine_task),
             Default::default(),
+            "v1.2.3".parse().unwrap(),
             DeploymentManagerRunMode::Daemon,
             DeploymentRequestLog::Full,
         );
@@ -881,6 +891,7 @@ mod test {
             Arc::new(AtomicBool::new(false)),
             Box::new(mk_engine_task),
             Default::default(),
+            "v1.2.3".parse().unwrap(),
             DeploymentManagerRunMode::RunOnce,
             DeploymentRequestLog::Full,
         );
@@ -922,6 +933,7 @@ mod test {
             Arc::new(AtomicBool::new(false)),
             Box::new(mk_engine_task),
             Default::default(),
+            "v1.2.3".parse().unwrap(),
             DeploymentManagerRunMode::RunOnce,
             DeploymentRequestLog::Full,
         );
@@ -944,6 +956,7 @@ mod test {
                 r#type: 0,
                 last_message_id: "".to_string(),
                 execution_start_deadline: None,
+                deployed_engine_version: None,
             }))]),
             msgs: vec![
                 Ok(EngineMessageRx {
@@ -979,6 +992,7 @@ mod test {
             Arc::new(AtomicBool::new(false)),
             Box::new(mk_engine_task),
             Default::default(),
+            "v1.2.3".parse().unwrap(),
             DeploymentManagerRunMode::RunOnce,
             DeploymentRequestLog::Full,
         );
@@ -1012,6 +1026,7 @@ mod test {
                 r#type: 0,
                 last_message_id: "".to_string(),
                 execution_start_deadline: None,
+                deployed_engine_version: None,
             }))]),
             msgs: vec![Ok(EngineMessageRx {
                 message_id: "".to_string(),
@@ -1047,6 +1062,7 @@ mod test {
             is_connected_to_gtw.clone(),
             Box::new(mk_engine_task),
             Default::default(),
+            "v1.2.3".parse().unwrap(),
             DeploymentManagerRunMode::Daemon,
             DeploymentRequestLog::Full,
         );
@@ -1071,6 +1087,7 @@ mod test {
         nb_disconnect: AtomicUsize,
         disconnect_after: Duration,
         nb_exec_deployment_called: Arc<AtomicUsize>,
+        received_request_versions: Arc<Mutex<Vec<Option<String>>>>,
     }
 
     #[tonic::async_trait]
@@ -1094,8 +1111,21 @@ mod test {
         type ExecDeploymentStream = Pin<Box<dyn Stream<Item = Result<EngineMessageRx, Status>> + Send>>;
         async fn exec_deployment(
             &self,
-            _request: Request<Streaming<EngineMessageTx>>,
+            request: Request<Streaming<EngineMessageTx>>,
         ) -> Result<Response<Self::ExecDeploymentStream>, Status> {
+            let mut request_stream = request.into_inner();
+            let message = request_stream
+                .message()
+                .await?
+                .ok_or_else(|| Status::invalid_argument("expected deployment request"))?;
+            let Some(engine_message_tx::Message::DeploymentRequest(deployment_info)) = message.message else {
+                return Err(Status::invalid_argument("expected deployment request"));
+            };
+            self.received_request_versions
+                .lock()
+                .unwrap()
+                .push(deployment_info.deployed_engine_version);
+
             self.nb_exec_deployment_called.fetch_add(1, Ordering::Relaxed);
             if self.nb_disconnect.fetch_add(1, Ordering::Relaxed) <= 1 {
                 // freeze the cnx and disconnect
@@ -1145,11 +1175,13 @@ mod test {
 
     #[tokio::test]
     async fn test_deployment_manager_not_executing_task_after_deadline() {
+        // setup:
         let (client, server) = tokio::io::duplex(1024);
 
         // The start should be claimed before 1sec
         let execution_start_deadline = Duration::from_secs(2);
         let nb_exec_deployment_called = Arc::new(AtomicUsize::new(0));
+        let received_request_versions = Arc::new(Mutex::new(Vec::new()));
         let engine_gateway = EngineGtwTestThatDisconnect {
             deployments: Mutex::new(vec![Ok(Response::new(DeploymentInfo {
                 organization_id: "".to_string(),
@@ -1159,6 +1191,7 @@ mod test {
                 r#type: 0,
                 last_message_id: "".to_string(),
                 execution_start_deadline: Some(prost_types::Duration::try_from(execution_start_deadline).unwrap()),
+                deployed_engine_version: None,
             }))]),
             msgs: vec![Ok(EngineMessageRx {
                 message_id: "".to_string(),
@@ -1167,6 +1200,7 @@ mod test {
             nb_disconnect: AtomicUsize::new(0),
             disconnect_after: execution_start_deadline - Duration::from_secs(1),
             nb_exec_deployment_called: nb_exec_deployment_called.clone(),
+            received_request_versions: received_request_versions.clone(),
         };
 
         tokio::spawn(async move {
@@ -1195,6 +1229,7 @@ mod test {
             Arc::new(AtomicBool::new(false)),
             Box::new(mk_engine_task),
             Default::default(),
+            "v1.2.3".parse().unwrap(),
             DeploymentManagerRunMode::Daemon,
             DeploymentRequestLog::Full,
         );
@@ -1203,14 +1238,18 @@ mod test {
         let fut = deployment_mngr.run();
         pin_mut!(fut);
 
-        // Drive the deployment for 5secs
+        // execute:
         assert!(timeout(execution_start_deadline * 3, &mut fut).await.is_err());
 
-        // Be sure that our task is not running and has not been executed
+        // validate:
         assert!(!task_is_running.load(Ordering::Relaxed));
         assert!(!_task.is_terminated());
         // it should have been called twice, and no more as deadline should have elapsed after
         assert_eq!(nb_exec_deployment_called.load(Ordering::Relaxed), 2);
+        assert_eq!(
+            *received_request_versions.lock().unwrap(),
+            vec![Some("v1.2.3".to_string()), Some("v1.2.3".to_string())]
+        );
     }
 
     #[test]

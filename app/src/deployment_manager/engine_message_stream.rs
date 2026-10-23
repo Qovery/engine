@@ -111,7 +111,7 @@ impl EngineMessageStream {
         (s, abort_handle_tx)
     }
 
-    fn convert_logs_to_grpc_message(buffer: &Vec<EngineEventIo>) -> EngineMessageTx {
+    fn convert_logs_to_grpc_message(buffer: &[EngineEventIo]) -> EngineMessageTx {
         EngineMessageTx {
             message_id: None, // Will be generated at a later stage
             message: Some(engine_message_tx::Message::Log(
@@ -138,8 +138,7 @@ impl EngineMessageStream {
         let opt_engine_message_tx = tokio::select! {
             biased;
 
-            msg = ctx.msg_receiver.recv() => {
-                msg.map(Self::convert_msg_to_grpc_message) },
+            msg = ctx.msg_receiver.recv() => msg.map(Self::convert_msg_to_grpc_message),
 
              // Deployment asked to be aborted, we leave to release the mutex of the channel
             _ = should_stop.changed() => None
@@ -217,7 +216,7 @@ impl Drop for EngineMessageStream {
 mod test {
     use crate::deployment_manager::deployment_context::DeploymentContext;
 
-    use crate::grpc::engine::DeploymentInfo;
+    use crate::grpc::engine::{DeploymentInfo, engine_message_tx};
 
     use futures_util::StreamExt;
 
@@ -250,7 +249,12 @@ mod test {
             EngineEvent::Error(EngineError::new_task_cancellation_requested(event_details.clone()), None);
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Default::default());
+        let mut deployment = DeploymentContext::new(
+            DeploymentInfo::default(),
+            buffer_duration,
+            "v1.2.3".parse().unwrap(),
+            Default::default(),
+        );
 
         // Dropping the handle should terminate the stream
         let (_, _, mut stream, abort_handle) = deployment.get_message_stream().await;
@@ -267,7 +271,10 @@ mod test {
         assert!(ret.is_ok());
 
         // We should receive one batch
-        assert!(matches!(timeout(buffer_deadline, stream.next()).await, Ok(Some(_))));
+        assert!(matches!(
+            timeout(buffer_deadline, stream.next()).await,
+            Ok(Some(ref message)) if matches!(message.message, Some(engine_message_tx::Message::Log(_)))
+        ));
         assert!(timeout(buffer_deadline, stream.next()).await.is_err());
 
         // We should receive 2 batch as message have been sent after the buffer duration
@@ -313,12 +320,20 @@ mod test {
         )));
         let buffer_duration = Duration::from_millis(100);
         let buffer_deadline = buffer_duration + Duration::from_millis(50);
-        let mut deployment = DeploymentContext::new(DeploymentInfo::default(), buffer_duration, Default::default());
+        let mut deployment = DeploymentContext::new(
+            DeploymentInfo::default(),
+            buffer_duration,
+            "v1.2.3".parse().unwrap(),
+            Default::default(),
+        );
         let (_, msg_tx, mut stream, abort_handle) = deployment.get_message_stream().await;
 
         let _ = msg_tx.send(engine_msg.clone());
         let msg = timeout(buffer_deadline * 2, stream.next()).await;
-        assert!(matches!(msg, Ok(Some(_))));
+        assert!(matches!(
+            msg,
+            Ok(Some(ref message)) if matches!(message.message, Some(engine_message_tx::Message::Metrics(_)))
+        ));
         assert!(timeout(buffer_deadline, stream.next()).await.is_err());
 
         // Resuming the stream should re-send the previous messages

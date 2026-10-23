@@ -91,6 +91,8 @@ message DeploymentInfo {
   // It is a duration and not a point in time as engine may have their clock not synchronized correctly.
   // i.e: Self Managed cluster, and need to rely on their clock
   google.protobuf.Duration execution_start_deadline = 7;
+  // Runtime engine version resolved by the worker that executes this deployment.
+  optional string deployed_engine_version = 8;
 }
 
 message EngineMessageTx {
