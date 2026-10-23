@@ -26,6 +26,8 @@ pub enum StepName {
     /// Log step of a router deployment; no metric is recorded under it yet.
     RouterDeployment,
     Executing,
+    /// Log step of a request waiting for the engine. Core logs it and times the queue; no metric here.
+    Queueing,
 }
 
 impl Display for StepName {
@@ -44,6 +46,7 @@ impl Display for StepName {
             StepName::Deployment => "Deployment".to_string(),
             StepName::RouterDeployment => "RouterDeployment".to_string(),
             StepName::Executing => "Executing".to_string(),
+            StepName::Queueing => "Queueing".to_string(),
         };
         write!(f, "{str}")
     }

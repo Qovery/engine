@@ -126,6 +126,7 @@ impl EnvironmentTask {
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
         max_build_in_parallel: usize,
+        on_build_start: impl FnOnce(usize),
         mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
         abort: &dyn Abort,
     ) -> Result<(), Box<EngineError>> {
@@ -142,6 +143,7 @@ impl EnvironmentTask {
         };
 
         let max_build_in_parallel = max(min(max_build_in_parallel, services.len()), 1);
+        on_build_start(max_build_in_parallel);
 
         // We wrap should_abort, to allow to notify parallel build threads to abort when one of them fails
         let abort_flag = AtomicAbortStatus::new(AbortStatus::None);
@@ -342,6 +344,7 @@ impl EnvironmentTask {
                 handle_service_external_secrets(&mut environment, infra_ctx, abort)?;
             }
 
+            let build_event_details = environment.event_details_with_step(EnvironmentStep::Build);
             let services_to_build: Vec<&mut dyn Service> = environment
                 .applications
                 .iter_mut()
@@ -372,6 +375,7 @@ impl EnvironmentTask {
                 },
                 infra_ctx,
                 environment.max_parallel_build as usize,
+                |parallel| logger.log(build_start_event(build_event_details, parallel)),
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
                 abort,
             )?;
@@ -875,6 +879,15 @@ impl BuilderThreadPool {
     }
 }
 
+/// Opens the build phase on the environment's log timeline, so the environment lines that follow
+/// (a cancel, the failure recap) join it.
+fn build_start_event(event_details: EventDetails, parallel: usize) -> EngineEvent {
+    EngineEvent::Info(
+        event_details.with_step_name_if_unset(Some(StepName::Build)),
+        EventMessage::new_from_safe(format!("🏗️ Proceeding with up to {parallel} parallel build(s)")),
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -882,6 +895,26 @@ mod test {
     use std::collections::BTreeMap;
     use std::sync::atomic::AtomicUsize;
     use std::time::Duration;
+
+    #[test]
+    fn the_build_start_line_opens_the_build_step() {
+        let details = EventDetails::new(
+            None,
+            crate::io_models::QoveryIdentifier::new_random(),
+            crate::io_models::QoveryIdentifier::new_random(),
+            crate::io_models::QoveryIdentifier::new_random().to_string(),
+            Stage::Environment(EnvironmentStep::Build),
+            crate::events::Transmitter::Environment(Uuid::new_v4(), "staging".to_string()),
+        );
+
+        let event = build_start_event(details, 2);
+
+        assert_eq!(event.get_details().step_name(), Some(StepName::Build));
+        assert_eq!(
+            event.message(crate::events::EventMessageVerbosity::SafeOnly),
+            "🏗️ Proceeding with up to 2 parallel build(s)"
+        );
+    }
 
     #[test]
     fn test_builder_thread_pool() {

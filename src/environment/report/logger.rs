@@ -48,20 +48,30 @@ fn deployment_step(service_type: ServiceType) -> StepName {
     }
 }
 
+/// Progress, success and first log step of a service action. Pause, delete and restart log under
+/// the deployment step: their reporter times them as a deployment.
+fn logger_steps(step: EnvironmentStep, service_type: ServiceType) -> (EnvironmentStep, EnvironmentStep, StepName) {
+    match step {
+        EnvironmentStep::Deploy => (
+            EnvironmentStep::Deploy,
+            EnvironmentStep::Deployed,
+            deployment_step(service_type),
+        ),
+        EnvironmentStep::Pause => (EnvironmentStep::Pause, EnvironmentStep::Paused, deployment_step(service_type)),
+        EnvironmentStep::Delete => (EnvironmentStep::Delete, EnvironmentStep::Deleted, deployment_step(service_type)),
+        EnvironmentStep::Build => (EnvironmentStep::Build, EnvironmentStep::Built, StepName::Build),
+        EnvironmentStep::Restart => (
+            EnvironmentStep::Restart,
+            EnvironmentStep::Restarted,
+            deployment_step(service_type),
+        ),
+        _ => panic!("Invalid environment step for logger"),
+    }
+}
+
 impl EnvLogger {
     pub fn new(service: &(impl Service + ?Sized), step: EnvironmentStep, logger: Arc<Box<dyn Logger>>) -> Self {
-        let (progress_step, success_step, current_step) = match step {
-            EnvironmentStep::Deploy => (
-                EnvironmentStep::Deploy,
-                EnvironmentStep::Deployed,
-                Some(deployment_step(service.service_type())),
-            ),
-            EnvironmentStep::Pause => (EnvironmentStep::Pause, EnvironmentStep::Paused, None),
-            EnvironmentStep::Delete => (EnvironmentStep::Delete, EnvironmentStep::Deleted, None),
-            EnvironmentStep::Build => (EnvironmentStep::Build, EnvironmentStep::Built, Some(StepName::Build)),
-            EnvironmentStep::Restart => (EnvironmentStep::Restart, EnvironmentStep::Restarted, None),
-            _ => panic!("Invalid environment step for logger"),
-        };
+        let (progress_step, success_step, current_step) = logger_steps(step, service.service_type());
         let event_details_progress = service.get_event_details(Stage::Environment(progress_step));
         let event_details_progress_executing = EventDetails::clone_changing_stage(
             event_details_progress.clone(),
@@ -77,7 +87,7 @@ impl EnvLogger {
             executing: AtomicBool::new(false),
             #[cfg(feature = "env-logger-check")]
             state: AtomicUsize::new(LoggerState::Progress as usize),
-            current_step: Mutex::new(current_step),
+            current_step: Mutex::new(Some(current_step)),
         }
     }
 
@@ -541,6 +551,22 @@ mod tests {
                 Some(StepName::Executing),
                 Some(StepName::Executing)
             ]
+        );
+    }
+
+    #[test]
+    fn pause_delete_and_restart_log_under_the_deployment_step() {
+        let steps = [
+            EnvironmentStep::Pause,
+            EnvironmentStep::Delete,
+            EnvironmentStep::Restart,
+        ]
+        .map(|step| logger_steps(step, ServiceType::Application).2);
+
+        assert_eq!(steps, [StepName::Deployment; 3]);
+        assert_eq!(
+            logger_steps(EnvironmentStep::Pause, ServiceType::Router).2,
+            StepName::RouterDeployment
         );
     }
 

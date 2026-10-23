@@ -90,6 +90,7 @@ impl Infrastructure for EnvironmentRequest {
             &deployment_option,
             infra_ctx,
             1,
+            |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
             &|| AbortStatus::None,
         );

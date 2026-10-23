@@ -715,6 +715,29 @@ pub enum Transmitter {
     TerraformService(TransmitterId, TransmitterName),
 }
 
+impl Transmitter {
+    pub fn id(&self) -> TransmitterId {
+        match self {
+            Transmitter::TaskManager(id, _)
+            | Transmitter::Blueprint(id, _)
+            | Transmitter::BuildPlatform(id, _)
+            | Transmitter::ContainerRegistry(id, _)
+            | Transmitter::CloudProvider(id, _)
+            | Transmitter::Kubernetes(id, _)
+            | Transmitter::DnsProvider(id, _)
+            | Transmitter::ObjectStorage(id, _)
+            | Transmitter::Environment(id, _)
+            | Transmitter::Database(id, _)
+            | Transmitter::Application(id, _)
+            | Transmitter::Container(id, _)
+            | Transmitter::Helm(id, _)
+            | Transmitter::Router(id, _)
+            | Transmitter::Job(id, _)
+            | Transmitter::TerraformService(id, _) => *id,
+        }
+    }
+}
+
 impl Display for Transmitter {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
