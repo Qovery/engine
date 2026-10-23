@@ -81,6 +81,25 @@ impl EnvLogger {
         }
     }
 
+    /// Masks the secrets of this logger in a text that is about to be reshaped (cut, split) before it is logged.
+    pub fn obfuscate(&self, text: String) -> String {
+        self.logger.obfuscate_secrets(text)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(logger: Arc<Box<dyn Logger>>, event_details: EventDetails) -> Self {
+        EnvLogger {
+            logger,
+            event_details_progress: event_details.clone(),
+            event_details_progress_executing: event_details.clone(),
+            event_details_success: event_details,
+            #[cfg(feature = "env-logger-check")]
+            state: AtomicUsize::new(LoggerState::Progress as usize),
+            executing: AtomicBool::new(false),
+            current_step: Mutex::new(None),
+        }
+    }
+
     /// Tags every line with `step` until the returned guard ends.
     pub fn enter_step(&self, step: StepName) -> StepGuard<'_> {
         StepGuard {

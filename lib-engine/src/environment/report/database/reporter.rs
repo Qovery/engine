@@ -1,5 +1,6 @@
 use crate::environment::models::database::DatabaseService;
 use crate::environment::report::database::renderer::render_database_deployment_report;
+use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use crate::environment::report::utils::get_kube_events;
@@ -132,6 +133,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             report: "".to_string(),
             timestamp: Instant::now(),
             all_warning_events: vec![],
+            failure: None,
         }
     }
 
@@ -185,6 +187,19 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
                 return;
             }
         };
+
+        report_observed_failure(
+            &Target {
+                kube: &self.kube_client,
+                namespace: &self.namespace,
+                selector: &format!("qovery.com/service-id={}", self.long_id),
+                kind: WorkloadKind::Pods,
+            },
+            &self.logger,
+            None,
+            &report.pods,
+            &mut last_report.failure,
+        );
 
         // Format the deployment information and send to it to user
         let rendered_report = match render_database_deployment_report(&report) {
@@ -242,6 +257,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             report: rendered_report,
             timestamp: Instant::now(),
             all_warning_events: last_report.all_warning_events.clone(),
+            failure: last_report.failure.take(),
         };
 
         // Send it to user
@@ -299,6 +315,21 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             self.logger.send_recap(line);
         }
 
+        // Say why, last, so it sits right above the error. A managed database has no pod to inspect.
+        if !self.is_managed {
+            let selector = format!("qovery.com/service-id={}", self.long_id);
+            report_failure(
+                &Target {
+                    kube: &self.kube_client,
+                    namespace: &self.namespace,
+                    selector: &selector,
+                    kind: WorkloadKind::Pods,
+                },
+                &self.logger,
+                last_report.failure,
+            );
+        }
+
         // Send error
         self.stop_records(StepStatus::Error);
         self.logger.send_error(EngineError::new_engine_error(
@@ -322,5 +353,52 @@ impl DatabaseDeploymentReporter {
             .stop_record(self.long_id, StepName::Deployment, step_status.clone());
         self.metrics_registry
             .stop_record(self.long_id, StepName::Total, step_status);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environment::report::failure_diagnostics::tests::*;
+    use crate::metrics_registry::StdMetricsRegistry;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn terminal_diagnostics_select_self_managed_database_pod_labels() {
+        let values: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/database_helm/self-managed-mysql-bitnami-private.json"
+        ))
+        .unwrap();
+        let mut labels = values["primary"]["podLabels"].clone();
+        assert!(labels.get("databaseId").is_none());
+        let long_id = Uuid::nil();
+        labels["qovery.com/service-id"] = json!(long_id);
+        let selector = format!("labelSelector=qovery.com%2Fservice-id%3D{long_id}");
+        let (kube_client, _) = mock_client(move |path, query| match path {
+            "pods" if query.contains(&selector) => {
+                let mut pod = pod_json(crash());
+                pod["metadata"]["labels"] = labels.clone();
+                list(vec![pod])
+            }
+            "log" => Reply::Bytes(b"error: database failed\n".to_vec()),
+            _ => list(vec![]),
+        });
+        let (logger, mut receiver) = test_logger();
+        let mut reporter = DatabaseDeploymentReporter {
+            long_id,
+            namespace: "ns".to_string(),
+            is_managed: false,
+            type_: DatabaseType::MySQL,
+            version: "8.0".to_string(),
+            kube_client,
+            logger,
+            metrics_registry: Arc::new(StdMetricsRegistry::default()),
+            action: Action::Create,
+        };
+        let state = reporter.new_state();
+        let _ = reporter.deployment_terminated(&Err(Box::new(deployment_error())), state);
+        let lines = block(&sent(&mut receiver));
+        assert!(lines[0].contains("CrashLoopBackOff"), "{lines:?}");
+        assert!(lines.last().unwrap().contains("error: database failed"));
     }
 }

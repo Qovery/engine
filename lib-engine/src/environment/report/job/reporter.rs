@@ -1,3 +1,4 @@
+use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
@@ -21,7 +22,6 @@ use crate::errors::Tag::JobFailure;
 use crate::io_models::job::JobSchedule;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::runtime::block_on;
-use itertools::Itertools;
 use k8s_openapi::api::batch::v1::Job as K8sJob;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -133,6 +133,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             report: "".to_string(),
             timestamp: Instant::now(),
             all_warning_events: vec![],
+            failure: None,
         }
     }
 
@@ -194,6 +195,19 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             }
         };
 
+        report_observed_failure(
+            &Target {
+                kube: &self.kube_client,
+                namespace: &self.namespace,
+                selector: &self.selector,
+                kind: WorkloadKind::Job,
+            },
+            &self.logger,
+            report.job.as_ref(),
+            &report.pods,
+            &mut last_report.failure,
+        );
+
         // Format the deployment information and send to it to user
         let rendered_report = match render_job_deployment_report(&self.job_type, &self.tag, &report) {
             Ok(deployment_status_report) => deployment_status_report,
@@ -244,6 +258,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             report: rendered_report,
             timestamp: Instant::now(),
             all_warning_events: last_report.all_warning_events.clone(),
+            failure: last_report.failure.take(),
         };
 
         // Send it to user
@@ -294,6 +309,18 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         for line in recap_report.trim_end().split('\n').map(str::to_string) {
             self.logger.send_recap(line);
         }
+
+        // Say why, last, so it sits right above the error
+        report_failure(
+            &Target {
+                kube: &self.kube_client,
+                namespace: &self.namespace,
+                selector: &self.selector,
+                kind: WorkloadKind::Job,
+            },
+            &self.logger,
+            last_report.failure,
+        );
 
         // Retrieve last state of the job to display it in the final message.
         let job_failure_message = match block_on(fetch_job_deployment_report(
@@ -381,7 +408,83 @@ async fn fetch_job_deployment_report(
     Ok(JobDeploymentReport {
         id: *service_id,
         pods: pods.items,
-        job: jobs.items.into_iter().find_or_first(|_| true),
+        // Match terminal selection: newest Job, with the first listed winning timestamp ties.
+        job: jobs
+            .items
+            .into_iter()
+            .rev()
+            .max_by(|a, b| a.metadata.creation_timestamp.cmp(&b.metadata.creation_timestamp)),
         events,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environment::report::failure_diagnostics::tests::*;
+    use crate::metrics_registry::StdMetricsRegistry;
+    use serde_json::{Value, json};
+
+    fn job_json(name: &str, uid: &str, created: &str) -> Value {
+        json!({"metadata": {"name": name, "uid": uid, "creationTimestamp": created}})
+    }
+
+    fn pod_of(job_uid: &str, created: &str) -> Value {
+        let mut pod = pod_json(crash());
+        pod["metadata"]["ownerReferences"][0]["uid"] = json!(job_uid);
+        pod["metadata"]["ownerReferences"][0]["name"] = json!(if job_uid == "job-uid" { "job" } else { "old-job" });
+        pod["metadata"]["creationTimestamp"] = json!(created);
+        pod
+    }
+
+    // The selector lists the retained old Job first and the current Job second.
+    fn observe(pods: Vec<Value>) -> (Vec<String>, usize) {
+        let (kube, requests) = mock_client(move |path, _| match path {
+            "jobs" => list(vec![
+                job_json("old-job", "old-job-uid", "2026-01-01T00:00:00Z"),
+                job_json("job", "job-uid", "2026-01-02T00:00:00Z"),
+            ]),
+            "pods" => list(pods.clone()),
+            "log" => Reply::Bytes(b"Error boom\n".to_vec()),
+            _ => list(vec![]),
+        });
+        let (logger, mut receiver) = test_logger();
+        let mut reporter = JobDeploymentReporter::<()> {
+            long_id: Uuid::new_v4(),
+            job_type: JobType::Job(Action::Create),
+            is_force_trigger: false,
+            max_duration: Duration::from_secs(60),
+            max_restarts: 0,
+            action: Action::Create,
+            tag: "v2".to_string(),
+            namespace: "ns".to_string(),
+            kube_client: kube,
+            selector: "service=svc".to_string(),
+            logger,
+            metrics_registry: Arc::new(StdMetricsRegistry::default()),
+            send_final_deleted_status: false,
+            _phantom: PhantomData,
+        };
+        let mut state = reporter.new_state();
+        reporter.deployment_in_progress(&mut state);
+        reporter.logger().send_error(deployment_error());
+        let logs = requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(path, _)| path.ends_with("/log"))
+            .count();
+        (block(&sent(&mut receiver)), logs)
+    }
+
+    #[test]
+    fn only_the_newest_job_pods_trigger_a_periodic_block_when_an_old_job_is_listed_first() {
+        let (lines, logs) = observe(vec![pod_of("old-job-uid", "2026-01-01T00:00:00Z")]);
+        assert!(lines.is_empty() && logs == 0, "{lines:?}");
+        let (lines, logs) = observe(vec![
+            pod_of("old-job-uid", "2026-01-01T00:00:00Z"),
+            pod_of("job-uid", "2026-01-02T00:00:00Z"),
+        ]);
+        assert!(lines[0].starts_with("Failure observed") && logs == 1, "{lines:?}");
+    }
 }

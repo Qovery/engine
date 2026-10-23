@@ -1,5 +1,6 @@
 use crate::environment::models::agentic_workflow::AgenticWorkflowService;
 use crate::environment::report::agentic_workflow::renderer::render_agentic_workflow_deployment_report;
+use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use crate::environment::report::utils::get_kube_events;
@@ -61,6 +62,7 @@ impl DeploymentReporter for AgenticWorkflowDeploymentReporter {
             report: "".to_string(),
             timestamp: Instant::now(),
             all_warning_events: vec![],
+            failure: None,
         }
     }
 
@@ -90,6 +92,19 @@ impl DeploymentReporter for AgenticWorkflowDeploymentReporter {
                 return;
             }
         };
+
+        report_observed_failure(
+            &Target {
+                kube: &self.kube_client,
+                namespace: &self.namespace,
+                selector: &self.selector,
+                kind: WorkloadKind::Job,
+            },
+            &self.logger,
+            report.job.as_ref(),
+            &report.pods,
+            &mut last_report.failure,
+        );
 
         let rendered_report = match render_agentic_workflow_deployment_report(&self.action, &report) {
             Ok(deployment_status_report) => deployment_status_report,
@@ -140,6 +155,7 @@ impl DeploymentReporter for AgenticWorkflowDeploymentReporter {
             report: rendered_report,
             timestamp: Instant::now(),
             all_warning_events: last_report.all_warning_events.clone(),
+            failure: last_report.failure.take(),
         };
 
         // Send it to user
@@ -186,6 +202,18 @@ impl DeploymentReporter for AgenticWorkflowDeploymentReporter {
                     .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
             }
         }
+
+        // Say why, last, so it sits right above the error
+        report_failure(
+            &Target {
+                kube: &self.kube_client,
+                namespace: &self.namespace,
+                selector: &self.selector,
+                kind: WorkloadKind::Job,
+            },
+            &self.logger,
+            last_report.failure,
+        );
 
         self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
@@ -237,7 +265,12 @@ async fn fetch_agentic_workflow_deployment_report(
     Ok(AgenticWorkflowDeploymentReport {
         id: *service_id,
         pods: pods.items,
-        job: jobs.items.into_iter().next(),
+        // Match terminal selection: newest Job, with the first listed winning timestamp ties.
+        job: jobs
+            .items
+            .into_iter()
+            .rev()
+            .max_by(|a, b| a.metadata.creation_timestamp.cmp(&b.metadata.creation_timestamp)),
         events,
     })
 }

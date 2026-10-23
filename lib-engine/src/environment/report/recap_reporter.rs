@@ -1,3 +1,4 @@
+use crate::environment::report::failure_diagnostics::ObservedFailure;
 use crate::environment::report::utils::{EventRenderContext, get_tera_instance};
 use itertools::Itertools;
 use k8s_openapi::api::core::v1::Event;
@@ -9,6 +10,8 @@ pub struct RecapReporterDeploymentState {
     pub report: String,
     pub timestamp: Instant,
     pub all_warning_events: Vec<Event>,
+    /// Latest rendered observation and signature, see `failure_diagnostics`.
+    pub(crate) failure: Option<ObservedFailure>,
 }
 
 #[derive(Debug, Serialize)]

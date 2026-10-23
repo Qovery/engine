@@ -1,4 +1,5 @@
 use crate::environment::report::application::renderer::render_app_deployment_report;
+use crate::environment::report::failure_diagnostics::{Target, WorkloadKind, report_failure, report_observed_failure};
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
@@ -89,6 +90,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             report: "".to_string(),
             timestamp: Instant::now(),
             all_warning_events: vec![],
+            failure: None,
         }
     }
 
@@ -129,6 +131,19 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
                 return;
             }
         };
+
+        report_observed_failure(
+            &Target {
+                kube: &self.kube_client,
+                namespace: &self.namespace,
+                selector: &self.selector,
+                kind: WorkloadKind::Deployment(&self.tag),
+            },
+            &self.logger,
+            None,
+            &report.pods,
+            &mut last_report.failure,
+        );
 
         // Format the deployment information and send to it to user
         let rendered_report = match render_app_deployment_report(self.service_type, &self.tag, &report) {
@@ -187,6 +202,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             report: rendered_report,
             timestamp: Instant::now(),
             all_warning_events: last_report.all_warning_events.clone(),
+            failure: last_report.failure.take(),
         };
 
         // Send it to user
@@ -241,6 +257,18 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             for line in recap_report.trim_end().split('\n').map(str::to_string) {
                 self.logger.send_recap(line);
             }
+
+            // Say why, last, so it sits right above the error
+            report_failure(
+                &Target {
+                    kube: &self.kube_client,
+                    namespace: &self.namespace,
+                    selector: &self.selector,
+                    kind: WorkloadKind::Deployment(&self.tag),
+                },
+                &self.logger,
+                last_report.failure,
+            );
 
             // Send error
             self.logger.send_error(EngineError::new_engine_error(
@@ -305,4 +333,137 @@ async fn fetch_app_deployment_report(
         replicasets: replicasets.items,
         events,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environment::report::execute_long_deployment;
+    use crate::environment::report::failure_diagnostics::tests::*;
+    use crate::environment::report::logger::EnvProgressLogger;
+    use crate::events::EngineEvent;
+    use crate::metrics_registry::StdMetricsRegistry;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    fn reporter(logger: EnvLogger, kube_client: kube::Client) -> ApplicationDeploymentReporter<()> {
+        ApplicationDeploymentReporter {
+            long_id: Uuid::new_v4(),
+            service_type: ServiceType::Application,
+            tag: "v2".to_string(),
+            namespace: "ns".to_string(),
+            kube_client,
+            selector: "service=svc".to_string(),
+            logger,
+            metrics_registry: Arc::new(StdMetricsRegistry::default()),
+            _tag: Default::default(),
+            action: Action::Create,
+        }
+    }
+
+    #[test]
+    fn terminal_ordering_and_original_result_survive_diagnostic_denial() {
+        for readable in [true, false] {
+            let (kube, _) = mock_client(move |path, _| {
+                if !readable {
+                    return denied();
+                }
+                match path {
+                    "pods" => list(vec![pod_json(crash())]),
+                    "log" => Reply::Bytes(b"Error SECRET\nTOKEN\n".to_vec()),
+                    _ => list(vec![]),
+                }
+            });
+            let (logger, mut receiver) = test_logger();
+            let original = deployment_error();
+            let expected = format!("{original:?}");
+            let task = move |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Err(Box::new(original.clone())) };
+            let returned = execute_long_deployment(reporter(logger, kube), task).unwrap_err();
+            assert_eq!(format!("{returned:?}"), expected);
+            let events = sent(&mut receiver);
+            assert!(matches!(events.last().unwrap(), EngineEvent::Error(error, _) if error.tag() == returned.tag()));
+            assert_eq!(events.iter().filter(|e| matches!(e, EngineEvent::Error(..))).count(), 1);
+            let lines = block(&events);
+            assert!(!lines.is_empty());
+            if !readable {
+                assert!(lines[0].contains("cause unavailable"));
+            }
+            if readable {
+                assert!(lines[0].contains("CrashLoopBackOff") && lines.last().unwrap().contains("Error xxx"));
+            }
+        }
+    }
+
+    #[test]
+    fn success_and_cancel_make_no_diagnostic_requests() {
+        for (cancel, observed) in [(false, false), (true, false), (false, true), (true, true)] {
+            let (kube, requests) = mock_client(|path, _| match path {
+                "pods" => list(vec![pod_json(crash())]),
+                "log" => Reply::Bytes(b"Error observed\n".to_vec()),
+                _ => list(vec![]),
+            });
+            let (logger, mut receiver) = test_logger();
+            let mut reporter = reporter(logger, kube);
+            let mut state = reporter.new_state();
+            if observed {
+                reporter.deployment_in_progress(&mut state);
+                assert!(!block(&sent(&mut receiver)).is_empty());
+                requests.lock().unwrap().clear();
+            }
+            let result = if cancel {
+                Err(Box::new(EngineError::new_task_cancellation_requested(event_details(
+                    crate::events::EnvironmentStep::DeployedError,
+                ))))
+            } else {
+                Ok(())
+            };
+            let _ = reporter.deployment_terminated(&result, state);
+            assert!(requests.lock().unwrap().is_empty());
+            assert!(block(&sent(&mut receiver)).is_empty());
+        }
+    }
+
+    #[test]
+    fn rollback_replays_observed_failure_before_the_original_terminal_error() {
+        let gone = Arc::new(AtomicBool::new(false));
+        let pod_gone = gone.clone();
+        let (kube, requests) = mock_client(move |path, _| match path {
+            "pods" if !pod_gone.load(Ordering::SeqCst) => list(vec![pod_json(crash())]),
+            "log" => Reply::Bytes(b"Error boom\n".to_vec()),
+            _ => list(vec![]),
+        });
+        let (logger, mut receiver) = test_logger();
+        let mut reporter = reporter(logger, kube);
+        let mut state = reporter.new_state();
+        reporter.deployment_in_progress(&mut state);
+        let lines = block(&sent(&mut receiver));
+        assert!(lines[0].starts_with("Failure observed") && lines.last().unwrap().contains("Error boom"));
+
+        // The rollback removed the pod: the final recap must retain the earlier observation.
+        gone.store(true, Ordering::SeqCst);
+        reporter.deployment_in_progress(&mut state);
+        assert!(block(&sent(&mut receiver)).is_empty());
+        let result = Err(Box::new(deployment_error()));
+        let _ = reporter.deployment_terminated(&result, state);
+        let events = sent(&mut receiver);
+        let replay = block(&events);
+        assert!(replay[0].contains("earlier deployment observation") && replay[0].contains("final cause unconfirmed"));
+        assert_eq!(&replay[1..], &lines[1..]);
+        assert_eq!(replay.iter().filter(|line| line.starts_with("Why it failed:")).count(), 1);
+        assert!(
+            matches!(events.last().unwrap(), EngineEvent::Error(error, _) if error.tag() == result.as_ref().unwrap_err().tag())
+        );
+        assert_eq!(
+            events[events.len() - 2].message(crate::events::EventMessageVerbosity::SafeOnly),
+            *replay.last().unwrap()
+        );
+        assert_eq!(
+            requests
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(path, _)| path.ends_with("/log"))
+                .count(),
+            1
+        );
+    }
 }
