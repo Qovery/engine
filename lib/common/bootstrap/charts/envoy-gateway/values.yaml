@@ -11,7 +11,7 @@ global:
   images:
     envoyGateway:
       # -- Full image for the Envoy Gateway control plane Deployment installed by this chart.
-      image: docker.io/envoyproxy/gateway:v1.9.1
+      image: docker.io/envoyproxy/gateway:v1.9.2
       # -- Image pull policy for the Envoy Gateway control plane Deployment.
       # Default behavior: latest images will be Always else IfNotPresent.
       pullPolicy: IfNotPresent
@@ -19,7 +19,7 @@ global:
       pullSecrets: []
     ratelimit:
       # This is the full image name including the hub, repo, and tag.
-      image: "docker.io/envoyproxy/ratelimit:8fe6ea42"
+      image: "docker.io/envoyproxy/ratelimit:0482748e"
       # Specify image pull policy if default behavior isn't desired.
       # Default behavior: latest images will be Always else IfNotPresent.
       pullPolicy: IfNotPresent
@@ -79,12 +79,12 @@ deployment:
       runAsUser: 65532
       seccompProfile:
         type: RuntimeDefault
-    strategy: {}
     # -- Volume source for the Wasm module cache mounted at /var/lib/eg/wasm. Defaults to an emptyDir when left empty.
     # Example: persist the Wasm module cache across controller restarts by backing it with a PersistentVolumeClaim:
     #   wasmCacheVolume:
     #     persistentVolumeClaim:
     #       claimName: envoy-gateway-wasm-cache
+    strategy: {}
     wasmCacheVolume: {}
     # Kubernetes best practice for controllers: use a startupProbe with a generous
     # failure threshold to avoid premature liveness/readiness failures during initialization.
