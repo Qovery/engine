@@ -1,3 +1,11 @@
+global:
+  images:
+    envoyProxy:
+      # HACK(QOV-2454): Pin the security-patched Envoy image until Envoy Gateway ships it.
+      # TODO(QOV-2454): Remove this override when the chart includes Envoy v1.39.5 or newer.
+      # https://qovery.atlassian.net/browse/QOV-2454
+      image: docker.io/envoyproxy/envoy:distroless-v1.39.5
+
 config:
   envoyGateway:
     gateway:
