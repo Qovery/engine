@@ -471,7 +471,7 @@ platformTemplateRelease:
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: gateway-crds-helm
-            version: v1.9.1
+            version: v1.9.2
           applyStrategy: SERVER_SIDE_APPLY_CRDS
           configRef:
             chart: envoy-gateway-crd
@@ -485,7 +485,7 @@ platformTemplateRelease:
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: gateway-helm
-            version: v1.9.1
+            version: v1.9.2
           dependsOn:
             - component: karpenter-qovery-configuration
               kind: after

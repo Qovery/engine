@@ -128,8 +128,8 @@ helm uninstall eg -n envoy-gateway-system
 | deployment.envoyGateway.startupProbe.periodSeconds | int | `1` |  |
 | deployment.envoyGateway.startupProbe.successThreshold | int | `1` |  |
 | deployment.envoyGateway.startupProbe.timeoutSeconds | int | `1` |  |
-| deployment.envoyGateway.strategy | object | `{}` |  |
-| deployment.envoyGateway.wasmCacheVolume | object | `{}` | Volume source for the Wasm module cache mounted at /var/lib/eg/wasm. Defaults to an emptyDir when left empty. Example: persist the Wasm module cache across controller restarts by backing it with a PersistentVolumeClaim:   wasmCacheVolume:     persistentVolumeClaim:       claimName: envoy-gateway-wasm-cache |
+| deployment.envoyGateway.strategy | object | `{}` | Volume source for the Wasm module cache mounted at /var/lib/eg/wasm. Defaults to an emptyDir when left empty. Example: persist the Wasm module cache across controller restarts by backing it with a PersistentVolumeClaim:   wasmCacheVolume:     persistentVolumeClaim:       claimName: envoy-gateway-wasm-cache |
+| deployment.envoyGateway.wasmCacheVolume | object | `{}` |  |
 | deployment.pod.affinity | object | `{}` |  |
 | deployment.pod.annotations."prometheus.io/port" | string | `"19001"` |  |
 | deployment.pod.annotations."prometheus.io/scrape" | string | `"true"` |  |
@@ -166,7 +166,7 @@ helm uninstall eg -n envoy-gateway-system
 | global.images.envoyProxy.image | string | `""` | Full image for the managed Envoy Proxy data plane. This updates the generated `envoyProxy` config and does not change the `envoy-gateway` control plane Deployment image. If not specified, the default image built into `envoy-gateway` is used. |
 | global.images.envoyProxy.pullPolicy | string | `""` | Image pull policy for the managed Envoy Proxy data plane. Default behavior: IfNotPresent. |
 | global.images.envoyProxy.pullSecrets | list | `[]` | Pull secrets for the managed Envoy Proxy data plane. |
-| global.images.ratelimit.image | string | `"docker.io/envoyproxy/ratelimit:8fe6ea42"` |  |
+| global.images.ratelimit.image | string | `"docker.io/envoyproxy/ratelimit:0482748e"` |  |
 | global.images.ratelimit.pullPolicy | string | `"IfNotPresent"` |  |
 | global.images.ratelimit.pullSecrets | list | `[]` |  |
 | hpa.behavior | object | `{}` |  |
@@ -182,3 +182,4 @@ helm uninstall eg -n envoy-gateway-system
 | service.type | string | `"ClusterIP"` | Service type. Can be set to LoadBalancer with specific IP, e.g.: type: LoadBalancer loadBalancerIP: 10.236.90.20 |
 | topologyInjector.annotations | object | `{}` |  |
 | topologyInjector.enabled | bool | `true` |  |
+
