@@ -2099,6 +2099,22 @@ mod tests {
         }
     }
 
+    /// Terraform ≥ 1.16 rejects a backend `exec` override: it cannot set `interactiveMode`, which
+    /// client-go requires for `client.authentication.k8s.io/v1`. Auth must come from the kubeconfig.
+    #[test]
+    fn kubernetes_backends_take_auth_from_the_kubeconfig() {
+        let backends = [
+            ("aws/services", include_str!("../../lib/aws/services/common/backend.j2.tf")),
+            (
+                "scaleway/services",
+                include_str!("../../lib/scaleway/services/common/backend.j2.tf"),
+            ),
+        ];
+        for (module, backend_tf) in backends {
+            assert!(!backend_tf.contains("exec"), "{module} backend must not override exec");
+        }
+    }
+
     #[test]
     fn test_terraform_managed_errors() {
         let could_not_load_plugin = r#"
