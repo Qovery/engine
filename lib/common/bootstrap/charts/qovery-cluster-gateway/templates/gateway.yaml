@@ -53,10 +53,12 @@ spec:
   provider:
     type: Kubernetes
     kubernetes:
+      envoyDeployment:
+        container:
+          image: {{ .Values.envoyImage | quote }}
       {{- with .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyDeployment }}
         {{- $pod := .pod }}
         {{- if or $pod.affinity $pod.topologySpreadConstraints $pod.tolerations }}
-      envoyDeployment:
         pod:
           {{- if $pod.affinity }}
           affinity: {{- toYaml $pod.affinity | nindent 12 }}

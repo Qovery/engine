@@ -10,6 +10,8 @@ spec:
     type: Kubernetes
     kubernetes:
       envoyDeployment:
+        container:
+          image: {{ .Values.envoyImage | quote }}
         pod:
           {{- if .Values.gatewayClass.qoveryPublic.affinity }}
           affinity: {{- toYaml .Values.gatewayClass.qoveryPublic.affinity | nindent 12 }}
@@ -113,6 +115,8 @@ spec:
     type: Kubernetes
     kubernetes:
       envoyDeployment:
+        container:
+          image: {{ .Values.envoyImage | quote }}
         pod:
           {{- if .Values.gatewayClass.qoveryPrivate.affinity }}
           affinity: {{- toYaml .Values.gatewayClass.qoveryPrivate.affinity | nindent 12 }}

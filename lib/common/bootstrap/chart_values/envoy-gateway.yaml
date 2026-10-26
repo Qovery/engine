@@ -1,3 +1,9 @@
+global:
+  images:
+    envoyProxy:
+      # TODO(QOV-2454) HACK(QOV-2454): Envoy Gateway does not yet ship Envoy v1.39.5; remove this override once it does.
+      image: docker.io/envoyproxy/envoy:distroless-v1.39.5
+
 config:
   envoyGateway:
     gateway:
