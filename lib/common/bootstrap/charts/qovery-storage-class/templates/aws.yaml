@@ -1,0 +1,103 @@
+{{- if eq .Values.provider "aws" }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "aws-ebs-gp3-0") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-ebs-gp3-0
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    aws-type: "gp3"
+    qovery-type: "ssd"
+    reclaim: "0"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp3
+  encrypted: 'true'
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "aws-ebs-gp2-0") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-ebs-gp2-0
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    aws-type: "gp2"
+    qovery-type: "ssd"
+    reclaim: "0"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: gp2
+  encrypted: 'true'
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "aws-ebs-io1-0") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-ebs-io1-0
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    aws-type: "io1"
+    qovery-type: "nvme"
+    reclaim: "0"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: io1
+  iopsPerGB: "32"
+  encrypted: 'true'
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "aws-ebs-st1-0") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-ebs-st1-0
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    aws-type: "st1"
+    qovery-type: "hdd"
+    reclaim: "0"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: st1
+  encrypted: 'true'
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "aws-ebs-sc1-0") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-ebs-sc1-0
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    aws-type: "sc1"
+    qovery-type: "cold"
+    reclaim: "0"
+provisioner: kubernetes.io/aws-ebs
+parameters:
+  type: sc1
+  encrypted: 'true'
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+{{- end }}
+{{- end }}
