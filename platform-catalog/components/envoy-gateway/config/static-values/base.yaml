@@ -1,4 +1,11 @@
 # Source 1 — the reviewed demo and BYOK-safe Envoy Gateway controller configuration.
+global:
+  images:
+    envoyProxy:
+      # HACK(QOV-2454): Remove once Envoy Gateway ships the patched Envoy image by default.
+      # https://qovery.atlassian.net/browse/QOV-2454
+      image: docker.io/envoyproxy/envoy:distroless-v1.39.5
+
 config:
   envoyGateway:
     gateway:

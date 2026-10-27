@@ -1,6 +1,7 @@
 //! Render the EnvoyProxy resources that replace the controller's default configuration.
 use platform_catalog_tests::{
-    contains_key, document_by_kind_and_name, document_kind, helm_template, parse_yaml_documents, yaml_path, yaml_string,
+    contains_key, document_by_kind_and_name, document_kind, helm_template, parse_yaml_documents, parse_yaml_file,
+    repository_path, yaml_path, yaml_string,
 };
 use serde_yaml::Value;
 
@@ -104,4 +105,74 @@ fn chart_image_setting_reaches_every_proxy_without_merging() {
 
     // validate:
     assert_proxy_images(&proxies, expected_image);
+}
+
+#[test]
+fn catalog_pins_the_controller_default_security_image() {
+    // setup:
+    let values_path = repository_path("platform-catalog/components/envoy-gateway/config/static-values/base.yaml");
+    let values = parse_yaml_file(&values_path);
+    assert_eq!(
+        yaml_string(&values, &["global", "images", "envoyProxy", "image"]),
+        Some(SECURITY_IMAGE),
+        "the catalog must pin the image independently of upstream chart defaults"
+    );
+
+    // execute:
+    let documents = parse_yaml_documents(&helm_template(
+        "envoy-image-test",
+        "lib-engine/lib/common/bootstrap/charts/envoy-gateway",
+        "qovery",
+        &[values_path],
+        &[],
+    ));
+
+    // validate:
+    let config_map = document_by_kind_and_name(&documents, "ConfigMap", "envoy-gateway-config")
+        .expect("the controller configuration must be rendered");
+    let config = yaml_string(config_map, &["data", "envoy-gateway.yaml"])
+        .expect("the ConfigMap must contain the controller configuration");
+    let config: Value = serde_yaml::from_str(config).expect("the controller configuration must be valid YAML");
+    assert_eq!(
+        yaml_string(
+            &config,
+            &[
+                "envoyProxy",
+                "provider",
+                "kubernetes",
+                "envoyDeployment",
+                "container",
+                "image"
+            ],
+        ),
+        Some(SECURITY_IMAGE),
+    );
+}
+
+#[test]
+fn catalog_pins_every_qovery_proxy_security_image_without_merging() {
+    // setup:
+    let mut proxies = Vec::new();
+    for component in ["qovery-gateway-class", "qovery-cluster-gateway"] {
+        let values_path = repository_path(format!(
+            "platform-catalog/components/{component}/config/static-values/base.yaml"
+        ));
+        let values = parse_yaml_file(&values_path);
+        assert_eq!(
+            yaml_string(&values, &["envoyImage"]),
+            Some(SECURITY_IMAGE),
+            "{component} must pin the image independently of chart defaults"
+        );
+
+        // execute:
+        let chart = format!("lib-engine/lib/common/bootstrap/charts/{component}");
+        proxies.extend(
+            parse_yaml_documents(&helm_template("envoy-image-test", &chart, "qovery", &[values_path], &[]))
+                .into_iter()
+                .filter(|document| document_kind(document) == Some("EnvoyProxy")),
+        );
+    }
+
+    // validate:
+    assert_proxy_images(&proxies, SECURITY_IMAGE);
 }

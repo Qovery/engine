@@ -1,4 +1,9 @@
 # Source 1 — public and private Qovery GatewayClass defaults from the legacy demo chart values.
+# HACK(QOV-2454): Pin each proxy directly to preserve Replace semantics without mergeType.
+# Remove once Envoy Gateway ships the patched Envoy image by default.
+# https://qovery.atlassian.net/browse/QOV-2454
+envoyImage: docker.io/envoyproxy/envoy:distroless-v1.39.5
+
 gatewayClass:
   qoveryPublic:
     enable: true
