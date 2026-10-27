@@ -8,6 +8,7 @@ use super::plan::{PreparedPlatformPlan, plan_failure_evidence, resolve_planned_c
 use super::runtime::{KUBERNETES_READ_TIMEOUT, block_on_timeout};
 use crate::io_models::platform_components::{PlatformHelmUnit, PlatformPreflightRequirement};
 use futures::stream::{self, StreamExt};
+use itertools::Itertools;
 use k8s_openapi::api::authorization::v1::{ResourceAttributes, SelfSubjectAccessReview, SelfSubjectAccessReviewSpec};
 use k8s_openapi::api::core::v1::Namespace;
 use k8s_openapi::api::discovery::v1::EndpointSlice;
@@ -32,6 +33,12 @@ const BETA_DEFAULT_STORAGE_CLASS_ANNOTATION: &str = "storageclass.beta.kubernete
 const KUBERNETES_SERVICE_DNS_ADDRESS: &str = "kubernetes.default:443";
 
 const KUBERNETES_SERVICE_DNS_NAME: &str = "kubernetes.default";
+
+const CLUSTER_DNS_NAMESPACE: &str = "kube-system";
+
+const CLUSTER_DNS_SERVICE_NAMES: [&str; 2] = ["kube-dns", "coredns"];
+
+const ENDPOINT_SLICE_SERVICE_NAME_LABEL: &str = "kubernetes.io/service-name";
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct RbacRequirement {
@@ -90,10 +97,10 @@ fn is_default_storage_class(storage_class: &StorageClass) -> bool {
 }
 
 pub(super) fn collect_cluster_dns(client: kube::Client, runs_inside_cluster: bool) -> FactState {
-    let endpoint_slices: Api<EndpointSlice> = Api::namespaced(client, "kube-system");
+    let endpoint_slices: Api<EndpointSlice> = Api::namespaced(client, CLUSTER_DNS_NAMESPACE);
     let slices = match block_on_timeout(
         KUBERNETES_READ_TIMEOUT,
-        endpoint_slices.list(&ListParams::default().labels("kubernetes.io/service-name=kube-dns")),
+        endpoint_slices.list(&ListParams::default().labels(&cluster_dns_endpoint_slice_selector())),
     ) {
         Ok(Ok(slices)) => slices,
         Ok(Err(_)) | Err(_) => return FactState::Unavailable(BTreeMap::new()),
@@ -118,9 +125,19 @@ pub(super) fn runs_inside_kubernetes() -> bool {
     std::env::var_os("KUBERNETES_SERVICE_HOST").is_some() && std::env::var_os("KUBERNETES_SERVICE_PORT").is_some()
 }
 
+fn cluster_dns_endpoint_slice_selector() -> String {
+    format!(
+        "{ENDPOINT_SLICE_SERVICE_NAME_LABEL} in ({})",
+        CLUSTER_DNS_SERVICE_NAMES.join(",")
+    )
+}
+
 fn cluster_dns_endpoint_state(slices: &[EndpointSlice]) -> FactState {
     if slices.is_empty() {
-        return FactState::Unavailable(evidence([("service", "kube-system/kube-dns")]));
+        let expected_services = CLUSTER_DNS_SERVICE_NAMES
+            .map(|name| format!("{CLUSTER_DNS_NAMESPACE}/{name}"))
+            .join(" or ");
+        return FactState::Unavailable(evidence([("service", expected_services.as_str())]));
     }
     let ready_endpoint = slices.iter().flat_map(|slice| &slice.endpoints).any(|endpoint| {
         endpoint
@@ -130,7 +147,14 @@ fn cluster_dns_endpoint_state(slices: &[EndpointSlice]) -> FactState {
             .unwrap_or(true)
     });
     if !ready_endpoint {
-        return FactState::Fail(evidence([("service", "kube-system/kube-dns")]));
+        let found_services = slices
+            .iter()
+            .filter_map(|slice| slice.metadata.labels.as_ref()?.get(ENDPOINT_SLICE_SERVICE_NAME_LABEL))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .map(|name| format!("{CLUSTER_DNS_NAMESPACE}/{name}"))
+            .join(", ");
+        return FactState::Fail(evidence([("service", found_services.as_str())]));
     }
     FactState::Pass
 }
@@ -336,8 +360,10 @@ mod tests {
     use super::super::test_support::{mock_kubernetes_client, plan_with_cluster_role, unit};
     use super::{
         BETA_DEFAULT_STORAGE_CLASS_ANNOTATION, DEFAULT_STORAGE_CLASS_ANNOTATION, KUBERNETES_SERVICE_DNS_ADDRESS,
-        cluster_dns_endpoint_state, collect_rbac, is_default_storage_class, namespace_state_from_lookup,
+        cluster_dns_endpoint_slice_selector, cluster_dns_endpoint_state, collect_rbac, is_default_storage_class,
+        namespace_state_from_lookup,
     };
+    use k8s_openapi::api::discovery::v1::EndpointSlice;
     use k8s_openapi::api::storage::v1::StorageClass;
     use std::collections::BTreeMap;
 
@@ -410,8 +436,40 @@ mod tests {
     }
 
     #[test]
+    fn cluster_dns_endpoint_slices_are_listed_for_kube_dns_and_coredns() {
+        assert_eq!(
+            cluster_dns_endpoint_slice_selector(),
+            "kubernetes.io/service-name in (kube-dns,coredns)"
+        );
+    }
+
+    #[test]
     fn missing_cluster_dns_endpoint_slices_are_not_a_health_failure() {
-        assert!(matches!(cluster_dns_endpoint_state(&[]), FactState::Unavailable(_)));
+        let FactState::Unavailable(details) = cluster_dns_endpoint_state(&[]) else {
+            panic!("missing cluster DNS endpoint slices must be unavailable");
+        };
+        assert_eq!(
+            details.get("service").map(String::as_str),
+            Some("kube-system/kube-dns or kube-system/coredns")
+        );
+    }
+
+    #[test]
+    fn unready_cluster_dns_names_the_service_that_was_found() {
+        let coredns_without_endpoints = EndpointSlice {
+            metadata: kube::core::ObjectMeta {
+                labels: Some(BTreeMap::from([(
+                    "kubernetes.io/service-name".to_string(),
+                    "coredns".to_string(),
+                )])),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let FactState::Fail(details) = cluster_dns_endpoint_state(&[coredns_without_endpoints]) else {
+            panic!("a cluster DNS without ready endpoints must fail");
+        };
+        assert_eq!(details.get("service").map(String::as_str), Some("kube-system/coredns"));
     }
 
     #[test]
