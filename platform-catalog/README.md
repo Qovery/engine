@@ -199,8 +199,11 @@ deprecating or bumping that release needs a q-core change.
 q-core rejects any selection for a mandatory layer, so every `qovery-self-managed-v0` deployment
 needs what its layers require: a Qovery DNS provider whose domain matches the cluster managed
 domain, the cluster `tls_email_report` for ACME, a default StorageClass while Loki keeps its `pvc`
-storage, no existing ExternalDNS instance, and no cert-manager or Gateway API CRDs owned by another
-installation.
+storage, the CSI driver behind the Qovery StorageClasses (the EBS CSI driver on EKS, which serves
+`kubernetes.io/aws-ebs` through CSI migration, the GKE persistent disk CSI driver, or the Scaleway
+Block Storage CSI driver), no existing ExternalDNS instance, and no cert-manager or Gateway API
+CRDs owned by another installation. A pre-existing StorageClass with a Qovery class name is kept as
+is and not managed by the `qovery-storage-class` release.
 
 ## Root template publication
 
@@ -250,6 +253,8 @@ first push. Slice 4.6 additionally requires
 Slice 4.8 additionally requires
 `platform-config/{cert-manager,qovery-cert-manager-webhook,external-dns-secret,external-dns,cert-manager-configs}`
 and the matching five `charts/*` repositories before publication.
+The self-managed StorageClasses additionally require `platform-config/qovery-storage-class` and
+`charts/qovery-storage-class` before publication.
 Karpenter artifact publication additionally requires these infrastructure-owned ECR
 repositories before running the job:
 
@@ -331,8 +336,8 @@ Terraform** (ECR does not auto-create repositories on push, and the publish
 scripts deliberately don't either — registry repositories live in the infra
 Terraform, like the rest of the AWS infra). Current
 scope: loki, qovery-cluster-agent, qovery-shell-agent, qovery-priority-class,
-alloy, cert-manager, qovery-cert-manager-webhook, external-dns-secret, external-dns, and
-cert-manager-configs.
+qovery-storage-class, alloy, cert-manager, qovery-cert-manager-webhook, external-dns-secret,
+external-dns, and cert-manager-configs.
 
 Caveat for later: Qovery-authored and `no_sync` charts keep a version number
 that does not change with content (agents are pinned at `0.1.0`; `no_sync`

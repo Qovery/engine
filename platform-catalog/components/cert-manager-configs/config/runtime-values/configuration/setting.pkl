@@ -10,7 +10,7 @@ settings: List<sdkSettings.Setting> = List(
     required = false
     default = ""
     label = "Existing TLS Secret"
-    description = "Name of a pre-provisioned kubernetes.io/tls Secret in the cert-manager namespace. Must be empty or exactly \(profile.gatewayCertificateSecretName), which the Gateway requires."
+    description = "Leave empty to let Qovery issue the Let's Encrypt certificate of the cluster domain. Select \(profile.gatewayCertificateSecretName) only if you created your own kubernetes.io/tls Secret with this name in the cert-manager namespace."
     options = List("", profile.gatewayCertificateSecretName).map((choice) -> new sdkSettings.Option { value = choice })
   },
 )

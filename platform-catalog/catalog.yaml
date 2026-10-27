@@ -30,6 +30,9 @@ components:
   - name: qovery-priority-class
     chart: qovery-priority-class # Qovery-authored bootstrap chart
     version: v1
+  - name: qovery-storage-class
+    chart: qovery-storage-class # Qovery-authored provider StorageClasses
+    version: v1
   - name: alloy
     chart: alloy # frozen upstream chart, configured from the legacy BYOK values
     version: v1
@@ -92,6 +95,8 @@ charts:
     path: lib-engine/lib/common/bootstrap/charts/qovery-shell-agent
   - name: qovery-priority-class
     path: lib-engine/lib/common/bootstrap/charts/qovery-priority-class
+  - name: qovery-storage-class
+    path: lib-engine/lib/common/bootstrap/charts/qovery-storage-class
   - name: alloy
     path: lib-engine/lib/common/bootstrap/charts/alloy
   - name: cert-manager

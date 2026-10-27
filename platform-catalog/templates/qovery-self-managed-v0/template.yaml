@@ -189,6 +189,19 @@ platformTemplateRelease:
             chart: qovery-priority-class
             version: v1
             digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: qovery-storage-class
+          kind: HELM
+          release:
+            name: qovery-storage-class
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-storage-class
+            version: 0.1.0
+          configRef:
+            chart: qovery-storage-class
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
     - key: log-infra
       applicability:
         modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]

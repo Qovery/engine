@@ -285,7 +285,12 @@ fn self_managed_template_makes_every_layer_mandatory_without_karpenter_or_infras
     }
     assert_eq!(
         layer_components(&template, "qovery-stack"),
-        ["cluster-agent", "shell-agent", "qovery-priority-class"]
+        [
+            "cluster-agent",
+            "shell-agent",
+            "qovery-priority-class",
+            "qovery-storage-class",
+        ]
     );
     assert_eq!(layer_components(&template, "log-infra"), ["loki", "alloy"]);
     assert_eq!(

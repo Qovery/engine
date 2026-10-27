@@ -1,0 +1,66 @@
+{{- if eq .Values.provider "gcp" }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "gcp-pd-extreme") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: gcp-pd-extreme
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    qovery-type: "ssd"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-extreme
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "gcp-pd-ssd") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: gcp-pd-ssd
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    qovery-type: "ssd"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-ssd
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "gcp-pd-balanced") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: gcp-pd-balanced
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    qovery-type: "ssd"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-balanced
+{{- end }}
+{{- if include "qovery-storage-class.renderable" (dict "root" $ "name" "gcp-pd-standard") }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: gcp-pd-standard
+  annotations:
+    qovery.com/source: platform-catalog
+  labels:
+    qovery-type: "hdd"
+provisioner: pd.csi.storage.gke.io
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: pd-standard
+{{- end }}
+{{- end }}

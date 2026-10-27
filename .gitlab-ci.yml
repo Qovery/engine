@@ -230,6 +230,9 @@ default:
     - .gitlab-ci.yml
     - Dockerfile
     - lib-engine/lib/common/bootstrap/charts/**/*
+    - lib-engine/lib/aws/bootstrap/charts/q-storageclass-aws/**/*
+    - lib-engine/lib/gcp/bootstrap/charts/q-storageclass-gcp/**/*
+    - lib-engine/lib/scaleway/bootstrap/charts/q-storageclass-scaleway/**/*
     - platform-catalog/**/*
     - scripts/install-pkl.sh
     - scripts/publish-platform-catalog.sh

@@ -89,6 +89,71 @@ fn priority_classes_render_with_expected_names() {
     assert!(document_by_kind_and_name(&documents, "PriorityClass", "qovery-standard-priority").is_some());
 }
 
+fn storage_classes_without_annotations(documents: &[Value]) -> Vec<Value> {
+    documents
+        .iter()
+        .map(|document| {
+            assert_eq!(
+                document_kind(document),
+                Some("StorageClass"),
+                "storage class charts must render only StorageClass documents, got {:?}",
+                document["metadata"]["name"]
+            );
+            let mut document = document.clone();
+            document
+                .get_mut("metadata")
+                .and_then(Value::as_mapping_mut)
+                .expect("StorageClass must declare metadata")
+                .remove("annotations");
+            document
+        })
+        .collect()
+}
+
+#[test]
+fn storage_classes_match_the_legacy_provider_charts_without_a_default_class() {
+    let chart = "lib-engine/lib/common/bootstrap/charts/qovery-storage-class";
+    for (overlay, legacy_chart) in [
+        ("aws", "lib-engine/lib/aws/bootstrap/charts/q-storageclass-aws"),
+        ("gcp", "lib-engine/lib/gcp/bootstrap/charts/q-storageclass-gcp"),
+        ("scw", "lib-engine/lib/scaleway/bootstrap/charts/q-storageclass-scaleway"),
+    ] {
+        let overlay_values = values(&format!(
+            "platform-catalog/components/qovery-storage-class/config/static-values/overlays/{overlay}.yaml"
+        ));
+        let documents = render("qovery-storage-class", chart, "qovery", &[overlay_values], &[]);
+        assert!(!documents.is_empty(), "{overlay} must render its StorageClasses");
+        for default_class_annotation in [
+            "storageclass.kubernetes.io/is-default-class",
+            "storageclass.beta.kubernetes.io/is-default-class",
+        ] {
+            assert!(
+                !any_document_contains_key(&documents, default_class_annotation),
+                "{overlay} must not mark any StorageClass as the cluster default"
+            );
+        }
+
+        let legacy_documents = render("q-storageclass", legacy_chart, "qovery", &[], &[]);
+        assert!(
+            documents.iter().all(|document| {
+                document["metadata"]["annotations"]["qovery.com/source"].as_str() == Some("platform-catalog")
+            }),
+            "{overlay} StorageClasses must be marked as installed by the platform catalog"
+        );
+        assert_eq!(
+            storage_classes_without_annotations(&documents),
+            storage_classes_without_annotations(&legacy_documents),
+            "{overlay} StorageClasses must keep the legacy names, provisioners and parameters"
+        );
+    }
+
+    let documents = render("qovery-storage-class", chart, "qovery", &[], &[]);
+    assert!(
+        documents.is_empty(),
+        "a provider without an overlay must render no StorageClass"
+    );
+}
+
 #[test]
 fn gateway_api_stack_renders_the_qovery_controller_and_public_gateway() {
     let crd_documents = render(
