@@ -814,6 +814,34 @@ fn loki_supports_single_binary_and_simple_scalable_modes() {
 }
 
 #[test]
+fn loki_gateway_resolves_through_the_cluster_dns_service_of_the_provider() {
+    let chart = "lib-engine/lib/common/bootstrap/charts/loki";
+    let base_values = values("platform-catalog/components/loki/config/static-values/base.yaml");
+    let single_binary = [
+        "--set",
+        "deploymentMode=SingleBinary",
+        "--set",
+        "backend.replicas=0",
+        "--set",
+        "read.replicas=0",
+        "--set",
+        "write.replicas=0",
+    ];
+    let default_documents = render("loki", chart, "qovery", std::slice::from_ref(&base_values), &single_binary);
+    assert!(any_document_contains_fragment(
+        &default_documents,
+        "resolver kube-dns.kube-system.svc.cluster.local.;"
+    ));
+
+    let scw_overlay = values("platform-catalog/components/loki/config/static-values/overlays/scw.yaml");
+    let scw_documents = render("loki", chart, "qovery", &[base_values, scw_overlay], &single_binary);
+    assert!(any_document_contains_fragment(
+        &scw_documents,
+        "resolver coredns.kube-system.svc.cluster.local.;"
+    ));
+}
+
+#[test]
 fn loki_qovery_karpenter_capability_overlay_matches_legacy_scheduling_and_renders() {
     let chart = "lib-engine/lib/common/bootstrap/charts/loki";
     let base_values = values("platform-catalog/components/loki/config/static-values/base.yaml");

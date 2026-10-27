@@ -7,6 +7,7 @@ loki/
       base.yaml
       overlays/
         qovery-karpenter.yaml   # Source 2 capability overlay selected by q-core
+        scw.yaml                # Kapsule names its DNS Service coredns: the gateway resolver needs it
     runtime-values/
       model.pkl                 # the only entrypoint q-core calls: decode, evaluate, render JSON
       settings.pkl              # table of contents: one feature per setting folder, in Console order
