@@ -93,6 +93,7 @@ spec:
           effect: {{ $value | toJson }}
       {{- end }}
       {{- end }}
+      {{- if or $.Values.service.advanced_settings.deployment_affinity_node_required (ne $.Values.service.advanced_settings.deployment_antiaffinity_pod "None") }}
       affinity:
         {{- if $.Values.service.advanced_settings.deployment_affinity_node_required }}
         nodeAffinity:
@@ -106,6 +107,7 @@ spec:
                 - {{ $value | toJson }}
         {{- end }}
         {{- end }}
+        {{- if ne $.Values.service.advanced_settings.deployment_antiaffinity_pod "None" }}
         podAntiAffinity:
           {{- if eq $.Values.service.advanced_settings.deployment_antiaffinity_pod "Required" }}
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -128,6 +130,8 @@ spec:
                     values:
                     - {{ $.Values.service.long_id | quote }}
           {{- end }}
+        {{- end }}
+      {{- end }}
       {{- if ne $.Values.service.advanced_settings.deployment_topology_spread_zone "Disabled" }}
       topologySpreadConstraints:
         - maxSkew: 1

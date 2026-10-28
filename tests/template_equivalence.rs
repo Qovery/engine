@@ -539,6 +539,45 @@ fn q_container_with_storage_sets_pod_fs_group() {
 }
 
 #[test]
+fn q_container_pod_anti_affinity_follows_the_advanced_setting() {
+    let affinity = |anti_affinity: &str, node_affinity: Json| {
+        let manifests = render_whole_chart(
+            "q-container",
+            &ctx(&[
+                ("service.advanced_settings.deployment_antiaffinity_pod", json!(anti_affinity)),
+                ("service.advanced_settings.deployment_affinity_node_required", node_affinity),
+            ]),
+        );
+        let deployment = manifests
+            .into_iter()
+            .find(|doc| doc["kind"] == "Deployment")
+            .expect("deployment");
+        deployment["spec"]["template"]["spec"]["affinity"].clone()
+    };
+    let node_affinity = json!({ "karpenter.sh/nodepool": "app" });
+
+    let preferred = affinity("Preferred", node_affinity.clone());
+    assert!(preferred["podAntiAffinity"]["preferredDuringSchedulingIgnoredDuringExecution"].is_array());
+    assert_eq!(
+        preferred["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"],
+        Json::Null
+    );
+
+    let required = affinity("Required", node_affinity.clone());
+    assert!(required["podAntiAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"].is_array());
+    assert_eq!(
+        required["podAntiAffinity"]["preferredDuringSchedulingIgnoredDuringExecution"],
+        Json::Null
+    );
+
+    let none_with_node_affinity = affinity("None", node_affinity);
+    assert_eq!(none_with_node_affinity["podAntiAffinity"], Json::Null);
+    assert!(none_with_node_affinity["nodeAffinity"].is_object());
+
+    assert_eq!(affinity("None", json!({})), Json::Null);
+}
+
+#[test]
 fn native_q_container_preserves_structured_keda_values_and_literal_templates() {
     let literal = r#"{{ fail "values must not be evaluated" }}"#;
     let spec = json!({"secretTargetRef": [{"parameter": "token", "name": "s", "key": "k"}]});

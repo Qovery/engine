@@ -54,6 +54,7 @@ pub enum PodAntiAffinity {
     #[default]
     Preferred,
     Required,
+    None,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Default)]
