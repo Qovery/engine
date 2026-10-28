@@ -29,6 +29,9 @@ config:
   enableGatewayAPI: null # set-by-engine-code
   enableGatewayAPIListenerSet: null # set-by-engine-code
 
+podAnnotations:
+  qovery.com/cert-manager-config-checksum: set-by-engine-code
+
 startupapicheck:
   jobAnnotations:
     helm.sh/hook: post-install,post-upgrade

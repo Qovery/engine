@@ -16,6 +16,9 @@ use crate::io_models::models::CustomerHelmChartsOverride;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
+use sha2::{Digest, Sha256};
+
+const CHART_VALUES: &str = include_str!("../../../lib/common/bootstrap/chart_values/cert-manager.yaml");
 
 pub struct CertManagerChart {
     chart_prefix_path: Option<String>,
@@ -115,6 +118,32 @@ impl CertManagerChart {
     pub fn chart_name() -> String {
         "cert-manager".to_string()
     }
+}
+
+fn config_checksum(
+    chart_values: &str,
+    values: &[ChartSetValue],
+    customer_override: Option<&CustomerHelmChartsOverride>,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(config_section(chart_values));
+    values
+        .iter()
+        .filter(|value| value.key.starts_with("config."))
+        .for_each(|value| hasher.update(format!("{}={}\n", value.key, value.value)));
+    if let Some(customer_override) = customer_override {
+        hasher.update(config_section(&customer_override.chart_values));
+    }
+    let hash: String = hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("sha256:{hash}")
+}
+
+fn config_section(values_yaml: &str) -> String {
+    serde_yaml::from_str::<serde_yaml::Value>(values_yaml)
+        .ok()
+        .and_then(|values| values.get("config").cloned())
+        .and_then(|config| serde_yaml::to_string(&config).ok())
+        .unwrap_or_default()
 }
 
 impl ToCommonHelmChart for CertManagerChart {
@@ -220,6 +249,11 @@ impl ToCommonHelmChart for CertManagerChart {
                 value: true.to_string(),
             });
         }
+
+        values.push(ChartSetValue {
+            key: "podAnnotations.qovery\\.com/cert-manager-config-checksum".to_string(),
+            value: config_checksum(CHART_VALUES, &values, self.customer_helm_chart_override.as_ref()),
+        });
 
         Ok(CommonChart {
             chart_info: ChartInfo {
@@ -343,9 +377,9 @@ impl ChartInstallationChecker for CertManagerChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::{HelmChartNamespaces, UpdateStrategy};
+    use crate::helm::{ChartSetValue, HelmChartNamespaces, UpdateStrategy};
     use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
-    use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
+    use crate::infrastructure::helm_charts::cert_manager_chart::{CHART_VALUES, CertManagerChart, config_checksum};
     use crate::infrastructure::helm_charts::{
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -507,5 +541,76 @@ mod tests {
                 "{key} must be enabled when Gateway API is the default path"
             );
         }
+    }
+
+    fn config_checksum_annotation(
+        gateway_api_rollout_status: GatewayApiRolloutStatus,
+        customer_values: &str,
+    ) -> String {
+        let customer_values = customer_values.to_string();
+        CertManagerChart::new(
+            None,
+            false,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
+            Arc::new(move |_chart_name: String| {
+                Some(CustomerHelmChartsOverride {
+                    chart_name: CertManagerChart::chart_name(),
+                    chart_values: customer_values.clone(),
+                })
+            }),
+            false,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::KubeSystem,
+            gateway_api_rollout_status,
+        )
+        .to_common_helm_chart()
+        .unwrap()
+        .chart_info
+        .values
+        .into_iter()
+        .find(|value| value.key == "podAnnotations.qovery\\.com/cert-manager-config-checksum")
+        .map(|value| value.value)
+        .expect("cert-manager controller pod must carry the config checksum annotation")
+    }
+
+    #[test]
+    fn cert_manager_config_checksum_follows_only_the_config() {
+        let checksum = config_checksum(CHART_VALUES, &[], None);
+        let edited_values_file =
+            CHART_VALUES.replace("ACMEHTTP01IngressPathTypeExact: false", "ACMEHTTP01IngressPathTypeExact: true");
+        let resources = ChartSetValue {
+            key: "resources.limits.cpu".to_string(),
+            value: "2".to_string(),
+        };
+
+        assert_ne!(edited_values_file, CHART_VALUES);
+        assert_ne!(checksum, config_checksum(&edited_values_file, &[], None));
+        assert_eq!(checksum, config_checksum(CHART_VALUES, &[resources], None));
+    }
+
+    #[test]
+    fn cert_manager_controller_restarts_when_its_config_changes() {
+        let not_deployed = config_checksum_annotation(GatewayApiRolloutStatus::NotDeployed, "");
+
+        assert_eq!(
+            not_deployed,
+            config_checksum_annotation(GatewayApiRolloutStatus::NotDeployed, "")
+        );
+        assert_ne!(not_deployed, config_checksum_annotation(GatewayApiRolloutStatus::DualStack, ""));
+        assert_ne!(
+            config_checksum_annotation(GatewayApiRolloutStatus::DualStack, ""),
+            config_checksum_annotation(GatewayApiRolloutStatus::Default, "")
+        );
+        assert_ne!(
+            not_deployed,
+            config_checksum_annotation(GatewayApiRolloutStatus::NotDeployed, "config:\n  logging:\n    verbosity: 3\n")
+        );
+        assert_eq!(
+            not_deployed,
+            config_checksum_annotation(GatewayApiRolloutStatus::NotDeployed, "# tuned\nwebhook:\n  replicaCount: 2\n")
+        );
     }
 }
